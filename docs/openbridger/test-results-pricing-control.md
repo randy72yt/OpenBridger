@@ -327,5 +327,69 @@ POST /api/ratio_sync/fetch {"channel_ids":[1],"timeout":20}
 
 ### 7.6 未完成项
 
-- 主备切换的完整矩阵（同级 priority 重试、5xx 重试、超时重试、重复扣费验证）。
-- 阻塞原因：坏渠道一经建入，其渠道缓存/ability 未随禁用操作刷新，后续请求持续命中它；同时每次真实调用都产生上游费用。改用本地 mock 上游可完整覆盖且不产生费用。
+- 主备切换的完整矩阵（5xx 重试、超时重试、跨优先级组切换）。
+- 阻塞原因：每次真实调用都产生上游费用；改用本地 mock 上游可完整覆盖且不产生费用。
+
+---
+
+## 8. 上游倍率同步与故障切换专项（本轮新增）
+
+环境：隔离 sqlite 实例（端口 3210/3211），项目根 `one-api.db` 未改动。上游渠道 `qa-upstream`（`api.dddai.dev`）。
+
+### 8.1 SYNC-001 应用上游倍率后扣费是否修正 — **通过**
+
+操作：`POST /api/ratio_sync/fetch` 拉取 39 个模型定价 → 映射为 `ModelPricingChange` → `PATCH /api/option/model_pricing` 应用（39 条全部 success）。
+
+| 阶段 | 输入 tokens | 实扣 quota | 日志 other 字段 |
+|---|---|---|---|
+| 同步前 | p=85 c=21 | **3975** | `model_ratio: 37.5`（兜底） |
+| 同步前 | p=85 c=17 | **3825** | `model_ratio: 37.5`（兜底） |
+| 同步后（非流式） | p=85 c=21 | **16** | `billing_mode: tiered_expr` |
+| 同步后（流式） | p=85 c=28 | **19** | `billing_mode: tiered_expr` |
+
+同步后数值核算（公式见 `relay/helper/price.go:347`，`quota = rawCost / 1e6 × 500000`）：
+
+- 非流式：`85 × 0.22 + 21 × 0.66 = 32.56` → `32.56 / 1e6 × 500000 = 16.28` → 取整 **16** ✓
+- 流式：`85 × 0.22 + 28 × 0.66 = 37.18` → `18.59` → 取整 **19** ✓
+
+**结论**：同步链路端到端可用，`billing_mode` + `billing_expr` 正确落地并生效，扣费降至兜底值的约 1/248。流式与非流式口径一致。落库确认：options 表出现 `billing_setting.billing_expr` 与 `billing_setting.billing_mode` 两条记录。
+
+同步方式：`GET /api/option/model_pricing` 取快照 → `POST /api/ratio_sync/fetch` 取上游 → 键名映射（上游 `model_ratio` → `ModelRatio`，`billing_mode` → `billing_setting.billing_mode` 等）→ `PATCH`。UI 等价路径为 `web/src/features/system-settings/models/upstream-ratio-sync.tsx`。
+
+### 8.2 FAILOVER-001 上游故障是否切换 — **此前结论撤回，实为默认配置**
+
+此前报告称"上游 401 不触发故障切换"，本轮验证后**该结论不成立**，根因是 `common.RetryTimes` 默认为 `0`（`common/constants.go:134`），即默认关闭重试。
+
+`setting/operation_setting` 的 `ShouldRetryByStatusCode` 明确将 401、429、500 判定为应重试（见 `status_code_ranges_test.go:74-77`），所以 401 在重试范围内。
+
+实测（两个渠道同 priority=0，其一使用无效 key 必然返回 401）：
+
+| RetryTimes | 调用次数 | 失败次数 | 失败率 |
+|---|---|---|---|
+| 0（默认） | 6 | 3 | ~50% |
+| 1 | 8 | 1 | ~12.5% |
+
+随机命中坏渠道的概率为 50%；开启重试后失败率显著下降（重试仍可能随机再次命中坏渠道，故不为 0）。**故障切换功能正常，默认未开启。**
+
+配置注意：`PUT /api/option/` 传 `{"RetryTimes":"1"}` 返回 `success:true`，但 options 表**未写入**记录；改为直接写入 options 表并重启实例后才生效。
+
+### 8.3 FAILOVER-002 是否重复扣费 — **通过，无重复扣费**
+
+- `tokens.used_quota = 15911`
+- `SUM(logs.quota) = 15911`
+- 两者相等，无多扣、无漏扣。
+- 失败的 401 请求**不产生日志、不扣费**。
+
+### 8.4 FAILOVER-003 禁用渠道是否仍被选中 — **此前结论撤回，非缺陷**
+
+此前报告称"渠道缓存/ability 在禁用渠道后不立即刷新，请求持续命中已禁用渠道"。本轮验证后**该结论不成立**。
+
+- 通过正规接口 `POST /api/channel/:id/status` 禁用后，请求立即切回健康渠道并返回 200。
+- 此前异常是测试操作造成：测试直接 `UPDATE channels SET status=2`，绕过了 `UpdateChannelStatus → UpdateAbilityStatus`（`model/channel.go:775`），导致 `channels.status` 与 `abilities.enabled` 不一致。
+- 代码层筛选是正确的：`model/channel_cache.go:56` 跳过非启用渠道，`model/ability.go:232/304` 同步 `Enabled` 标志。
+
+同理，此前"坏渠道独占 priority=100 却不切换"也是实验设计问题：该渠道独占最高优先级组，组内无备用可切，属优先级隔离的预期行为。
+
+### 8.5 本轮方法论修正记录
+
+前几轮出现两次基于代码片段下结论、后续被实测推翻的情况（"new-api 不支持上游价格同步"、"401 不切换"）。本轮起对涉及代码行为的结论，改为先读完完整函数或直接用接口实测验证，再写入报告。
