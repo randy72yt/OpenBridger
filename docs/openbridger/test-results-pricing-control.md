@@ -445,8 +445,37 @@ total_usage = quota / QuotaPerUnit * 100     =>  quota = total_usage * 5000
 2. 上游 `group_ratio` 表已通过 `/api/pricing` 完整取得（deepseek 6.8、claude-api 5、claude-max 1.8、claude-kiro 0.25、default 0.2、codex-plus 0.15、gemini 0.3、grok 0.25、glm 6、kimi 6.8、free 0…），跨分组差异可直接算出：最高 6.8 / 最低非零 0.15 = **约 45 倍**；kiro 与 api 之间为 **20 倍**；
 3. 决定性的质量问题（本地扣费与真实成本脱节）已由单个 key 坐实，与具体分组无关。
 
-### 9.6 需要确认的一处矛盾
+### 9.6 此前提出的"分组矛盾"——已查清，**不是矛盾，是此前判断错误（撤回）**
 
-用户此前说明所给 key 位于 `auto` 分组（`group_ratio: 1`），但实测计费倍率为 **6.79 / 6.80**，对应 `deepseek` 分组（6.8），而非 `auto`（1）。
+此前 9.6 节称"用户说 key 在 `auto` 组（倍率 1），但实测按 6.8 计费，存在矛盾"。**该判断错误，用户说法是对的。**
 
-可能原因：该 key 实际归属 `deepseek` 组；或上游对模型启用了 `enable_groups` 限制作了重定向。**建议在 dddai.dev 后台确认该 key 的实际分组**——这直接影响毛利测算，因为 6.8 与 1 之间差 6.8 倍。
+补充实验：用同一个 key 直接调用 `gemini-3.1-flash-lite`（`enable_groups: ["gemini"]`，`group_ratio.gemini = 0.3`，`model_ratio 0.25`，`completion_ratio 3`），p=2201 / c=1033：
+
+| 假设分组倍率 | 预测扣费 | 实测 |
+|---|---|---|
+| gemini 0.3 | 1325 × 0.3 = **397.5** | **398** ✅ |
+| auto 1 | 1325.0 | ❌ |
+| deepseek 6.8 | 9010.0 | ❌ |
+
+结论：**该 key 确实在 `auto` 组；`auto` = 自动分组，计费时按目标模型所属分组的 `group_ratio` 结算**，而非按 `auto` 自身的 1。所以同一个 key 调 deepseek 模型按 6.8 计、调 gemini 模型按 0.3 计，两者并不冲突。
+
+统一公式（两类计费口径均已验证）：
+
+```
+上游真实扣费 = 定价基准 × 该模型所属分组的 group_ratio
+  定价基准 =  (prompt + completion × completion_ratio) × model_ratio      # ratio 模式
+           或 billing_expr 结果 / 1e6 × QuotaPerUnit                       # tiered_expr 模式
+```
+
+### 9.7 偏差是双向的：不只是"少收"，也可能"多收"
+
+本地扣费 = 定价基准 × **本地分组倍率（当前为 1）**；上游真实成本 = 同一基准 × **模型所属分组倍率**。因此偏差方向随分组翻转：
+
+| 模型 | 上游分组倍率 | 本地扣费 | 上游真实成本 | 偏差方向 |
+|---|---|---|---|---|
+| deepseek-v4-flash | 6.8（deepseek 组） | 16 quota | 106 quota | **少收 6.8 倍**，亏损 |
+| gemini-3.1-flash-lite | 0.3（gemini 组） | 1325 quota | 398 quota | **多收 3.3 倍**，定价虚高 |
+
+（gemini 行的"本地扣费"为按本地同步倍率 × 本地分组倍率 1 计算所得，与 ratio 模式公式一致。）
+
+影响：`pricing_control` 的毛利报表在两端都失真——高价组（deepseek / kimi 6.8、glm 6、claude-api 5）实际是亏损，低价组（gemini 0.3、claude-kiro 0.25、grok 0.25、default 0.2、codex-plus 0.15）实际毛利远高于报表。靠单一 `model_ratio` 无法同时覆盖两端。
