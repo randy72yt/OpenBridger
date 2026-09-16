@@ -245,6 +245,20 @@ func SetApiRouter(router *gin.Engine) {
 			ratioSyncRoute.GET("/channels", controller.GetSyncableChannels)
 			ratioSyncRoute.POST("/fetch", controller.FetchUpstreamRatios)
 		}
+		pricingControlRoute := apiRouter.Group("/pricing-control")
+		pricingControlRoute.Use(middleware.RootAuth())
+		{
+			pricingControlRoute.GET("/offers", controller.GetPricingOffers)
+			pricingControlRoute.POST("/offers/import", controller.ImportPricingOffers)
+			pricingControlRoute.GET("/policies", controller.GetPricingPolicies)
+			pricingControlRoute.PUT("/policies", controller.UpsertPricingPolicy)
+			pricingControlRoute.POST("/recalculate", controller.RecalculatePricing)
+			pricingControlRoute.GET("/proposals", controller.GetPricingProposals)
+			pricingControlRoute.POST("/proposals/:id/approve", controller.ApprovePricingProposal)
+			pricingControlRoute.POST("/proposals/:id/reject", controller.RejectPricingProposal)
+			pricingControlRoute.POST("/proposals/:id/publish", controller.PublishPricingProposal)
+			pricingControlRoute.GET("/risk", controller.GetPricingRisks)
+		}
 		taskPluginRoute := apiRouter.Group("/plugin/task")
 		taskPluginRoute.Use(middleware.RootAuth())
 		{

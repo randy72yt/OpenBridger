@@ -1,9 +1,9 @@
-# Frontend Development - Backend built from local source
+# Local acceptance environment built from current source
 #
 # Usage:
-#   1. docker compose -f docker-compose.dev.yml up -d
-#   2. make dev-web
-#   3. Open http://localhost:5173 (Rsbuild dev server, API auto-proxied to :3000)
+#   1. cd web && bun run build
+#   2. docker compose -f docker-compose.dev.yml up -d --build
+#   3. Open http://localhost:3000
 #
 # Rebuild backend after Go code changes:
 #   docker compose -f docker-compose.dev.yml up -d --build new-api

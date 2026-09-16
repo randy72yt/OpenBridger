@@ -1,0 +1,70 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+:root {
+  --background: #f1eee6;
+  --foreground: #0b1016;
+  --card: #faf8f3;
+  --card-foreground: #0b1016;
+  --popover: #faf8f3;
+  --popover-foreground: #0b1016;
+  /* Darker signal tone keeps text-primary readable on paper surfaces. */
+  --primary: #087c74;
+  --primary-foreground: #ffffff;
+  --secondary: #e4e5dc;
+  --secondary-foreground: #0b1016;
+  --muted: #e8e5dd;
+  --muted-foreground: #59636c;
+  --accent-foreground: #0b1016;
+  --border: #d2d1c9;
+  --input: #a0a49f;
+  --ring: #087c74;
+  --sidebar: #e8e5dd;
+  --sidebar-foreground: #0b1016;
+  --sidebar-primary: #087c74;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent-foreground: #075e59;
+  --sidebar-border: #d2d1c9;
+  --sidebar-ring: #087c74;
+}
+
+.dark {
+  --background: #0b1016;
+  --foreground: #f1eee6;
+  --card: #141c24;
+  --card-foreground: #f1eee6;
+  --popover: #19232c;
+  --popover-foreground: #f1eee6;
+  --primary: #2bbfb4;
+  --primary-foreground: #0b1016;
+  --secondary: #202c34;
+  --secondary-foreground: #f1eee6;
+  --muted: #19232c;
+  --muted-foreground: #a2aab1;
+  --accent-foreground: #f1eee6;
+  --border: #303e49;
+  --input: #63717c;
+  --ring: #2bbfb4;
+  --sidebar: #10171e;
+  --sidebar-foreground: #f1eee6;
+  --sidebar-primary: #2bbfb4;
+  --sidebar-primary-foreground: #0b1016;
+  --sidebar-accent-foreground: #2bbfb4;
+  --sidebar-border: #303e49;
+  --sidebar-ring: #2bbfb4;
+}

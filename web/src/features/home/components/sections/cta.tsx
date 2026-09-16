@@ -43,8 +43,8 @@ export function CTA(props: CTAProps) {
         className='absolute inset-0 -z-10 opacity-20 dark:opacity-[0.08]'
         style={{
           background: [
-            'radial-gradient(ellipse 50% 50% at 30% 50%, oklch(0.7 0.15 250 / 70%) 0%, transparent 70%)',
-            'radial-gradient(ellipse 40% 40% at 70% 40%, oklch(0.65 0.12 200 / 50%) 0%, transparent 70%)',
+            'radial-gradient(ellipse 50% 50% at 30% 50%, color-mix(in srgb, var(--primary) 50%, transparent) 0%, transparent 70%)',
+            'radial-gradient(ellipse 40% 40% at 70% 40%, color-mix(in srgb, var(--primary) 30%, transparent) 0%, transparent 70%)',
           ].join(', '),
         }}
       />
@@ -54,15 +54,15 @@ export function CTA(props: CTAProps) {
         animation='scale-in'
       >
         <h2 className='text-2xl leading-tight font-bold tracking-tight md:text-4xl'>
-          {t('Ready to simplify')}
+          {t('Start with an idea,')}
           <br />
-          <span className='bg-gradient-to-r from-blue-400 via-violet-400 to-purple-500 bg-clip-text text-transparent'>
-            {t('your AI integration?')}
+          <span className='from-primary via-primary to-primary/75 bg-gradient-to-r bg-clip-text text-transparent'>
+            {t('make your first request')}
           </span>
         </h2>
         <p className='text-muted-foreground/80 mx-auto mt-5 max-w-md text-sm leading-relaxed md:text-base'>
           {t(
-            'Deploy your own gateway and start routing requests through your configured upstream services.'
+            'From a course project to an application, start with a model and build at your own pace.'
           )}
         </p>
         <div className='mt-8 flex items-center justify-center gap-3'>

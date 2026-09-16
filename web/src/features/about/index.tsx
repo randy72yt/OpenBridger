@@ -17,98 +17,109 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { Construction } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { PublicLayout } from '@/components/layout'
+import { Footer } from '@/components/layout/components/footer'
+import { PlatformContact } from '@/components/platform-contact'
 import { RichContent } from '@/components/rich-content'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useSystemConfig } from '@/hooks/use-system-config'
 import { isHttpUrl, isLikelyHtml } from '@/lib/content-format'
 
 import { getAboutContent } from './api'
 
-function EmptyAboutState() {
+export function DefaultAboutContent() {
   const { t } = useTranslation()
-  const currentYear = new Date().getFullYear()
+  const { systemName } = useSystemConfig()
 
   return (
-    <div className='flex min-h-[60vh] items-center justify-center p-8'>
-      <div className='max-w-2xl space-y-6 text-center'>
-        <div className='flex justify-center'>
-          <Construction className='text-muted-foreground h-24 w-24' />
-        </div>
-        <div className='space-y-2'>
-          <h2 className='text-2xl font-bold'>{t('No About Content Set')}</h2>
-          <p className='text-muted-foreground'>
+    <main className='mx-auto max-w-5xl px-5 pt-28 pb-16 md:pt-32'>
+      <Card className='gap-0 rounded-3xl py-0 shadow-none'>
+        <CardHeader className='gap-4 p-7 md:p-12'>
+          <div className='text-primary flex items-center gap-3 text-xs font-semibold tracking-wider'>
+            {systemName} · {t('Regional access notice')}
+          </div>
+          <h1 className='text-3xl font-semibold tracking-tight md:text-4xl'>
+            {t('Service usage notice')}
+          </h1>
+          <p className='text-muted-foreground leading-8'>
             {t(
-              'The administrator has not configured any about content yet. You can set it in the settings page, supporting HTML or URL.'
+              'This notice explains service eligibility, permitted use, account responsibilities, operational logs and abuse handling. Please read it before using the platform.'
             )}
           </p>
-        </div>
-        <div className='space-y-4 text-sm'>
-          <p>
-            {t('New API Project Repository:')}{' '}
-            <a
-              href='https://github.com/QuantumNous/new-api'
-              target='_blank'
-              rel='noopener noreferrer'
-              className='text-primary hover:underline'
-            >
-              {t('https://github.com/QuantumNous/new-api')}
-            </a>
-          </p>
-          <p className='text-muted-foreground'>
-            <a
-              href='https://github.com/QuantumNous/new-api'
-              target='_blank'
-              rel='noopener noreferrer'
-              className='text-primary hover:underline'
-            >
-              {t('NewAPI')}
-            </a>{' '}
-            © {currentYear}{' '}
-            <a
-              href='https://github.com/QuantumNous'
-              target='_blank'
-              rel='noopener noreferrer'
-              className='text-primary hover:underline'
-            >
-              {t('QuantumNous')}
-            </a>{' '}
-            {t('| Based on')}{' '}
-            <a
-              href='https://github.com/songquanpeng/one-api'
-              target='_blank'
-              rel='noopener noreferrer'
-              className='text-primary hover:underline'
-            >
-              {t('One API')}
-            </a>{' '}
-            © 2023{' '}
-            <a
-              href='https://github.com/songquanpeng'
-              target='_blank'
-              rel='noopener noreferrer'
-              className='text-primary hover:underline'
-            >
-              {t('JustSong')}
-            </a>
-          </p>
-          <p className='text-muted-foreground'>
-            {t('This project must be used in compliance with the')}{' '}
-            <a
-              href='https://github.com/QuantumNous/new-api/blob/main/LICENSE'
-              target='_blank'
-              rel='noopener noreferrer'
-              className='text-primary hover:underline'
-            >
-              {t('AGPL v3.0 License')}
-            </a>
-            .
-          </p>
-        </div>
-      </div>
-    </div>
+        </CardHeader>
+        <CardContent className='space-y-8 px-7 pb-7 md:px-12 md:pb-12'>
+          <Card className='bg-primary/5 ring-primary/15 rounded-2xl py-0 shadow-none'>
+            <CardContent className='space-y-3 p-6'>
+              <h2 className='text-lg font-semibold'>{t('Important notice')}</h2>
+              <p className='text-muted-foreground leading-8'>
+                {t(
+                  'This platform serves only users outside mainland China. Please ensure that your access to and use of the service comply with applicable laws in your location, upstream provider terms and platform rules. Responsibility for violations rests with the respective responsible parties in accordance with the law.'
+                )}
+              </p>
+            </CardContent>
+          </Card>
+          <Separator className='mx-auto max-w-[min(36rem,80%)] opacity-60' />
+          <section className='space-y-3'>
+            <h2 className='text-lg font-semibold'>{t('Permitted use')}</h2>
+            <p className='text-muted-foreground leading-8'>
+              {t(
+                'Use your account and API keys only for your own projects or authorized team activities. Do not sell or publicly distribute credentials, resell access without authorization, bypass limits, attack systems or infringe others’ rights. Follow applicable laws, provider terms and academic integrity rules.'
+              )}
+            </p>
+          </section>
+          <Separator className='mx-auto max-w-[min(36rem,80%)] opacity-60' />
+          <section className='space-y-3'>
+            <h2 className='text-lg font-semibold'>{t('Data and security')}</h2>
+            <p className='text-muted-foreground leading-8'>
+              {t(
+                'To deliver requests, measure usage and investigate issues, the platform processes necessary request data and may record login IPs, request times, models, usage, status and error information. Requests are forwarded to the selected upstream provider. Avoid submitting unnecessary sensitive information; consult the privacy policy for data handling details.'
+              )}
+            </p>
+          </section>
+          <Separator className='mx-auto max-w-[min(36rem,80%)] opacity-60' />
+          <section className='space-y-3'>
+            <h2 className='text-lg font-semibold'>{t('Account security')}</h2>
+            <p className='text-muted-foreground leading-8'>
+              {t(
+                'Keep your password and API keys private. Check usage regularly, and revoke any key that may have been exposed. Do not include credentials in support messages.'
+              )}
+            </p>
+          </section>
+          <Separator className='mx-auto max-w-[min(36rem,80%)] opacity-60' />
+          <section className='space-y-3'>
+            <h2 className='text-lg font-semibold'>{t('Abuse handling')}</h2>
+            <p className='text-muted-foreground leading-8'>
+              {t(
+                'Abnormal access, API abuse, attempts to bypass restrictions or other security risks may lead to restrictions, suspension or termination of affected accounts and keys. Measures depend on the risk; urgent security incidents may require action without advance notice. Contact the platform if you believe a restriction is mistaken.'
+              )}
+            </p>
+          </section>
+          <Separator className='mx-auto max-w-[min(36rem,80%)] opacity-60' />
+          <section id='business' className='scroll-mt-24 space-y-3'>
+            <h2 className='text-lg font-semibold'>
+              {t('Business cooperation')}
+            </h2>
+            <p className='text-muted-foreground leading-8'>
+              {t(
+                'Discuss API integration, team access or model service partnerships with us. Include your use case, expected usage and technical requirements when contacting us.'
+              )}
+            </p>
+          </section>
+          <section id='contact' className='scroll-mt-24 space-y-3'>
+            <h2 className='text-lg font-semibold'>
+              {t('footer.columns.about.links.contact')}
+            </h2>
+            <div className='bg-muted/60 text-muted-foreground flex flex-col gap-3 rounded-2xl p-6 text-sm'>
+              <PlatformContact />
+            </div>
+          </section>
+        </CardContent>
+      </Card>
+    </main>
   )
 }
 
@@ -139,8 +150,9 @@ export function About() {
 
   if (!hasContent) {
     return (
-      <PublicLayout>
-        <EmptyAboutState />
+      <PublicLayout showMainContainer={false}>
+        <DefaultAboutContent />
+        <Footer />
       </PublicLayout>
     )
   }

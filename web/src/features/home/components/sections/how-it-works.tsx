@@ -20,6 +20,7 @@ import { Settings, Zap, BarChart3 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { AnimateInView } from '@/components/animate-in-view'
+import { Separator } from '@/components/ui/separator'
 
 export function HowItWorks() {
   const { t } = useTranslation()
@@ -27,30 +28,29 @@ export function HowItWorks() {
   const steps = [
     {
       num: '1',
-      title: t('Configure'),
-      desc: t(
-        'Add your API keys, set up channels and configure access permissions'
-      ),
+      title: t('Create an API key'),
+      desc: t('Sign in, choose a model and create an API key in the console.'),
       icon: <Settings className='size-6' strokeWidth={1.5} />,
     },
     {
       num: '2',
       title: t('Connect'),
-      desc: t(
-        'Connect through OpenAI, Claude, Gemini, and other compatible API routes'
-      ),
+      desc: t('Set the Base URL, API key and model in your tool or SDK.'),
       icon: <Zap className='size-6' strokeWidth={1.5} />,
     },
     {
       num: '3',
       title: t('Monitor'),
-      desc: t('Track usage, costs and performance with real-time analytics'),
+      desc: t(
+        'Send a request and review usage and request logs in the console.'
+      ),
       icon: <BarChart3 className='size-6' strokeWidth={1.5} />,
     },
   ]
 
   return (
-    <section className='border-border/40 relative z-10 border-t px-6 py-24 md:py-32'>
+    <section className='relative z-10 px-6 py-24 md:py-32'>
+      <Separator className='absolute top-0 left-1/2 max-w-[min(36rem,80%)] -translate-x-1/2 opacity-60' />
       <div className='mx-auto max-w-6xl'>
         <AnimateInView className='mb-16 text-center md:mb-20'>
           <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>

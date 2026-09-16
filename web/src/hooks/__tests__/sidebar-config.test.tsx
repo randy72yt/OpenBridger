@@ -180,3 +180,14 @@ describe('audit log sidebar entry', () => {
     expect(titles).toContain('Audit Logs')
   })
 })
+
+it('keeps playground and removes external chat presets from the root navigation', () => {
+  const { result } = sidebarFor()
+  const items = result.current.flatMap((group) => group.items)
+  expect(
+    items.some((item) => 'url' in item && item.url === '/playground')
+  ).toBe(true)
+  expect(
+    items.some((item) => 'type' in item && item.type === 'chat-presets')
+  ).toBe(false)
+})

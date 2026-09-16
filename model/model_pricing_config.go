@@ -84,7 +84,11 @@ func defaultPricingMaps() map[string]map[string]any {
 
 func readModelPricingMaps(db *gorm.DB) (map[string]map[string]any, error) {
 	var rows []Option
-	if err := db.Where(commonKeyCol+" IN ?", modelPricingOptionKeys).Find(&rows).Error; err != nil {
+	keys := make([]any, len(modelPricingOptionKeys))
+	for i, key := range modelPricingOptionKeys {
+		keys[i] = key
+	}
+	if err := db.Where(clause.IN{Column: clause.Column{Name: "key"}, Values: keys}).Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	values := defaultPricingMaps()
@@ -361,7 +365,7 @@ func mutateModelPricingOptions(mutate func(*gorm.DB, map[string]map[string]any) 
 			if err != nil {
 				return err
 			}
-			if err := tx.Model(&Option{}).Where(commonKeyCol+" = ?", key).Update("value", string(encoded)).Error; err != nil {
+			if err := tx.Model(&Option{}).Where(clause.Eq{Column: clause.Column{Name: "key"}, Value: key}).Update("value", string(encoded)).Error; err != nil {
 				return err
 			}
 		}

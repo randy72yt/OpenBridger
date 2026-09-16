@@ -89,9 +89,13 @@ export function useTopNavLinks(): TopNavLink[] {
   // Docs (supports external links)
   if (modules?.docs !== false) {
     if (docsLink) {
-      links.push({ title: t('Docs'), href: docsLink, external: true })
+      links.push({
+        title: t('Practical tutorials'),
+        href: docsLink,
+        external: /^https?:\/\//.test(docsLink),
+      })
     } else {
-      links.push({ title: t('Docs'), href: '/docs' })
+      links.push({ title: t('Practical tutorials'), href: '/docs' })
     }
   }
 

@@ -886,6 +886,11 @@ func performPluginRequest(handler http.Handler, method, path string) *httptest.R
 func TestWebFallbackDoesNotCacheMissingAPIOrAssets(t *testing.T) {
 	outer := gin.New()
 	SetWebRouter(outer, WebAssets{IndexPage: []byte("dashboard")}, func(c *gin.Context) { c.Next() })
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		favicon := performPluginRequest(outer, method, "/favicon.ico")
+		assert.Equal(t, http.StatusTemporaryRedirect, favicon.Code)
+		assert.Equal(t, "/openbridger-mark.svg", favicon.Header().Get("Location"))
+	}
 	for _, path := range []string{"/api/user/token/status", "/api/audit/self?p=1", "/v1/missing", "/assets/missing.js"} {
 		t.Run(path, func(t *testing.T) {
 			response := performPluginRequest(outer, http.MethodGet, path)

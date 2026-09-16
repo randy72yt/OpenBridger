@@ -365,6 +365,10 @@ func migrateDB() error {
 		&SystemInstance{},
 		&SystemTask{},
 		&SystemTaskLock{},
+		&UpstreamModelOffer{},
+		&UpstreamCostSnapshot{},
+		&ModelPricePolicy{},
+		&ModelPriceProposal{},
 		&CasbinRule{},
 		&AuthzRole{},
 	)

@@ -57,6 +57,12 @@ var auditContentTemplates = map[string]string{
 	"channel.multi_key_manage":   "Multi-key management ${action} on channel (ID: ${id})",
 	"channel.upstream_apply":     "Applied upstream model changes to channel (ID: ${id})",
 	"channel.upstream_apply_all": "Applied upstream model changes to ${count} channels",
+	"pricing.offers.import":      "Imported ${count} upstream pricing offers",
+	"pricing.policy.update":      "Updated pricing policy for ${model} (${tier})",
+	"pricing.recalculate":        "Started pricing recalculation task ${task_id}",
+	"pricing.proposal.approve":   "Approved pricing proposal ${id}",
+	"pricing.proposal.reject":    "Rejected pricing proposal ${id}",
+	"pricing.proposal.publish":   "Published pricing proposal ${id}",
 
 	"redemption.create": "Created ${count} redemption codes named ${name} (${quota} each)",
 

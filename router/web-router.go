@@ -22,6 +22,12 @@ type WebAssets struct {
 func SetWebRouter(router *gin.Engine, assets WebAssets, pluginDispatcher gin.HandlerFunc) {
 	frontendFS := common.EmbedFolder(assets.BuildFS, "web/dist")
 
+	redirectFavicon := func(c *gin.Context) {
+		c.Redirect(http.StatusTemporaryRedirect, "/openbridger-mark.svg")
+	}
+	router.GET("/favicon.ico", redirectFavicon)
+	router.HEAD("/favicon.ico", redirectFavicon)
+
 	router.NoRoute(
 		pluginDispatcher,
 		middleware.RouteTag("web"),

@@ -81,7 +81,14 @@ import {
 } from '@/components/ui/form'
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import {
   Sheet,
@@ -1306,7 +1313,7 @@ export function ChannelMutateDrawer({
     const timer = setTimeout(() => {
       toast.warning(
         t(
-          'Warning: Base URL should not end with /v1. New API will handle it automatically. This may cause request failures.'
+          'Warning: Base URL should not end with /v1. OpenBridger will handle it automatically. This may cause request failures.'
         ),
         { duration: 5000 }
       )
@@ -1980,35 +1987,35 @@ export function ChannelMutateDrawer({
                                 <FormItem>
                                   <FormLabel>{t('Task plugin *')}</FormLabel>
                                   {canBindTaskPlugin ? (
-                                    <FormControl><Combobox
-value={field.value}
-onValueChange={(value) => {
-                                        field.onChange(value)
-                                        const plugin =
-                                          taskPluginOptionsQuery.data?.find(
-                                            (item) => item.key === value
-                                          )
-                                        if (plugin?.models?.length) {
-                                          form.setValue(
-                                            'models',
-                                            formatModelsArray(plugin.models),
-                                            {
-                                              shouldDirty: true,
-                                            }
-                                          )
-                                        }
-                                      }}
-options={(
-                                        taskPluginOptionsQuery.data ?? []
-                                      ).map((plugin) => ({
-                                        value: plugin.key,
-                                        label: `${plugin.name} (${plugin.key})`,
-                                      }))}
-className='w-full'
-placeholder={t(
-                                              'Select task plugin'
-                                            )}
-/></FormControl>
+                                    <FormControl>
+                                      <Combobox
+                                        value={field.value}
+                                        onValueChange={(value) => {
+                                          field.onChange(value)
+                                          const plugin =
+                                            taskPluginOptionsQuery.data?.find(
+                                              (item) => item.key === value
+                                            )
+                                          if (plugin?.models?.length) {
+                                            form.setValue(
+                                              'models',
+                                              formatModelsArray(plugin.models),
+                                              {
+                                                shouldDirty: true,
+                                              }
+                                            )
+                                          }
+                                        }}
+                                        options={(
+                                          taskPluginOptionsQuery.data ?? []
+                                        ).map((plugin) => ({
+                                          value: plugin.key,
+                                          label: `${plugin.name} (${plugin.key})`,
+                                        }))}
+                                        className='w-full'
+                                        placeholder={t('Select task plugin')}
+                                      />
+                                    </FormControl>
                                   ) : (
                                     <FormControl>
                                       <Input
@@ -2794,7 +2801,7 @@ placeholder={t(
                                     </FormControl>
                                     <FormDescription>
                                       {t(
-                                        'Custom API base URL. For official channels, New API has built-in addresses. Only fill this for third-party proxy sites or special endpoints. Do not add /v1 or trailing slash.'
+                                        'Custom API base URL. For official channels, OpenBridger has built-in addresses. Only fill this for third-party proxy sites or special endpoints. Do not add /v1 or trailing slash.'
                                       )}
                                     </FormDescription>
                                     <FormMessage />
