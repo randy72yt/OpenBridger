@@ -239,24 +239,91 @@ TEST_POSTGRES_DSN="host=127.0.0.1 port=5499 user=postgres password=qapass dbname
 
 排查提示：这个 401 极易被误判为"OpenBridger 自身令牌无效"。区分依据是日志中 `channel error (channel #2, ...)` 前缀——那是上游返回的状态，不是网关自身的鉴权失败。
 
-### 7.4 E2E-005 详情：未知模型按 37.5 兜底计费（本次最严重发现）
+### 7.4 E2E-005 详情：未知模型按 37.5 兜底计费（已修正根因定位）
 
-- 上游 `/api/pricing` 给 `deepseek-v4-flash` 的倍率：`model_ratio = 0.75`、`completion_ratio = 3`。
+> **2026-09-16 修正**：本节初稿将根因归为"new-api 无法获取上游价格"，**该判断错误**。经追加验证，new-api 原生支持从上游同步模型与价格（见 7.5.1）。37.5 兜底的真实触发条件是：**未执行倍率同步**，本地倍率表中无此模型。以下为实测事实与修正后的结论。
+
+**实测事实（未同步状态下）**
+
 - 实际扣费 3975。日志 `other` 字段记录：`model_ratio: 37.5`、`completion_ratio: 1`、`group_ratio: 1`、`billing_source: wallet`。
 - 实扣核算：`(85 + 21 × 1) × 37.5 = 3975` ✓
-- 按上游真实倍率应为：`85 × 0.75 + 21 × 0.75 × 3 = 111`
-- **差 35.8 倍。**
-- 根因位置：`setting/ratio_setting/model_ratio.go:760`，`GetModelRatioOrPrice` 在模型名未命中内置倍率表时 `return 37.5, false, false`（第三个返回值 `exist=false`）。
-- 影响面：中转站使用的都是私有或新模型名（`deepseek-v4-flash`、`gpt-5.6-terra`、`claude-fable-5`、`kimi-k3` 等），内置倍率表里基本没有，**全部会落到 37.5 这个最高档兜底**，与真实成本严重脱钩。
+- 兜底位置：`setting/ratio_setting/model_ratio.go:760`，`GetModelRatioOrPrice` 在模型名未命中本地倍率表时 `return 37.5, false, false`（第三个返回值 `exist=false`）。
+
+**修正后的根因**
+
+不是"产品不支持获取上游价格"，而是**测试环境从未执行过倍率同步**。补充实测（`POST /api/ratio_sync/fetch`，channel_id=1）结果：
+
+- 请求成功，返回 **39 个模型的定价值**（`test_results: [{name: 'qa-upstream(1)', status: 'success'}]`）。
+- 本地 `current` 全部为空 `{}`，即本地倍率表确实没有这些模型。
+- 上游同时下发了 `billing_mode` 与 `billing_expr`：`deepseek-v4-flash` 使用的是**分档计费表达式**（峰谷分时），并非固定 ratio：
+
+  ```
+  weekday("UTC") >= 1 && weekday("UTC") <= 5 && ((hour("UTC") >= 1 && hour("UTC") < 4) || (hour("UTC") >= 6 && hour("UTC") < 10))
+    ? tier("peak", p * 0.44 + cr * 0.014 + c * 1.32)
+    : tier("off_peak", p * 0.22 + cr * 0.007 + c * 0.66)
+  ```
+
+- 初稿所称"上游给 `model_ratio = 0.75`"不适用于该模型——`billing_mode = tiered_expr` 时走表达式计费，ratio 字段不参与。
+
+**结论调整**
+
+"差 35.8 倍"是由未同步状态产生的观测值，**不构成产品缺陷的直接证据**。仍然成立且值得关注的事实是：
+
+1. 未命中本地倍率表时静默按 37.5（约 $75/1M tokens，属最贵档）计费，无告警、无日志标记。
+2. `ratio_sync.go:677-691` 存在专门的可信度校验：上游返回 `model_ratio=37.5 且 completion_ratio=1.0` 组合时标记 `confidence=false`。这说明该组合在代码内已被认定为无意义信号，但本地兜底路径仍会产生同样的值。
+3. 倍率同步为**手动触发**（fetch 仅返回差异，需人工确认后应用），无定时自动同步；模型列表侧则支持自动同步（`UpstreamModelUpdateAutoSyncEnabled`）。
+
+**待补测**：同步应用上游倍率后重新调用，核对扣费金额是否符合表达式预期。本次未执行（需重启实例刷新倍率缓存，且每次真实调用产生上游费用）。
 
 ### 7.5 上游能力实测
 
 | 探测项 | 结果 |
 |---|---|
 | `GET /v1/models` | 分组调整后返回 40 个模型（调整前为空数组） |
-| `GET /api/pricing` | 可用，40 条；**37 条只有 ratio 倍率，仅 3 条有绝对价格** |
+| `GET /api/pricing` | 可用，40 条；**匿名可访问**（ratio_sync 拉取时不带认证头，实测仍返回 200 / 17741 字节） |
 | 流式 usage | **默认每个 chunk 都带 usage**，无需 `stream_options` |
 | 模型名改写 | `deepseek-v4-flash` → 上游返回 `deepseek-v4-flash-ga-260731` |
+
+#### 7.5.1 new-api 上游同步能力（追加验证，修正此前错误判断）
+
+初次报告中"new-api 只取模型 ID 不取价格""37/40 条只有 ratio 因而不可用"的说法**均不成立**。代码与实测如下：
+
+**价格同步** —— `controller/ratio_sync.go`，路由 `POST /api/ratio_sync/fetch`（`RootAuth` 保护），默认端点常量 `defaultEndpoint = "/api/pricing"`（`ratio_sync.go:33`）。支持四种上游格式：
+
+| 类型 | 上游端点 | 处理方式 |
+|---|---|---|
+| type1 | `/api/ratio_config` | `data` 为 map，直接采用 |
+| type2 | `/api/pricing` | `data` 为 `[]Pricing` 列表，转换为统一 map |
+| type3 | OpenRouter `/v1/models` | per-token 价格换算为 ratio，`ratio = price × 1000 × USD` |
+| type4 | models.dev `/api.json` | USD/1M 换算为 ratio，`ratio = input × USD / 1000` |
+
+同步字段（`pricingSyncFields`，`ratio_sync.go:64-75`）覆盖 `model_ratio`、`completion_ratio`、`cache_ratio`、`create_cache_ratio`、`image_ratio`、`audio_ratio`、`audio_completion_ratio`、`model_price`，以及 `billing_mode` + `billing_expr`。**分档计费表达式可随同步下发**，不止是固定倍率。
+
+另内置两个预设来源（`GetSyncableChannels`）：官方倍率预设 `basellm.github.io`、models.dev 价格预设。
+
+`ratio_sync.go:677-691` 设有可信度校验：上游返回 `model_ratio=37.5 且 completion_ratio=1.0` 时将该条目标记 `confidence=false`，UI 可据此提示。
+
+**模型同步** —— `controller/channel_upstream_update.go`，`fetchChannelUpstreamModelIDs` 拉取 `/v1/models`。支持自动同步：`UpstreamModelUpdateAutoSyncEnabled` 开启后，后台任务 `runChannelUpstreamModelUpdateTaskOnce`（`:688`）按 `getUpstreamModelUpdateMinCheckIntervalSeconds` 节流自动追加新模型（`:534`）。手动入口：`/api/channel/upstream_models/detect|apply`（`:855`、`:911`）。
+
+**实测结果（对本次中转站渠道）**
+
+```
+POST /api/ratio_sync/fetch {"channel_ids":[1],"timeout":20}
+→ HTTP 200, test_results: [{name: 'qa-upstream(1)', status: 'success'}]
+→ differences: 39 个模型, prices: 39 条
+→ confidence 统计: 可信 114 条 / 不可信 0 条
+```
+
+样例（本地 `current` 均为空 `{}`）：
+
+- `claude-haiku-4-5`：`model_ratio 0.5`、`completion_ratio 5`、`cache_ratio 0.1`、`create_cache_ratio 2`
+- `claude-sonnet-5`：`model_ratio 1`、`completion_ratio 5`、`cache_ratio 0.1`、`create_cache_ratio 1.25`
+- `deepseek-v4-flash`：`billing_mode = tiered_expr` + 峰谷分时表达式（见 7.4）
+- `gemini-2.5-flash-lite`：`billing_mode = tiered_expr` + `tier("standard", p*0.1 + img*0.1 + ai*0.3 + c*0.4 + cr*0.01 + cc*0.0833333333)`
+
+**计价单位换算**：`USD = 500`（`model_ratio.go:15`，`$0.002 = 1`），即 `1 ratio = $0.002/1K tokens = $2/1M tokens`。由此 ratio 与绝对价格的换算链路是通的，此前"需知道上游额度单价才能换算"的判断不成立。
+
+**仍然成立的断点**：上述能力作用于 new-api 原生的 ratio/表达式计价体系；OpenBridger 自研的定价控制平面（`UpstreamModelOffer`）要求输入绝对成本 USD/1M，其唯一写入路径是手工导入 `ValidateAndImportPricingOffers`。**上游价格 → pricing_control offers 这一段在代码上没有自动通道**，这才是此前"拿不到价格"说法中唯一成立的部分。
 
 ### 7.6 未完成项
 
