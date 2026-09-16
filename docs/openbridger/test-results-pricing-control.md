@@ -206,3 +206,59 @@ TEST_POSTGRES_DSN="host=127.0.0.1 port=5499 user=postgres password=qapass dbname
 - `service/pricing_control_db_test.go` — PC-DB 三数据库一致性
 
 两个文件只新增测试，未修改任何业务代码。
+
+## 7. 真实上游端到端（PC-E2E）执行结果
+
+### 7.1 环境
+
+- 隔离实例：独立 sqlite `/tmp/qa-e2e/ob.db`，端口 3200/3201/3202。项目根 `one-api.db` 未被触碰（修改时间仍为 09-08 22:11）。
+- 上游：中转站 `https://api.dddai.dev`（OpenAI 兼容）。该中转站自身即 new-api，错误响应 `type: new_api_error`。
+- 渠道：id=1 `qa-upstream`（有效 key）；id=2 `qa-bad-primary`（key 故意无效，priority=100）。
+- 模型：`deepseek-v4-flash`。
+
+### 7.2 结果总览
+
+| 用例 | 结果 | 实测 |
+|---|---|---|
+| E2E-001 真实非流式调用 | 通过 | 200，usage `prompt=85 / completion=21` |
+| E2E-002 真实流式调用 | 通过 | 200，扣费与非流式**完全一致** |
+| E2E-003 无效模型不扣费 | 通过 | 503 `model_not_found`，无 log、无扣减 |
+| E2E-004 主渠道 401 时故障切换 | **未切换** | 上游 401 被透传，未重试备用渠道 |
+| E2E-005 扣费金额核对 | **不符** | 实扣 3975，按上游倍率应为约 111 |
+
+### 7.3 E2E-004 详情：上游 401 不触发切换
+
+日志实证：
+
+```
+[ERR] channel error (channel #2, status code: 401): Invalid token
+[ERR] relay error: Invalid token
+```
+
+请求被路由到 priority=100 的坏渠道，上游返回 401，OpenBridger **直接把上游错误原文（含 "Invalid token" 字样）透传给客户端，未切换到可用的 channel #1**。
+
+排查提示：这个 401 极易被误判为"OpenBridger 自身令牌无效"。区分依据是日志中 `channel error (channel #2, ...)` 前缀——那是上游返回的状态，不是网关自身的鉴权失败。
+
+### 7.4 E2E-005 详情：未知模型按 37.5 兜底计费（本次最严重发现）
+
+- 上游 `/api/pricing` 给 `deepseek-v4-flash` 的倍率：`model_ratio = 0.75`、`completion_ratio = 3`。
+- 实际扣费 3975。日志 `other` 字段记录：`model_ratio: 37.5`、`completion_ratio: 1`、`group_ratio: 1`、`billing_source: wallet`。
+- 实扣核算：`(85 + 21 × 1) × 37.5 = 3975` ✓
+- 按上游真实倍率应为：`85 × 0.75 + 21 × 0.75 × 3 = 111`
+- **差 35.8 倍。**
+- 根因位置：`setting/ratio_setting/model_ratio.go:760`，`GetModelRatioOrPrice` 在模型名未命中内置倍率表时 `return 37.5, false, false`（第三个返回值 `exist=false`）。
+- 影响面：中转站使用的都是私有或新模型名（`deepseek-v4-flash`、`gpt-5.6-terra`、`claude-fable-5`、`kimi-k3` 等），内置倍率表里基本没有，**全部会落到 37.5 这个最高档兜底**，与真实成本严重脱钩。
+
+### 7.5 上游能力实测
+
+| 探测项 | 结果 |
+|---|---|
+| `GET /v1/models` | 分组调整后返回 40 个模型（调整前为空数组） |
+| `GET /api/pricing` | 可用，40 条；**37 条只有 ratio 倍率，仅 3 条有绝对价格** |
+| 流式 usage | **默认每个 chunk 都带 usage**，无需 `stream_options` |
+| 模型名改写 | `deepseek-v4-flash` → 上游返回 `deepseek-v4-flash-ga-260731` |
+
+### 7.6 未完成项
+
+- 主备切换的完整矩阵（同级 priority 重试、5xx 重试、超时重试、重复扣费验证）。
+- 阻塞原因：坏渠道一经建入，其渠道缓存/ability 未随禁用操作刷新，后续请求持续命中它；同时每次真实调用都产生上游费用。改用本地 mock 上游可完整覆盖且不产生费用。
