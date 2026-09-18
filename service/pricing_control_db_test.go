@@ -22,6 +22,43 @@ type qaDBResult struct {
 	PublishErr   error
 }
 
+type qaLegacyUpstreamModelOffer struct {
+	ID             int64 `gorm:"primaryKey"`
+	ChannelID      int
+	UpstreamModel  string
+	PublicModel    string
+	InputCost      float64
+	OutputCost     float64
+	CacheReadCost  float64
+	Currency       string
+	SourceType     string
+	SourceURL      string
+	SourceVersion  string
+	SuccessRateBPS int
+	CollectedAt    int64
+	ExpiresAt      int64
+	Enabled        bool
+	CreatedAt      int64
+	UpdatedAt      int64
+}
+
+func (qaLegacyUpstreamModelOffer) TableName() string { return "upstream_model_offers" }
+
+type qaLegacyUpstreamCostSnapshot struct {
+	ID            int64 `gorm:"primaryKey"`
+	OfferID       int64
+	ChannelID     int
+	PublicModel   string
+	InputCost     float64
+	OutputCost    float64
+	CacheReadCost float64
+	Currency      string
+	SourceVersion string
+	CollectedAt   int64
+}
+
+func (qaLegacyUpstreamCostSnapshot) TableName() string { return "upstream_cost_snapshots" }
+
 // qaRunOnDatabase 在指定数据库上执行同一组定价操作，返回可比较的结果。
 func qaRunOnDatabase(t *testing.T, dbType common.DatabaseType, openDB func(string) gorm.Dialector, dsn string) qaDBResult {
 	t.Helper()
@@ -42,9 +79,29 @@ func qaRunOnDatabase(t *testing.T, dbType common.DatabaseType, openDB func(strin
 	})
 
 	models := []any{
-		&model.Option{}, &model.Channel{}, &model.UpstreamModelOffer{}, &model.UpstreamCostSnapshot{},
+		&model.Option{}, &model.Channel{}, &model.Ability{}, &model.Model{}, &model.Vendor{},
+		&model.UpstreamModelOffer{}, &model.UpstreamCostSnapshot{},
 		&model.ModelPricePolicy{}, &model.ModelPriceProposal{},
 	}
+	require.NoError(t, database.Migrator().DropTable(models...))
+	require.NoError(t, database.AutoMigrate(
+		&model.Option{}, &model.Channel{}, &model.Ability{}, &model.Model{}, &model.Vendor{},
+		&qaLegacyUpstreamModelOffer{}, &qaLegacyUpstreamCostSnapshot{},
+		&model.ModelPricePolicy{}, &model.ModelPriceProposal{},
+	))
+	require.NoError(t, database.Create(&qaLegacyUpstreamModelOffer{
+		ChannelID: 999, UpstreamModel: "legacy-upstream", PublicModel: "legacy-public",
+		InputCost: 1, OutputCost: 2, Currency: "USD", SourceType: "test", SourceVersion: "legacy",
+		SuccessRateBPS: 10000, CollectedAt: 1, ExpiresAt: 2, Enabled: true, CreatedAt: 1, UpdatedAt: 1,
+	}).Error)
+	require.NoError(t, database.AutoMigrate(models...))
+	require.NoError(t, database.AutoMigrate(models...))
+	require.True(t, database.Migrator().HasColumn(&model.UpstreamModelOffer{}, "UpstreamGroupRatio"))
+	var legacyCount int64
+	require.NoError(t, database.Model(&model.UpstreamModelOffer{}).Where("public_model = ?", "legacy-public").Count(&legacyCount).Error)
+	require.Equal(t, int64(1), legacyCount)
+
+	require.NoError(t, database.Migrator().DropTable(models...))
 	require.NoError(t, database.AutoMigrate(models...))
 	require.NoError(t, database.AutoMigrate(models...))
 
@@ -55,17 +112,18 @@ func qaRunOnDatabase(t *testing.T, dbType common.DatabaseType, openDB func(strin
 	}
 
 	now := common.GetTimestamp()
+	groupRatio := 1.0
 	require.NoError(t, ValidateAndImportPricingOffers([]model.UpstreamModelOffer{
 		{
 			ChannelID: 201, UpstreamModel: "qa-up", PublicModel: publicModel,
 			InputCost: 1.23456789, OutputCost: 6.54321987, CacheReadCost: 0.11111111,
-			Currency: "USD", SourceType: "test", SourceVersion: "db-v1", SuccessRateBPS: 9891,
+			UpstreamGroupRatio: &groupRatio, Currency: "USD", SourceType: "test", SourceVersion: "db-v1", SuccessRateBPS: 9891,
 			CollectedAt: now, ExpiresAt: now + 3600, Enabled: true,
 		},
 		{
 			ChannelID: 202, UpstreamModel: "qa-up", PublicModel: publicModel,
 			InputCost: 2.5, OutputCost: 12.5, CacheReadCost: 0.2,
-			Currency: "USD", SourceType: "test", SourceVersion: "db-v1", SuccessRateBPS: 9900,
+			UpstreamGroupRatio: &groupRatio, Currency: "USD", SourceType: "test", SourceVersion: "db-v1", SuccessRateBPS: 9900,
 			CollectedAt: now, ExpiresAt: now + 3600, Enabled: true,
 		},
 	}))
@@ -188,19 +246,21 @@ func TestQAPricingDatabaseMatrix(t *testing.T) {
 func qaRunSQLite(t *testing.T) qaDBResult {
 	t.Helper()
 	const publicModel = "qa-db-matrix"
+	require.NoError(t, model.DB.AutoMigrate(&model.Channel{}, &model.Ability{}, &model.Model{}, &model.Vendor{}))
 
 	now := common.GetTimestamp()
+	groupRatio := 1.0
 	require.NoError(t, ValidateAndImportPricingOffers([]model.UpstreamModelOffer{
 		{
 			ChannelID: 201, UpstreamModel: "qa-up", PublicModel: publicModel,
 			InputCost: 1.23456789, OutputCost: 6.54321987, CacheReadCost: 0.11111111,
-			Currency: "USD", SourceType: "test", SourceVersion: "db-v1", SuccessRateBPS: 9891,
+			UpstreamGroupRatio: &groupRatio, Currency: "USD", SourceType: "test", SourceVersion: "db-v1", SuccessRateBPS: 9891,
 			CollectedAt: now, ExpiresAt: now + 3600, Enabled: true,
 		},
 		{
 			ChannelID: 202, UpstreamModel: "qa-up", PublicModel: publicModel,
 			InputCost: 2.5, OutputCost: 12.5, CacheReadCost: 0.2,
-			Currency: "USD", SourceType: "test", SourceVersion: "db-v1", SuccessRateBPS: 9900,
+			UpstreamGroupRatio: &groupRatio, Currency: "USD", SourceType: "test", SourceVersion: "db-v1", SuccessRateBPS: 9900,
 			CollectedAt: now, ExpiresAt: now + 3600, Enabled: true,
 		},
 	}))

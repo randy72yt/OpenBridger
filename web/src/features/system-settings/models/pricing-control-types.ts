@@ -24,6 +24,7 @@ export type UpstreamModelOffer = {
   input_cost: number
   output_cost: number
   cache_read_cost: number
+  upstream_group_ratio?: number | null
   currency: string
   source_type: string
   source_version: string

@@ -51,10 +51,11 @@ func TestPricingControlDatabaseMatrix(t *testing.T) {
 			require.NoError(t, database.AutoMigrate(models...))
 			require.NoError(t, database.AutoMigrate(models...))
 			now := common.GetTimestamp()
+			groupRatio := 1.0
 			require.NoError(t, ValidateAndImportPricingOffers([]model.UpstreamModelOffer{{
 				ChannelID: 101, UpstreamModel: "matrix-upstream", PublicModel: "matrix-public",
 				InputCost: 1.25, OutputCost: 6.25, Currency: "USD", SourceType: "test",
-				CollectedAt: now, ExpiresAt: now + 3600, Enabled: true,
+				UpstreamGroupRatio: &groupRatio, CollectedAt: now, ExpiresAt: now + 3600, Enabled: true,
 			}}))
 			require.NoError(t, ValidateAndUpsertPricePolicy(&model.ModelPricePolicy{
 				PublicModel: "matrix-public", ServiceTier: "default", PrimaryChannelID: 101,
@@ -70,18 +71,19 @@ func TestPricingControlDatabaseMatrix(t *testing.T) {
 func TestPricingControlImportRecalculateAndPublish(t *testing.T) {
 	truncate(t)
 	now := common.GetTimestamp()
+	groupRatio := 1.0
 	offers := []model.UpstreamModelOffer{
 		{
 			ChannelID: 1, UpstreamModel: "provider-model", PublicModel: "pricing-control-model",
 			InputCost: 1, OutputCost: 5, CacheReadCost: 0.1, Currency: "usd",
 			SourceType: "api", SourceVersion: "primary-v1", SuccessRateBPS: 9950,
-			CollectedAt: now, ExpiresAt: now + 3600, Enabled: true,
+			UpstreamGroupRatio: &groupRatio, CollectedAt: now, ExpiresAt: now + 3600, Enabled: true,
 		},
 		{
 			ChannelID: 2, UpstreamModel: "provider-model", PublicModel: "pricing-control-model",
 			InputCost: 2, OutputCost: 10, CacheReadCost: 0.2, Currency: "USD",
 			SourceType: "api", SourceVersion: "backup-v1", SuccessRateBPS: 9900,
-			CollectedAt: now, ExpiresAt: now + 3600, Enabled: true,
+			UpstreamGroupRatio: &groupRatio, CollectedAt: now, ExpiresAt: now + 3600, Enabled: true,
 		},
 	}
 	require.NoError(t, ValidateAndImportPricingOffers(offers))
@@ -141,9 +143,10 @@ func TestPricingControlImportRecalculateAndPublish(t *testing.T) {
 func TestPricingControlStableTierAndMissingOfferRisk(t *testing.T) {
 	truncate(t)
 	now := common.GetTimestamp()
+	groupRatio := 1.0
 	require.NoError(t, ValidateAndImportPricingOffers([]model.UpstreamModelOffer{
-		{ChannelID: 1, UpstreamModel: "m", PublicModel: "stable-model", InputCost: 1, OutputCost: 5, Currency: "USD", SourceType: "manual", CollectedAt: now, ExpiresAt: now + 3600, Enabled: true},
-		{ChannelID: 2, UpstreamModel: "m", PublicModel: "stable-model", InputCost: 2, OutputCost: 10, Currency: "USD", SourceType: "manual", CollectedAt: now, ExpiresAt: now + 3600, Enabled: true},
+		{ChannelID: 1, UpstreamModel: "m", PublicModel: "stable-model", InputCost: 1, OutputCost: 5, UpstreamGroupRatio: &groupRatio, Currency: "USD", SourceType: "manual", CollectedAt: now, ExpiresAt: now + 3600, Enabled: true},
+		{ChannelID: 2, UpstreamModel: "m", PublicModel: "stable-model", InputCost: 2, OutputCost: 10, UpstreamGroupRatio: &groupRatio, Currency: "USD", SourceType: "manual", CollectedAt: now, ExpiresAt: now + 3600, Enabled: true},
 	}))
 	require.NoError(t, ValidateAndUpsertPricePolicy(&model.ModelPricePolicy{
 		PublicModel: "stable-model", ServiceTier: "stable", PrimaryChannelID: 1, BackupChannelID: 2,
@@ -173,8 +176,9 @@ func TestPricingControlStableTierAndMissingOfferRisk(t *testing.T) {
 }
 
 func TestPricingControlRejectsUnsupportedCurrencyAndInvalidMargin(t *testing.T) {
+	groupRatio := 1.0
 	assert.ErrorIs(t, ValidateAndImportPricingOffers([]model.UpstreamModelOffer{{
-		ChannelID: 1, UpstreamModel: "m", PublicModel: "m", Currency: "CNY", SourceType: "manual",
+		ChannelID: 1, UpstreamModel: "m", PublicModel: "m", UpstreamGroupRatio: &groupRatio, Currency: "CNY", SourceType: "manual",
 	}}), ErrPricingOfferInvalid)
 	assert.ErrorIs(t, ValidateAndUpsertPricePolicy(&model.ModelPricePolicy{
 		PublicModel: "m", PrimaryChannelID: 1, TargetMarginBPS: 2000, MinimumMarginBPS: 2000,

@@ -151,6 +151,8 @@ var (
 	ErrPricingPolicyInvalid = errors.New("invalid pricing policy")
 	ErrPricingProposalState = errors.New("invalid pricing proposal state")
 	ErrPricingOfferMissing  = errors.New("required upstream pricing offer is missing or expired")
+	ErrPricingCostInvalid   = errors.New("upstream pricing offer has no positive effective cost")
+	ErrPricingProposalStale = errors.New("pricing proposal is stale; refresh offers and recalculate")
 )
 
 func ValidateAndImportPricingOffers(offers []model.UpstreamModelOffer) error {
@@ -170,6 +172,9 @@ func ValidateAndImportPricingOffers(offers []model.UpstreamModelOffer) error {
 		if !validPriceNumber(offer.InputCost) || !validPriceNumber(offer.OutputCost) || !validPriceNumber(offer.CacheReadCost) {
 			return fmt.Errorf("%w at item %d", ErrPricingOfferInvalid, i)
 		}
+		if offer.UpstreamGroupRatio == nil || !validPriceNumber(*offer.UpstreamGroupRatio) || *offer.UpstreamGroupRatio <= 0 {
+			return fmt.Errorf("%w at item %d", ErrPricingOfferInvalid, i)
+		}
 		if offer.SuccessRateBPS < 0 || offer.SuccessRateBPS > 10000 {
 			return fmt.Errorf("%w at item %d", ErrPricingOfferInvalid, i)
 		}
@@ -179,11 +184,8 @@ func ValidateAndImportPricingOffers(offers []model.UpstreamModelOffer) error {
 		if offer.ExpiresAt <= offer.CollectedAt {
 			offer.ExpiresAt = offer.CollectedAt + 24*60*60
 		}
-		if err := model.UpsertUpstreamModelOffer(offer); err != nil {
-			return err
-		}
 	}
-	return nil
+	return model.ImportUpstreamModelOffers(offers)
 }
 
 func ValidateAndUpsertPricePolicy(policy *model.ModelPricePolicy) error {
@@ -223,7 +225,7 @@ func RecalculatePricingProposals(ctx context.Context) (int, error) {
 		}
 		proposal, err := buildPriceProposal(&policy)
 		if err != nil {
-			if errors.Is(err, ErrPricingOfferMissing) {
+			if errors.Is(err, ErrPricingOfferMissing) || errors.Is(err, ErrPricingCostInvalid) {
 				continue
 			}
 			return created, err
@@ -248,6 +250,30 @@ func buildPriceProposal(policy *model.ModelPricePolicy) (*model.ModelPricePropos
 		if err != nil {
 			return nil, err
 		}
+	}
+	if primary.UpstreamGroupRatio == nil || !validPriceNumber(*primary.UpstreamGroupRatio) {
+		return nil, fmt.Errorf("%w: model=%s channel=%d", ErrPricingCostInvalid, policy.PublicModel, policy.PrimaryChannelID)
+	}
+	primaryMultiplier := *primary.UpstreamGroupRatio
+	if !validPriceNumber(primary.InputCost) || !validPriceNumber(primary.OutputCost) || !validPriceNumber(primary.CacheReadCost) ||
+		primary.InputCost <= 0 || primary.OutputCost <= 0 || primaryMultiplier <= 0 {
+		return nil, fmt.Errorf("%w: model=%s channel=%d", ErrPricingCostInvalid, policy.PublicModel, policy.PrimaryChannelID)
+	}
+	primary.InputCost *= primaryMultiplier
+	primary.OutputCost *= primaryMultiplier
+	primary.CacheReadCost *= primaryMultiplier
+	if backup != nil {
+		if backup.UpstreamGroupRatio == nil || !validPriceNumber(*backup.UpstreamGroupRatio) ||
+			!validPriceNumber(backup.InputCost) || !validPriceNumber(backup.OutputCost) || !validPriceNumber(backup.CacheReadCost) {
+			return nil, fmt.Errorf("%w: model=%s channel=%d", ErrPricingCostInvalid, policy.PublicModel, policy.BackupChannelID)
+		}
+		backupMultiplier := *backup.UpstreamGroupRatio
+		if backupMultiplier <= 0 {
+			return nil, fmt.Errorf("%w: model=%s channel=%d", ErrPricingCostInvalid, policy.PublicModel, policy.BackupChannelID)
+		}
+		backup.InputCost *= backupMultiplier
+		backup.OutputCost *= backupMultiplier
+		backup.CacheReadCost *= backupMultiplier
 	}
 	fallback := float64(policy.FallbackProbabilityBPS) / 10000
 	inputCost := primary.InputCost
@@ -301,8 +327,12 @@ func buildPriceProposal(policy *model.ModelPricePolicy) (*model.ModelPricePropos
 }
 
 func currentOffer(publicModel string, channelID int, now int64) (*model.UpstreamModelOffer, error) {
+	return currentOfferWithDB(model.DB, publicModel, channelID, now)
+}
+
+func currentOfferWithDB(db *gorm.DB, publicModel string, channelID int, now int64) (*model.UpstreamModelOffer, error) {
 	var offer model.UpstreamModelOffer
-	err := model.DB.Where("public_model = ? AND channel_id = ? AND enabled = ? AND expires_at > ?", publicModel, channelID, true, now).
+	err := db.Where("public_model = ? AND channel_id = ? AND enabled = ? AND expires_at > ?", publicModel, channelID, true, now).
 		Order("collected_at desc").First(&offer).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -317,16 +347,46 @@ func ApprovePricingProposal(id int64, operatorID int) error {
 	if id <= 0 || operatorID <= 0 {
 		return ErrPricingProposalState
 	}
-	result := model.DB.Model(&model.ModelPriceProposal{}).
-		Where("id = ? AND status = ?", id, model.PricingProposalPending).
-		Updates(map[string]any{"status": model.PricingProposalApproved, "approved_by": operatorID, "approved_at": common.GetTimestamp(), "updated_at": common.GetTimestamp()})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected != 1 {
+	var proposal model.ModelPriceProposal
+	if err := model.DB.Where("id = ? AND status = ?", id, model.PricingProposalPending).First(&proposal).Error; err != nil {
 		return ErrPricingProposalState
 	}
-	return nil
+	snapshot, err := model.GetModelPricingSnapshot([]string{proposal.PublicModel})
+	if err != nil {
+		return err
+	}
+	version := snapshot.EmptyVersion
+	if len(snapshot.Entries) == 1 {
+		version = snapshot.Entries[0].Version
+	}
+	if version != proposal.PricingVersion {
+		return ErrPricingProposalStale
+	}
+	return model.DB.Transaction(func(tx *gorm.DB) error {
+		var policy model.ModelPricePolicy
+		if err := tx.Where("id = ?", proposal.PolicyID).First(&policy).Error; err != nil {
+			return ErrPricingProposalStale
+		}
+		now := common.GetTimestamp()
+		if _, err := currentOfferWithDB(tx, proposal.PublicModel, policy.PrimaryChannelID, now); err != nil {
+			return ErrPricingProposalStale
+		}
+		if policy.BackupChannelID > 0 {
+			if _, err := currentOfferWithDB(tx, proposal.PublicModel, policy.BackupChannelID, now); err != nil {
+				return ErrPricingProposalStale
+			}
+		}
+		result := tx.Model(&model.ModelPriceProposal{}).
+			Where("id = ? AND status = ?", id, model.PricingProposalPending).
+			Updates(map[string]any{"status": model.PricingProposalApproved, "approved_by": operatorID, "approved_at": now, "updated_at": now})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrPricingProposalState
+		}
+		return nil
+	})
 }
 
 func RejectPricingProposal(id int64) error {
@@ -382,12 +442,21 @@ func PricingRisks() ([]map[string]any, error) {
 		if !policy.Enabled {
 			continue
 		}
-		if _, err := currentOffer(policy.PublicModel, policy.PrimaryChannelID, now); err != nil {
+		primary, err := currentOffer(policy.PublicModel, policy.PrimaryChannelID, now)
+		if err != nil {
 			risks = append(risks, map[string]any{"public_model": policy.PublicModel, "service_tier": policy.ServiceTier, "code": "primary_offer_missing_or_expired"})
+		} else if !validPriceNumber(primary.InputCost) || !validPriceNumber(primary.OutputCost) ||
+			primary.InputCost <= 0 || primary.OutputCost <= 0 || primary.UpstreamGroupRatio == nil ||
+			!validPriceNumber(*primary.UpstreamGroupRatio) || *primary.UpstreamGroupRatio <= 0 {
+			risks = append(risks, map[string]any{"public_model": policy.PublicModel, "service_tier": policy.ServiceTier, "code": "primary_offer_cost_invalid"})
 		}
 		if policy.BackupChannelID > 0 {
-			if _, err := currentOffer(policy.PublicModel, policy.BackupChannelID, now); err != nil {
+			backup, err := currentOffer(policy.PublicModel, policy.BackupChannelID, now)
+			if err != nil {
 				risks = append(risks, map[string]any{"public_model": policy.PublicModel, "service_tier": policy.ServiceTier, "code": "backup_offer_missing_or_expired"})
+			} else if !validPriceNumber(backup.InputCost) || !validPriceNumber(backup.OutputCost) ||
+				backup.UpstreamGroupRatio == nil || !validPriceNumber(*backup.UpstreamGroupRatio) || *backup.UpstreamGroupRatio <= 0 {
+				risks = append(risks, map[string]any{"public_model": policy.PublicModel, "service_tier": policy.ServiceTier, "code": "backup_offer_cost_invalid"})
 			}
 		}
 	}

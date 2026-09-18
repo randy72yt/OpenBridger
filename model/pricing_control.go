@@ -19,36 +19,38 @@ const (
 // on one channel. Prices use the same per-million billing unit as the public
 // billing expression; the original currency and source remain auditable.
 type UpstreamModelOffer struct {
-	ID             int64   `json:"id" gorm:"primaryKey"`
-	ChannelID      int     `json:"channel_id" gorm:"uniqueIndex:idx_pricing_offer,priority:1;index"`
-	UpstreamModel  string  `json:"upstream_model" gorm:"type:varchar(191);uniqueIndex:idx_pricing_offer,priority:2"`
-	PublicModel    string  `json:"public_model" gorm:"type:varchar(191);uniqueIndex:idx_pricing_offer,priority:3;index"`
-	InputCost      float64 `json:"input_cost" gorm:"type:decimal(20,8);not null"`
-	OutputCost     float64 `json:"output_cost" gorm:"type:decimal(20,8);not null"`
-	CacheReadCost  float64 `json:"cache_read_cost" gorm:"type:decimal(20,8);not null"`
-	Currency       string  `json:"currency" gorm:"type:varchar(16);not null"`
-	SourceType     string  `json:"source_type" gorm:"type:varchar(32);not null"`
-	SourceURL      string  `json:"source_url" gorm:"type:varchar(512);not null"`
-	SourceVersion  string  `json:"source_version" gorm:"type:varchar(128);not null"`
-	SuccessRateBPS int     `json:"success_rate_bps" gorm:"not null"`
-	CollectedAt    int64   `json:"collected_at" gorm:"bigint;index"`
-	ExpiresAt      int64   `json:"expires_at" gorm:"bigint;index"`
-	Enabled        bool    `json:"enabled" gorm:"not null"`
-	CreatedAt      int64   `json:"created_at" gorm:"bigint"`
-	UpdatedAt      int64   `json:"updated_at" gorm:"bigint"`
+	ID                 int64    `json:"id" gorm:"primaryKey"`
+	ChannelID          int      `json:"channel_id" gorm:"uniqueIndex:idx_pricing_offer,priority:1;index"`
+	UpstreamModel      string   `json:"upstream_model" gorm:"type:varchar(191);uniqueIndex:idx_pricing_offer,priority:2"`
+	PublicModel        string   `json:"public_model" gorm:"type:varchar(191);uniqueIndex:idx_pricing_offer,priority:3;index"`
+	InputCost          float64  `json:"input_cost" gorm:"type:decimal(20,8);not null"`
+	OutputCost         float64  `json:"output_cost" gorm:"type:decimal(20,8);not null"`
+	CacheReadCost      float64  `json:"cache_read_cost" gorm:"type:decimal(20,8);not null"`
+	UpstreamGroupRatio *float64 `json:"upstream_group_ratio" gorm:"type:decimal(20,8)"`
+	Currency           string   `json:"currency" gorm:"type:varchar(16);not null"`
+	SourceType         string   `json:"source_type" gorm:"type:varchar(32);not null"`
+	SourceURL          string   `json:"source_url" gorm:"type:varchar(512);not null"`
+	SourceVersion      string   `json:"source_version" gorm:"type:varchar(128);not null"`
+	SuccessRateBPS     int      `json:"success_rate_bps" gorm:"not null"`
+	CollectedAt        int64    `json:"collected_at" gorm:"bigint;index"`
+	ExpiresAt          int64    `json:"expires_at" gorm:"bigint;index"`
+	Enabled            bool     `json:"enabled" gorm:"not null"`
+	CreatedAt          int64    `json:"created_at" gorm:"bigint"`
+	UpdatedAt          int64    `json:"updated_at" gorm:"bigint"`
 }
 
 type UpstreamCostSnapshot struct {
-	ID            int64   `json:"id" gorm:"primaryKey"`
-	OfferID       int64   `json:"offer_id" gorm:"index"`
-	ChannelID     int     `json:"channel_id" gorm:"index"`
-	PublicModel   string  `json:"public_model" gorm:"type:varchar(191);index"`
-	InputCost     float64 `json:"input_cost" gorm:"type:decimal(20,8);not null"`
-	OutputCost    float64 `json:"output_cost" gorm:"type:decimal(20,8);not null"`
-	CacheReadCost float64 `json:"cache_read_cost" gorm:"type:decimal(20,8);not null"`
-	Currency      string  `json:"currency" gorm:"type:varchar(16);not null"`
-	SourceVersion string  `json:"source_version" gorm:"type:varchar(128);not null"`
-	CollectedAt   int64   `json:"collected_at" gorm:"bigint;index"`
+	ID                 int64    `json:"id" gorm:"primaryKey"`
+	OfferID            int64    `json:"offer_id" gorm:"index"`
+	ChannelID          int      `json:"channel_id" gorm:"index"`
+	PublicModel        string   `json:"public_model" gorm:"type:varchar(191);index"`
+	InputCost          float64  `json:"input_cost" gorm:"type:decimal(20,8);not null"`
+	OutputCost         float64  `json:"output_cost" gorm:"type:decimal(20,8);not null"`
+	CacheReadCost      float64  `json:"cache_read_cost" gorm:"type:decimal(20,8);not null"`
+	UpstreamGroupRatio *float64 `json:"upstream_group_ratio" gorm:"type:decimal(20,8)"`
+	Currency           string   `json:"currency" gorm:"type:varchar(16);not null"`
+	SourceVersion      string   `json:"source_version" gorm:"type:varchar(128);not null"`
+	CollectedAt        int64    `json:"collected_at" gorm:"bigint;index"`
 }
 
 type ModelPricePolicy struct {
@@ -127,26 +129,44 @@ func UpsertUpstreamModelOffer(offer *UpstreamModelOffer) error {
 	if offer == nil {
 		return errors.New("offer is required")
 	}
-	now := common.GetTimestamp()
-	offer.UpdatedAt = now
 	return DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "channel_id"}, {Name: "upstream_model"}, {Name: "public_model"}},
-			DoUpdates: clause.AssignmentColumns([]string{"input_cost", "output_cost", "cache_read_cost", "currency", "source_type", "source_url", "source_version", "success_rate_bps", "collected_at", "expires_at", "enabled", "updated_at"}),
-		}).Create(offer).Error; err != nil {
-			return err
-		}
-		var current UpstreamModelOffer
-		if err := tx.Where("channel_id = ? AND upstream_model = ? AND public_model = ?", offer.ChannelID, offer.UpstreamModel, offer.PublicModel).First(&current).Error; err != nil {
-			return err
-		}
-		offer.ID = current.ID
-		return tx.Create(&UpstreamCostSnapshot{
-			OfferID: current.ID, ChannelID: offer.ChannelID, PublicModel: offer.PublicModel,
-			InputCost: offer.InputCost, OutputCost: offer.OutputCost, CacheReadCost: offer.CacheReadCost,
-			Currency: offer.Currency, SourceVersion: offer.SourceVersion, CollectedAt: offer.CollectedAt,
-		}).Error
+		return upsertUpstreamModelOffer(tx, offer)
 	})
+}
+
+func ImportUpstreamModelOffers(offers []UpstreamModelOffer) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		for i := range offers {
+			if err := upsertUpstreamModelOffer(tx, &offers[i]); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func upsertUpstreamModelOffer(tx *gorm.DB, offer *UpstreamModelOffer) error {
+	offer.UpdatedAt = common.GetTimestamp()
+	if err := tx.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "channel_id"}, {Name: "upstream_model"}, {Name: "public_model"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"input_cost", "output_cost", "cache_read_cost", "upstream_group_ratio", "currency", "source_type",
+			"source_url", "source_version", "success_rate_bps", "collected_at", "expires_at", "enabled", "updated_at",
+		}),
+	}).Create(offer).Error; err != nil {
+		return err
+	}
+	var current UpstreamModelOffer
+	if err := tx.Where("channel_id = ? AND upstream_model = ? AND public_model = ?", offer.ChannelID, offer.UpstreamModel, offer.PublicModel).First(&current).Error; err != nil {
+		return err
+	}
+	offer.ID = current.ID
+	return tx.Create(&UpstreamCostSnapshot{
+		OfferID: current.ID, ChannelID: offer.ChannelID, PublicModel: offer.PublicModel,
+		InputCost: offer.InputCost, OutputCost: offer.OutputCost, CacheReadCost: offer.CacheReadCost,
+		UpstreamGroupRatio: offer.UpstreamGroupRatio,
+		Currency:           offer.Currency, SourceVersion: offer.SourceVersion, CollectedAt: offer.CollectedAt,
+	}).Error
 }
 
 func ListUpstreamModelOffers(publicModel string) ([]UpstreamModelOffer, error) {

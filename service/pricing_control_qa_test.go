@@ -21,10 +21,12 @@ import (
 
 func qaOffer(channelID int, publicModel string, in, out float64) model.UpstreamModelOffer {
 	now := common.GetTimestamp()
+	groupRatio := 1.0
 	return model.UpstreamModelOffer{
 		ChannelID: channelID, UpstreamModel: "upstream-" + publicModel, PublicModel: publicModel,
 		InputCost: in, OutputCost: out, CacheReadCost: 0,
-		Currency: "USD", SourceType: "manual", SourceVersion: "qa-v1",
+		UpstreamGroupRatio: &groupRatio,
+		Currency:           "USD", SourceType: "manual", SourceVersion: "qa-v1",
 		SuccessRateBPS: 9900, CollectedAt: now, ExpiresAt: now + 3600, Enabled: true,
 	}
 }
@@ -164,16 +166,19 @@ func TestQAPricingEdge(t *testing.T) {
 	t.Run("EDGE-001 零成本渠道不得产出0售价却报目标毛利", func(t *testing.T) {
 		truncate(t)
 		qaSeedOffers(t, qaOffer(1, "edge-001", 0, 0))
-		p := qaBuild(t, qaPolicy("edge-001", "default", 1, 0, 3500, 2000, 500, 0))
-		qaReport(t, p)
+		_, err := buildPriceProposal(qaPolicy("edge-001", "default", 1, 0, 3500, 2000, 500, 0))
+		assert.ErrorIs(t, err, ErrPricingCostInvalid, "零成本报价必须阻止生成可审批方案")
+	})
 
-		zeroPrice := p.ProposedInputPrice == 0 && p.ProposedOutputPrice == 0
-		claimsTargetMargin := p.ExpectedMarginBPS == 3500
-		if zeroPrice && claimsTargetMargin {
-			t.Logf("实际结果: 售价=0/0，但 ExpectedMarginBPS=%d（等于目标毛利）", p.ExpectedMarginBPS)
-		}
-		assert.False(t, zeroPrice && claimsTargetMargin,
-			"售价为 0 时不得同时报告等于目标值的毛利，两者自相矛盾")
+	t.Run("EDGE-017 上游分组倍率计入真实采购成本", func(t *testing.T) {
+		truncate(t)
+		offer := qaOffer(1, "edge-017", 0.22, 0.66)
+		ratio := 6.8
+		offer.UpstreamGroupRatio = &ratio
+		qaSeedOffers(t, offer)
+		p := qaBuild(t, qaPolicy("edge-017", "default", 1, 0, 3500, 2000, 0, 0))
+		assert.InDelta(t, 1.496, p.ExpectedInputCost, 1e-9)
+		assert.InDelta(t, 4.488, p.ExpectedOutputCost, 1e-9)
 	})
 
 	t.Run("EDGE-002 stable档备用渠道零成本", func(t *testing.T) {
@@ -390,6 +395,11 @@ func TestQAPricingEdge(t *testing.T) {
 		noChannel := qaOffer(0, "edge-015", 1, 5)
 		assert.ErrorIs(t, ValidateAndImportPricingOffers([]model.UpstreamModelOffer{noChannel}), ErrPricingOfferInvalid)
 
+		noGroupRatio := qaOffer(1, "edge-015", 1, 5)
+		noGroupRatio.UpstreamGroupRatio = nil
+		assert.ErrorIs(t, ValidateAndImportPricingOffers([]model.UpstreamModelOffer{noGroupRatio}), ErrPricingOfferInvalid,
+			"缺少上游结算倍率时必须拒绝导入，不能暗中按 1 计算")
+
 		assert.ErrorIs(t, ValidateAndImportPricingOffers(nil), ErrPricingOfferInvalid, "空批次应被拒绝")
 	})
 }
@@ -591,15 +601,9 @@ func TestQAPricingConcurrency(t *testing.T) {
 			},
 		}}))
 
-		_, err = RecalculatePricingProposals(context.Background())
-		require.NoError(t, err)
-		current, err := ListPricingProposalReviews(model.PricingProposalPending)
-		require.NoError(t, err)
-		require.Len(t, current, 1)
-
-		err = ApprovePricingProposal(current[0].ID, 1)
+		err = ApprovePricingProposal(proposals[0].ID, 1)
 		if err == nil {
-			t.Logf("实际结果: PricingVersion 已由 %q 变为 %q，批准仍成功", staleVersion, current[0].PricingVersion)
+			t.Logf("实际结果: PricingVersion 已由 %q 变化，旧方案批准仍成功", staleVersion)
 		}
 		assert.Error(t, err, "DEC-004 要求价格版本变化的方案禁止审批")
 	})
