@@ -250,6 +250,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			pricingControlRoute.GET("/offers", controller.GetPricingOffers)
 			pricingControlRoute.POST("/offers/import", controller.ImportPricingOffers)
+			pricingControlRoute.POST("/offers/sync", controller.SyncPricingOffers)
 			pricingControlRoute.GET("/policies", controller.GetPricingPolicies)
 			pricingControlRoute.PUT("/policies", controller.UpsertPricingPolicy)
 			pricingControlRoute.POST("/recalculate", controller.RecalculatePricing)

@@ -360,20 +360,20 @@ func ApprovePricingProposal(id int64, operatorID int) error {
 		version = snapshot.Entries[0].Version
 	}
 	if version != proposal.PricingVersion {
-		return ErrPricingProposalStale
+		return fmt.Errorf("%w: current selling price changed", ErrPricingProposalStale)
 	}
 	return model.DB.Transaction(func(tx *gorm.DB) error {
 		var policy model.ModelPricePolicy
 		if err := tx.Where("id = ?", proposal.PolicyID).First(&policy).Error; err != nil {
-			return ErrPricingProposalStale
+			return fmt.Errorf("%w: pricing policy no longer exists", ErrPricingProposalStale)
 		}
 		now := common.GetTimestamp()
 		if _, err := currentOfferWithDB(tx, proposal.PublicModel, policy.PrimaryChannelID, now); err != nil {
-			return ErrPricingProposalStale
+			return fmt.Errorf("%w: primary upstream offer is missing, disabled, or expired", ErrPricingProposalStale)
 		}
 		if policy.BackupChannelID > 0 {
 			if _, err := currentOfferWithDB(tx, proposal.PublicModel, policy.BackupChannelID, now); err != nil {
-				return ErrPricingProposalStale
+				return fmt.Errorf("%w: backup upstream offer is missing, disabled, or expired", ErrPricingProposalStale)
 			}
 		}
 		result := tx.Model(&model.ModelPriceProposal{}).

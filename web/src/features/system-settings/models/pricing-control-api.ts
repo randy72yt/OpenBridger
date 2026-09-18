@@ -54,6 +54,11 @@ export async function importPricingOffers(offers: UpstreamModelOffer[]) {
   return response.data
 }
 
+export async function syncPricingOffers() {
+  const response = await api.post('/api/pricing-control/offers/sync', {})
+  return response.data
+}
+
 export async function savePricingPolicy(policy: ModelPricePolicy) {
   const response = await api.put('/api/pricing-control/policies', policy)
   return response.data

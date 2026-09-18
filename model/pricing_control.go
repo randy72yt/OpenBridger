@@ -2,6 +2,8 @@ package model
 
 import (
 	"errors"
+	"math"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
@@ -126,8 +128,8 @@ func (proposal *ModelPriceProposal) BeforeCreate(_ *gorm.DB) error {
 }
 
 func UpsertUpstreamModelOffer(offer *UpstreamModelOffer) error {
-	if offer == nil {
-		return errors.New("offer is required")
+	if err := validateUpstreamModelOfferWrite(offer); err != nil {
+		return err
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
 		return upsertUpstreamModelOffer(tx, offer)
@@ -135,6 +137,14 @@ func UpsertUpstreamModelOffer(offer *UpstreamModelOffer) error {
 }
 
 func ImportUpstreamModelOffers(offers []UpstreamModelOffer) error {
+	if len(offers) == 0 {
+		return errors.New("offers are required")
+	}
+	for i := range offers {
+		if err := validateUpstreamModelOfferWrite(&offers[i]); err != nil {
+			return err
+		}
+	}
 	return DB.Transaction(func(tx *gorm.DB) error {
 		for i := range offers {
 			if err := upsertUpstreamModelOffer(tx, &offers[i]); err != nil {
@@ -143,6 +153,27 @@ func ImportUpstreamModelOffers(offers []UpstreamModelOffer) error {
 		}
 		return nil
 	})
+}
+
+func validateUpstreamModelOfferWrite(offer *UpstreamModelOffer) error {
+	if offer == nil {
+		return errors.New("offer is required")
+	}
+	validNumber := func(value float64) bool {
+		return value >= 0 && !math.IsNaN(value) && !math.IsInf(value, 0)
+	}
+	if offer.ChannelID <= 0 || strings.TrimSpace(offer.UpstreamModel) == "" || strings.TrimSpace(offer.PublicModel) == "" ||
+		strings.ToUpper(strings.TrimSpace(offer.Currency)) != "USD" || strings.TrimSpace(offer.SourceType) == "" {
+		return errors.New("invalid upstream pricing offer")
+	}
+	if !validNumber(offer.InputCost) || !validNumber(offer.OutputCost) || !validNumber(offer.CacheReadCost) ||
+		offer.UpstreamGroupRatio == nil || !validNumber(*offer.UpstreamGroupRatio) || *offer.UpstreamGroupRatio <= 0 {
+		return errors.New("invalid upstream pricing offer costs")
+	}
+	if offer.SuccessRateBPS < 0 || offer.SuccessRateBPS > 10000 {
+		return errors.New("invalid upstream pricing offer success rate")
+	}
+	return nil
 }
 
 func upsertUpstreamModelOffer(tx *gorm.DB, offer *UpstreamModelOffer) error {

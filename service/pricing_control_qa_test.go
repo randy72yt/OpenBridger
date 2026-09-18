@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -402,6 +404,46 @@ func TestQAPricingEdge(t *testing.T) {
 
 		assert.ErrorIs(t, ValidateAndImportPricingOffers(nil), ErrPricingOfferInvalid, "空批次应被拒绝")
 	})
+}
+
+func TestQAPricingOfferSync(t *testing.T) {
+	var authorization string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authorization = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, err := w.Write([]byte(`{
+          "success": true,
+          "pricing_version": "upstream-v1",
+          "auto_groups": ["default", "deepseek"],
+          "group_ratio": {"default": 0.23, "deepseek": 6.8},
+          "data": [
+            {"model_name":"deepseek-chat","quota_type":0,"model_ratio":0.11,"completion_ratio":3,"cache_ratio":0.1,"enable_groups":["deepseek"]},
+            {"model_name":"fixed-image","quota_type":1,"model_price":0.04,"enable_groups":["default"]}
+          ]
+        }`))
+		require.NoError(t, err)
+	}))
+	defer server.Close()
+
+	baseURL := server.URL + "/v1"
+	mapping := `{"deepseek-v3":"deepseek-chat"}`
+	channel := &model.Channel{
+		Id: 42, Key: "test-key", BaseURL: &baseURL,
+		Models: "deepseek-v3,fixed-image", ModelMapping: &mapping,
+	}
+	offers, warnings, err := fetchPricingOffersForChannel(context.Background(), channel)
+	require.NoError(t, err)
+	require.Len(t, offers, 1)
+	assert.Equal(t, "Bearer test-key", authorization)
+	assert.Equal(t, "deepseek-v3", offers[0].PublicModel)
+	assert.Equal(t, "deepseek-chat", offers[0].UpstreamModel)
+	assert.InDelta(t, 0.22, offers[0].InputCost, 1e-9)
+	assert.InDelta(t, 0.66, offers[0].OutputCost, 1e-9)
+	assert.InDelta(t, 0.022, offers[0].CacheReadCost, 1e-9)
+	require.NotNil(t, offers[0].UpstreamGroupRatio)
+	assert.InDelta(t, 6.8, *offers[0].UpstreamGroupRatio, 1e-9)
+	assert.Equal(t, "upstream-v1", offers[0].SourceVersion)
+	assert.Contains(t, warnings, "fixed-image: fixed-price model is not token-priced")
 }
 
 func qaOfferWithCurrency(channelID int, publicModel, currency string) model.UpstreamModelOffer {

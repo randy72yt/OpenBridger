@@ -17,7 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Calculator, Database, ShieldCheck } from 'lucide-react'
+import {
+  AlertTriangle,
+  Calculator,
+  Database,
+  RefreshCw,
+  ShieldCheck,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -36,6 +42,7 @@ import {
   importPricingOffers,
   recalculatePricing,
   savePricingPolicy,
+  syncPricingOffers,
   updatePricingProposal,
 } from './pricing-control-api'
 import { PricingControlInventory } from './pricing-control-inventory'
@@ -103,6 +110,14 @@ export function PricingControlSection() {
     onSuccess: () => toast.success(t('Pricing recalculation queued')),
     onError: (error: Error) => toast.error(error.message),
   })
+  const syncMutation = useMutation({
+    mutationFn: syncPricingOffers,
+    onSuccess: async () => {
+      toast.success(t('Upstream prices synchronized'))
+      await refresh()
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
 
   if (query.isLoading) return <LoadingState />
   if (query.isError || !query.data) {
@@ -162,6 +177,22 @@ export function PricingControlSection() {
         )}
       >
         <div className='space-y-3'>
+          <div className='flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3'>
+            <p className='text-muted-foreground text-sm'>
+              {t(
+                'Fetch current model prices and effective group ratios from configured upstream channels.'
+              )}
+            </p>
+            <Button
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+            >
+              <RefreshCw
+                className={syncMutation.isPending ? 'animate-spin' : ''}
+              />
+              {t('Sync upstream prices')}
+            </Button>
+          </div>
           <Textarea
             value={offerJson}
             onChange={(event) => setOfferJson(event.target.value)}
@@ -171,7 +202,7 @@ export function PricingControlSection() {
           <div className='flex flex-wrap justify-between gap-2'>
             <p className='text-muted-foreground text-sm'>
               {t(
-                'Fields: channel_id, upstream_model, public_model, input_cost, output_cost, currency, source_type, enabled.'
+                'Fields: channel_id, upstream_model, public_model, input_cost, output_cost, upstream_group_ratio, currency, source_type, enabled.'
               )}
             </p>
             <Button
