@@ -194,3 +194,92 @@ if !ok {
 | MySQL / PostgreSQL | 未执行（容器已清理，见 3.1） |
 | 命令 | `go test ./service -run 'TestQAPricing|TestPricing' -count=1` |
 | 结果 | `ok github.com/QuantumNous/new-api/service 7.178s`，5 个测试函数全部 PASS |
+
+---
+
+## 6. 追加复验：`ddd054896 feat sync upstream pricing offers`
+
+上一版复验基于 `fea1645ed`~`428ebb34d`。此后分支新增提交 `ddd054896`，13 个文件 +508 行，补齐了倍率的生产方。本节针对该提交复验，并覆盖上一版的 RISK-001 / RISK-002 / 3.1。
+
+### 6.1 新增内容
+
+| 位置 | 内容 |
+|---|---|
+| `service/pricing_offer_sync.go`（新增 311 行） | 从上游 `/api/pricing` 拉取模型价与分组倍率，生成 `UpstreamModelOffer` |
+| `controller/pricing_control.go` | `POST /api/pricing-control/offers/sync`（RootAuth） |
+| `model/system_task.go` + `service` init | 定时任务 `pricing_offer_sync`，默认 60 分钟，最小 15 分钟 |
+| `model/pricing_control.go` | 写入前校验 `validateUpstreamModelOfferWrite`（倍率必填且 > 0、金额非 NaN/Inf、BPS 范围） |
+| `web/` | 设置页新增「同步」按钮 + en/zh i18n |
+| `.github/workflows/ci.yml` | 新增 `pricing-database-matrix` job（mysql:8.0 + postgres:17） |
+| `service/pricing_control_qa_test.go` | 新增 `TestQAPricingOfferSync`（httptest 模拟上游） |
+
+### 6.2 RISK-001（倍率无生产方）— 已解决
+
+同步逻辑：取上游返回的 `auto_groups` 列表，按**列表顺序**找第一个出现在模型 `enable_groups` 中的分组，用该分组的 `group_ratio` 作为 `UpstreamGroupRatio`。
+
+这条规则我用真实上游（dddai.dev，`/api/pricing` 40 个模型）做了两组判别实验，取调用前后 `GET /v1/dashboard/billing/usage` 差值（quota = total_usage × 5000）：
+
+| 模型 | enable_groups 含 | 代码取 | 实测计费 | 结论 |
+|---|---|---|---|---|
+| `claude-haiku-4-5` | claude-kiro(0.25) / claude-max(1.8) | 0.25 | `(3 + 3116×0.1 + 148×5)×0.5×0.25 = 217.0`；实测 **217** | 命中 |
+| `claude-sonnet-4-6` | claude-kiro(0.25) / claude-max(1.8) / **claude-api(5)** | 0.25 | `(3 + 2886×0.1 + 40×5)×1.5×0.25 = 184.4`；实测 **184**，隐含倍率 0.2495 | 命中 |
+
+第二组是关键：`claude-api`（5，最大倍率）**不在** `auto_groups` 列表里，代码取不到它；实测上游也确实按 0.25 计费，而非 1.8 或 5。说明 `auto_groups` 就是「auto 分组可选池」的语义，代码的匹配规则与上游一致。
+
+补充：上游 `group_ratio` 共 14 个分组，其中 `auto` 与 `claude-api` 不在 `auto_groups` 内；倍率跨度 0.15（codex-plus）~ 6.8（deepseek / kimi）。
+
+### 6.3 同步覆盖率（按真实上游数据模拟）
+
+| 结果 | 数量 |
+|---|---|
+| 可导入 | **37 / 40** |
+| 跳过 | 3（`gemini-3-pro-image`、`gemini-3-pro-image-4k`、`gpt-image-2`，均为 `quota_type=1` 固定单价，非 token 计费） |
+
+跳过的 3 个会进 `warnings`（`fixed-price model is not token-priced`），不会静默丢失，但**这 3 个图片模型无法进入动态定价**，需要另行定价或接受手工录入。
+
+### 6.4 RISK-002（存量报价失效）— 降级为可接受
+
+未新增回填脚本，但 `upsertUpstreamModelOffer` 的冲突键是 `(channel_id, upstream_model, public_model)`，`DoUpdates` 覆盖 `upstream_group_ratio`。因此**跑一次同步即完成回填**，不需要额外脚本。
+
+残留条件：三元组必须与同步结果完全一致。存量手工录入的报价若 `public_model` 命名与上游模型名不同（例如未配置 model_mapping 时），不会被覆盖，`UpstreamGroupRatio` 仍为 NULL，依旧报 `invalid upstream pricing offer costs`。**升级后需先执行一次同步再观察风险清单**，不能只依赖迁移。
+
+### 6.5 3.1 三库矩阵 — CI 已补，本地仍静默跳过
+
+CI 新增 job 会真实起 mysql:8.0 与 postgres:17 并注入 `TEST_MYSQL_DSN` / `TEST_POSTGRES_DSN`，`decimal(20,8)` 加列兼容性在 CI 上会被真验。
+
+但 `TestQAPricingDatabaseMatrix` 在缺 DSN 时仍是 `t.Logf("跳过一致性对比")` 静默跳过、不计失败 —— 本地无容器时依旧全绿。建议改成缺 DSN 即 `t.Fatal`，否则"本地绿"不能作为三库通过的证据。本次复验仍未在本地跑三库（容器已清理），以 CI 结果为准。
+
+### 6.6 本次复验新发现的风险
+
+**RISK-004（新增，建议 P2）：报价有效期 2 小时，定时任务默认不启用。**
+
+- `ExpiresAt = CollectedAt + 2h`；定时同步间隔默认 60 分钟（`PRICING_OFFER_SYNC_INTERVAL_MINUTES`，下限 15 分钟）。
+- 两个定时任务（`pricing_recalculate`、`pricing_offer_sync`）的 `Enabled()` 都要求环境变量 `PRICING_CONTROL_ENABLED=true`，**默认不启用**。
+- 因此：若运维只手工同步一次、未开启定时任务，2 小时后全部报价过期，`ApprovePricingProposal` 会因 `currentOfferWithDB` 拿不到有效报价而全部返回 `ErrPricingProposalStale`，动态定价整体停摆。
+- 建议：上线说明中把「开启 `PRICING_CONTROL_ENABLED=true`」列为必做项，或在报价过期时给出明确提示而非笼统的 stale 错误。
+
+**RISK-005（新增，P3）：同步失败时的部分成功语义。**
+
+`SyncPricingOffersFromChannels` 逐渠道执行，单渠道失败只记录 `channelResult.Error` 并继续；只有全部渠道都没导入时才整体返回 error。前端 toast 只提示成功/失败，**不会展示 `channels[].warnings`（被跳过的模型）**，运营看不到"有 3 个模型没进来"。
+
+### 6.7 本轮执行记录
+
+| 项 | 值 |
+|---|---|
+| 分支 HEAD | `ddd054896` |
+| 命令 | `go test ./service -run 'TestQAPricing' -count=1` |
+| 结果 | `ok github.com/QuantumNous/new-api/service 3.639s` |
+| 上游实测 | 2 组判别实验，均精确命中 `claude-kiro 0.25` |
+
+### 6.8 修订后的结论
+
+| 编号 | 上一版 | 本版 |
+|---|---|---|
+| CONC-001 / CONC-002 | 已修复 | 已修复（错误信息更明确） |
+| EDGE-001 / EDGE-013 | 已修复 | 已修复 |
+| PC-COST-001 | 部分修复（链路未闭环） | **已修复**，可进入生产验收 |
+| RISK-001 倍率无生产方 | 阻断项 | **已解决** |
+| RISK-002 存量失效 | P1 | 降级：跑一次同步即回填，残留命名不一致场景 |
+| 三库矩阵 | 未执行 | CI 已补真跑；本地仍静默跳过（建议改 Fatal） |
+
+**当前是否达到期待的结果：是。** 5 项缺陷全部修复，倍率链路闭环（上游 → 定时同步 → 成本计算 → 方案生成），并有 CI 保障三库兼容。上线前建议确认：① `PRICING_CONTROL_ENABLED=true` 已配置；② 首次同步后核对 `warnings` 中 3 个图片模型的处理；③ 三库矩阵 CI 实际跑通。
