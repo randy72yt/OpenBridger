@@ -283,3 +283,72 @@ CI 新增 job 会真实起 mysql:8.0 与 postgres:17 并注入 `TEST_MYSQL_DSN` 
 | 三库矩阵 | 未执行 | CI 已补真跑；本地仍静默跳过（建议改 Fatal） |
 
 **当前是否达到期待的结果：是。** 5 项缺陷全部修复，倍率链路闭环（上游 → 定时同步 → 成本计算 → 方案生成），并有 CI 保障三库兼容。上线前建议确认：① `PRICING_CONTROL_ENABLED=true` 已配置；② 首次同步后核对 `warnings` 中 3 个图片模型的处理；③ 三库矩阵 CI 实际跑通。
+
+### 6.9 上线前三项确认的具体核实
+
+#### ① `PRICING_CONTROL_ENABLED=true`
+
+- **性质**：纯 `os.Getenv` 进程环境变量（项目未引入 godotenv，不会读 `.env` 文件）。
+- **影响范围**：只影响两个**定时任务** —— `pricing_offer_sync`（报价同步，默认 60 分钟）与 `pricing_recalculate`。**手工 API `POST /offers/sync` 与前端同步按钮不受该变量影响**，随时可用。
+- **不配的后果**：`service/system_task.go:270` 的 `if !ok || !scheduled.Enabled() { continue }` 会让任务连任务行都不创建。而 `ExpiresAt = CollectedAt + 2h`，所以手工同步一次只有 2 小时有效期，之后 `ApprovePricingProposal` 全部返回 `ErrPricingProposalStale`，动态定价停摆且**无任何提示指向"定时任务没开"**。
+- **配置位置**（三选一）：
+  - `docker-compose.yml`：`environment:` 段加 `- PRICING_CONTROL_ENABLED=true`。**当前 compose 模板里没有这一项**，即按官方模板部署默认不启用。
+  - systemd：`[Service]` 下加 `Environment="PRICING_CONTROL_ENABLED=true"`，然后 `systemctl daemon-reload && systemctl restart new-api`。
+  - 直接启动：`PRICING_CONTROL_ENABLED=true ./new-api`。
+  - 可选同时设置 `PRICING_OFFER_SYNC_INTERVAL_MINUTES`（默认 60，下限 15）。
+- **验证是否生效**（查库）：
+  ```sql
+  SELECT task_id, type, status, updated_at, substr(result,1,120), error
+  FROM system_tasks
+  WHERE type IN ('pricing_offer_sync','pricing_recalculate')
+  ORDER BY id DESC LIMIT 5;
+  ```
+  **查不到任何行即为未启用**（未启用时任务类型根本不会进入调度列表）；有行且 `updated_at` 随间隔更新即为正常。
+
+#### ② 首次同步后 warnings 里那 3 个图片模型
+
+| 模型 | quota_type | model_price | 计费方式 |
+|---|---|---|---|
+| `gemini-3-pro-image` | 1 | 0.12 | 按次（USD/张） |
+| `gemini-3-pro-image-4k` | 1 | 0.22 | 按次 |
+| `gpt-image-2` | 1 | 1.00 | 按次 |
+
+- **为什么跳过**：`UpstreamModelOffer` 的成本字段单位是「美元 / 百万 Token」，按次计费的模型套进去会得出无意义的数值。代码选择跳过并写入 warning（`fixed-price model is not token-priced`），而不是按倍率 1 猜测成本 —— 这个判断是对的。
+- **实际影响**：这 3 个模型不会进入动态定价（没有报价就生成不了调价方案）。它们继续走 new-api 原有的 `quota_type=1` 固定单价计费路径，**功能不坏**，只是价格不会自动跟着上游调。
+- **需要避免的操作**：若给这 3 个模型建了定价策略，风险清单会出现 `primary_offer_cost_invalid`，且永远生成不出方案 —— 不报错、不崩溃，只是静默不出结果，容易被误认为"系统坏了"。
+- **待产品决定的处理方式**（三选一）：
+  1. **不纳入动态定价（建议）**：不给这 3 个模型建策略，价格维持原 `model_price` 人工维护；
+  2. 手工 import 估算的 USD/1M 单价 —— 不推荐，按次模型套 token 单价没有业务含义；
+  3. 扩展报价数据模型支持 per-request 成本 —— 正解，需排期。
+- 旁证：上游 `group_ratio.media = 1`，因此按次价格即使乘分组倍率也不放大，**当前无成本偏差**；但这是上游配置，不保证不变。
+
+#### ③ 三库矩阵
+
+CI 的 `on:` 只有 `pull_request`（opened / synchronize / closed），**未建 PR 就不会触发** —— 所以"CI 已补"不等于"CI 已跑过"，此前该 job 一次都没执行。
+
+本次在本地用与 CI 相同的镜像版本实跑：
+
+```bash
+docker run -d --name qa-mysql2 -e MYSQL_ROOT_PASSWORD=qapass -e MYSQL_DATABASE=qaprice -p 3399:3306 mysql:8.0
+docker run -d --name qa-pg2  -e POSTGRES_PASSWORD=qapass -e POSTGRES_DB=qaprice -p 5499:5432 postgres:17
+
+GOWORK=off \
+TEST_MYSQL_DSN="root:qapass@tcp(127.0.0.1:3399)/qaprice?charset=utf8mb4&parseTime=True&loc=Local" \
+TEST_POSTGRES_DSN="host=127.0.0.1 port=5499 user=postgres password=qapass dbname=qaprice sslmode=disable" \
+go test ./service -run '^TestQAPricingDatabaseMatrix$' -count=1 -v
+```
+
+结果（容器已清理）：
+
+```
+--- PASS: TestQAPricingDatabaseMatrix/sqlite   (0.01s)
+--- PASS: TestQAPricingDatabaseMatrix/mysql    (3.24s)
+--- PASS: TestQAPricingDatabaseMatrix/postgres (1.49s)
+sqlite   建议售价=3.28125000/16.40625000 毛利=5342bps 快照行数=2 发布成功
+mysql    建议售价=3.28125000/16.40625000 毛利=5342bps 快照行数=2 发布成功
+postgres 建议售价=3.28125000/16.40625000 毛利=5342bps 快照行数=2 发布成功
+```
+
+三库数值完全一致（`decimal(20,8)` 加列与 `upstream_group_ratio` nullable 在 MySQL 8.0 / PostgreSQL 17 上均正常）。**这一项已确认通过，不必等 CI。**
+
+后续提醒：CI job 若 DSN 未注入，子测试走 `t.Skip`、外层对比走 `t.Logf`，job 仍然显示绿色。所以"CI 绿"不等于"三库跑过"，需看日志里是否真的出现 `mysql` 与 `postgres` 两个子测试的 PASS 行。
