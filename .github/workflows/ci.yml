@@ -115,6 +115,7 @@ jobs:
           --health-interval=10s --health-timeout=5s --health-retries=10
     env:
       GOWORK: 'off'
+      PRICING_DB_MATRIX_REQUIRED: 'true'
       TEST_MYSQL_DSN: root:qapass@tcp(127.0.0.1:3306)/qaprice?charset=utf8mb4&parseTime=True&loc=Local
       TEST_POSTGRES_DSN: host=127.0.0.1 port=5432 user=postgres password=qapass dbname=qaprice sslmode=disable
     steps:

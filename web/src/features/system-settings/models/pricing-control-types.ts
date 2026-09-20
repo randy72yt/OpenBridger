@@ -90,3 +90,16 @@ export type PricingApiResponse<T> = {
   message: string
   data: T
 }
+
+export type PricingOfferSyncResult = {
+  imported: number
+  skipped: number
+  created_proposals: number
+  channels: {
+    channel_id: number
+    imported: number
+    skipped: number
+    warnings?: string[]
+    error?: string
+  }[]
+}

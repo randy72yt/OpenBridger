@@ -21,6 +21,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { PricingControlPolicyForm } from '../pricing-control-policy-form'
 import type { ModelPriceProposal } from '../pricing-control-types'
+import { PricingOfferSyncSummary } from '../pricing-offer-sync-summary'
 import { PricingProposalReview } from '../pricing-proposal-review'
 
 const proposal: ModelPriceProposal = {
@@ -120,5 +121,83 @@ describe('pricing proposal review', () => {
 
     expect(screen.getByText('Stale')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled()
+  })
+})
+
+describe('pricing offer sync summary', () => {
+  it('shows successful imports alongside skipped models and failed channels', () => {
+    render(
+      <PricingOfferSyncSummary
+        response={{
+          success: true,
+          message: '',
+          data: {
+            imported: 2,
+            skipped: 1,
+            created_proposals: 1,
+            channels: [
+              {
+                channel_id: 11,
+                imported: 2,
+                skipped: 1,
+                warnings: [
+                  'image-model: fixed-price model is not token-priced',
+                ],
+              },
+              {
+                channel_id: 12,
+                imported: 0,
+                skipped: 0,
+                error: 'upstream pricing returned 503',
+              },
+            ],
+          },
+        }}
+      />
+    )
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Upstream price sync needs review'
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Channel 11')
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'image-model: fixed-price model is not token-priced'
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Channel 12')
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'upstream pricing returned 503'
+    )
+  })
+
+  it('shows the upstream error when no channel produced an importable offer', () => {
+    render(
+      <PricingOfferSyncSummary
+        response={{
+          success: false,
+          message: 'pricing sync did not import any offers',
+          data: {
+            imported: 0,
+            skipped: 1,
+            created_proposals: 0,
+            channels: [
+              {
+                channel_id: 11,
+                imported: 0,
+                skipped: 1,
+                warnings: ['model-x: no positive auto-group ratio'],
+                error: 'upstream returned no importable token prices',
+              },
+            ],
+          },
+        }}
+      />
+    )
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'pricing sync did not import any offers'
+    )
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'model-x: no positive auto-group ratio'
+    )
   })
 })

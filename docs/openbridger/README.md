@@ -10,6 +10,8 @@
 | [生产验收](./production-acceptance.md) | 上线前逐项执行的测试用例、通过标准和证据记录 |
 | [上线计划](./launch-plan.md) | 按依赖关系推进上线准备，并记录每个阶段的完成状态 |
 
+第一个版本的发布前必做项与可延期项已整理在[上线计划的 Release 1 待办总览](./launch-plan.md#release-1-待办总览)。发布放行仍以[生产验收](./production-acceptance.md)中所有适用 P0 用例的实际证据为准。
+
 ## 动态定价控制面（pricing control）测试与缺陷资产
 
 | 文档 | 用途 | 当前状态 |
@@ -35,15 +37,15 @@
 | r6UjdF | 配置 `PRICING_CONTROL_ENABLED=true`，否则报价 2 小时后全过期、动态定价停摆 | urgent | `fix-review` 6.9 ①（含三种部署方式的配置位置与验证 SQL） |
 | r2VsH5 | 生图等按次计费模型纳入动态定价（gpt-image-2/2.5、gemini-3-pro-image） | high | `spec-per-request-pricing.md` 全文，重点第 2 节可行性依据、第 6/7 节改动清单、第 8 节测试验收 |
 | rpOYB6 | 生产验收：核对本地扣费与上游账单增量，确认倍率同步生效 | high | `test-results` 第 9 节（真实成本测量方法）＋ `fix-review` 6.2（倍率匹配规则） |
-| rhU308 | 同步结果未展示 warnings，被跳过的模型运营不可见 | medium | `fix-review` 6.3、6.6 RISK-005 |
+| rhU308 | 同步结果未展示 warnings，被跳过的模型运营不可见（本分支已修复，待 CI 确认） | medium | `fix-review` 6.3、6.6 RISK-005 |
 | r008SV | EDGE-001 零成本渠道语义追认（报错 / 保护价 / 标记异常） | medium | `fix-review` 1.3 ＋ `defect-list` EDGE-001 |
-| ryIHwN | 三库矩阵缺 DSN 静默跳过；补存量 NULL 倍率回归用例 | medium | `fix-review` 3.1、6.5、6.9 ③（含三库基准值） |
+| ryIHwN | 三库矩阵缺 DSN 静默跳过；补存量 NULL 倍率回归用例（本分支已修复并本地三库通过，待 CI 确认） | medium | `fix-review` 3.1、6.5、6.9 ③（含三库基准值） |
 | rftiXH | 主备切换与故障转移验证（需第二个上游渠道） | medium | `fix-review` 3.2；前提：`RetryTimes` 默认 0、禁用渠道须走 `POST /api/channel/:id/status` |
 | rx3c81 | `ErrPricingProposalStale` 错误码语义混用 | low | `fix-review` 2. RISK-003 |
 
 ### 代码位置
 
-上述资产与修复代码位于分支 **`codex/fix-pricing-control-qa`**（HEAD `d0df2779a`，已推送 origin，**未合并到 main**）。合入前请以 `fix-review-pricing-control.md` 第 0.1 节结论为准，遗留项不阻塞合并，但 `r6UjdF` 为上线必做项。
+上述资产与修复代码位于分支 **`codex/fix-pricing-control-qa`**（以当前分支 HEAD 为准，**未合并到 main**）。合入前请以 `fix-review-pricing-control.md` 第 0.1 节结论为准，遗留项按[上线计划](./launch-plan.md#release-1-待办总览)区分是否阻断首版；`r6UjdF` 为上线必做项。
 
 ### 复用价值高的两条经验
 

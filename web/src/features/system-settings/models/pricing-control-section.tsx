@@ -50,8 +50,11 @@ import { PricingControlPolicyForm } from './pricing-control-policy-form'
 import type {
   ModelPricePolicy,
   ModelPriceProposal,
+  PricingApiResponse,
+  PricingOfferSyncResult,
   UpstreamModelOffer,
 } from './pricing-control-types'
+import { PricingOfferSyncSummary } from './pricing-offer-sync-summary'
 import { PricingProposalReview } from './pricing-proposal-review'
 
 const pricingControlKey = ['pricing-control'] as const
@@ -60,6 +63,8 @@ export function PricingControlSection() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [offerJson, setOfferJson] = useState('[]')
+  const [lastSync, setLastSync] =
+    useState<PricingApiResponse<PricingOfferSyncResult> | null>(null)
   const [publishTarget, setPublishTarget] = useState<ModelPriceProposal | null>(
     null
   )
@@ -112,11 +117,25 @@ export function PricingControlSection() {
   })
   const syncMutation = useMutation({
     mutationFn: syncPricingOffers,
-    onSuccess: async () => {
-      toast.success(t('Upstream prices synchronized'))
+    onSuccess: async (response) => {
+      setLastSync(response)
+      if (!response.success) {
+        toast.error(response.message)
+      } else if (
+        response.data.channels.some(
+          (channel) => channel.error || channel.warnings?.length
+        )
+      ) {
+        toast.warning(t('Upstream price sync needs review'))
+      } else {
+        toast.success(t('Upstream prices synchronized'))
+      }
       await refresh()
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => {
+      setLastSync(null)
+      toast.error(error.message)
+    },
   })
 
   if (query.isLoading) return <LoadingState />
@@ -193,6 +212,7 @@ export function PricingControlSection() {
               {t('Sync upstream prices')}
             </Button>
           </div>
+          {lastSync && <PricingOfferSyncSummary response={lastSync} />}
           <Textarea
             value={offerJson}
             onChange={(event) => setOfferJson(event.target.value)}

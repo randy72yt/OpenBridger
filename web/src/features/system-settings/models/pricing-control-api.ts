@@ -16,12 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { isAxiosError } from 'axios'
+
 import { api } from '@/lib/api'
 
 import type {
   ModelPricePolicy,
   ModelPriceProposal,
   PricingApiResponse,
+  PricingOfferSyncResult,
   PricingRisk,
   UpstreamModelOffer,
 } from './pricing-control-types'
@@ -55,8 +58,20 @@ export async function importPricingOffers(offers: UpstreamModelOffer[]) {
 }
 
 export async function syncPricingOffers() {
-  const response = await api.post('/api/pricing-control/offers/sync', {})
-  return response.data
+  try {
+    const response = await api.post<PricingApiResponse<PricingOfferSyncResult>>(
+      '/api/pricing-control/offers/sync',
+      {},
+      { skipErrorHandler: true }
+    )
+    return response.data
+  } catch (error) {
+    if (isAxiosError<PricingApiResponse<PricingOfferSyncResult>>(error)) {
+      const payload = error.response?.data
+      if (payload?.data?.channels) return payload
+    }
+    throw error
+  }
 }
 
 export async function savePricingPolicy(policy: ModelPricePolicy) {

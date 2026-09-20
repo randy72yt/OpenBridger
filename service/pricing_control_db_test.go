@@ -92,7 +92,8 @@ func qaRunOnDatabase(t *testing.T, dbType common.DatabaseType, openDB func(strin
 	require.NoError(t, database.Create(&qaLegacyUpstreamModelOffer{
 		ChannelID: 999, UpstreamModel: "legacy-upstream", PublicModel: "legacy-public",
 		InputCost: 1, OutputCost: 2, Currency: "USD", SourceType: "test", SourceVersion: "legacy",
-		SuccessRateBPS: 10000, CollectedAt: 1, ExpiresAt: 2, Enabled: true, CreatedAt: 1, UpdatedAt: 1,
+		SuccessRateBPS: 10000, CollectedAt: common.GetTimestamp(), ExpiresAt: common.GetTimestamp() + 3600,
+		Enabled: true, CreatedAt: 1, UpdatedAt: 1,
 	}).Error)
 	require.NoError(t, database.AutoMigrate(models...))
 	require.NoError(t, database.AutoMigrate(models...))
@@ -100,8 +101,31 @@ func qaRunOnDatabase(t *testing.T, dbType common.DatabaseType, openDB func(strin
 	var legacyCount int64
 	require.NoError(t, database.Model(&model.UpstreamModelOffer{}).Where("public_model = ?", "legacy-public").Count(&legacyCount).Error)
 	require.Equal(t, int64(1), legacyCount)
+	var legacyOffer model.UpstreamModelOffer
+	require.NoError(t, database.Where("public_model = ?", "legacy-public").First(&legacyOffer).Error)
+	require.Nil(t, legacyOffer.UpstreamGroupRatio, "migration must not guess the upstream multiplier")
+	_, err = buildPriceProposal(qaPolicy("legacy-public", "default", 999, 0, 3500, 2000, 0, 0))
+	require.ErrorIs(t, err, ErrPricingCostInvalid, "missing legacy multiplier must not produce a proposal")
+	groupRatioForLegacy := 0.23
+	require.NoError(t, ValidateAndImportPricingOffers([]model.UpstreamModelOffer{{
+		ChannelID: 999, UpstreamModel: "legacy-upstream", PublicModel: "legacy-public",
+		InputCost: 1, OutputCost: 2, UpstreamGroupRatio: &groupRatioForLegacy,
+		Currency: "USD", SourceType: "test", CollectedAt: common.GetTimestamp(),
+		ExpiresAt: common.GetTimestamp() + 3600, Enabled: true,
+	}}))
+	require.NoError(t, database.Where("public_model = ?", "legacy-public").First(&legacyOffer).Error)
+	require.NotNil(t, legacyOffer.UpstreamGroupRatio)
+	assert.InDelta(t, groupRatioForLegacy, *legacyOffer.UpstreamGroupRatio, 1e-9)
+	_, err = buildPriceProposal(qaPolicy("legacy-public", "default", 999, 0, 3500, 2000, 0, 0))
+	require.NoError(t, err, "synced multiplier must restore proposal generation")
 
 	require.NoError(t, database.Migrator().DropTable(models...))
+	sqlDB, err := database.DB()
+	require.NoError(t, err)
+	require.NoError(t, sqlDB.Close())
+	database, err = gorm.Open(openDB(dsn), &gorm.Config{})
+	require.NoError(t, err)
+	model.DB = database
 	require.NoError(t, database.AutoMigrate(models...))
 	require.NoError(t, database.AutoMigrate(models...))
 
@@ -188,6 +212,10 @@ func qaOfferWithModel(channelID int, publicModel string, in, out float64) model.
 // TestQAPricingDatabaseMatrix 在 SQLite、MySQL、PostgreSQL 上执行同一组定价操作，
 // 验证流程可用且三种库产出的售价完全一致。
 func TestQAPricingDatabaseMatrix(t *testing.T) {
+	if os.Getenv("PRICING_DB_MATRIX_REQUIRED") == "true" {
+		require.NotEmpty(t, os.Getenv("TEST_MYSQL_DSN"), "pricing matrix requires MySQL")
+		require.NotEmpty(t, os.Getenv("TEST_POSTGRES_DSN"), "pricing matrix requires PostgreSQL")
+	}
 	dialects := []struct {
 		name   string
 		env    string
