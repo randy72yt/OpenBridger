@@ -24,10 +24,17 @@ import (
 
 func GetTopUpInfo(c *gin.Context) {
 	complianceConfirmed := operation_setting.IsPaymentComplianceConfirmed()
+	onlinePaymentEnabled := common.OnlinePaymentEnabled()
+	topUpLink := common.TopUpLink
+	creemProducts := setting.CreemProducts
+	if !onlinePaymentEnabled {
+		topUpLink = ""
+		creemProducts = "[]"
+	}
 
 	// 获取支付方式
 	payMethods := operation_setting.PayMethods
-	if !complianceConfirmed {
+	if !complianceConfirmed || !onlinePaymentEnabled {
 		payMethods = []map[string]string{}
 	}
 
@@ -97,6 +104,7 @@ func GetTopUpInfo(c *gin.Context) {
 	}
 
 	data := gin.H{
+		"online_payment_enabled":           onlinePaymentEnabled,
 		"enable_online_topup":              isEpayTopUpEnabled(),
 		"enable_stripe_topup":              isStripeTopUpEnabled(),
 		"enable_creem_topup":               isCreemTopUpEnabled(),
@@ -111,7 +119,7 @@ func GetTopUpInfo(c *gin.Context) {
 			}
 			return nil
 		}(),
-		"creem_products":          setting.CreemProducts,
+		"creem_products":          creemProducts,
 		"pay_methods":             payMethods,
 		"min_topup":               operation_setting.MinTopUp,
 		"stripe_min_topup":        setting.StripeMinTopUp,
@@ -119,7 +127,7 @@ func GetTopUpInfo(c *gin.Context) {
 		"waffo_pancake_min_topup": setting.WaffoPancakeMinTopUp,
 		"amount_options":          operation_setting.GetPaymentSetting().AmountOptions,
 		"discount":                operation_setting.GetPaymentSetting().AmountDiscount,
-		"topup_link":              common.TopUpLink,
+		"topup_link":              topUpLink,
 	}
 	common.ApiSuccess(c, data)
 }

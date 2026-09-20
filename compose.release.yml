@@ -1,0 +1,38 @@
+# Build web/dist with `cd web && bun install --frozen-lockfile && bun run build`
+# before building this image. TLS terminates at the host reverse proxy.
+# All secrets are supplied by the deployment environment; this file stores none.
+services:
+  openbridger:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: openbridger:${OPENBRIDGER_IMAGE_TAG:?Set an immutable release tag}
+    restart: unless-stopped
+    init: true
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - openbridger_data:/data
+    environment:
+      SQL_DSN: ${SQL_DSN:?Set the production database DSN}
+      REDIS_CONN_STRING: ${REDIS_CONN_STRING:?Set the production Redis DSN}
+      SESSION_SECRET: ${SESSION_SECRET:?Set a unique production session secret}
+      CRYPTO_SECRET: ${CRYPTO_SECRET:?Set a unique production crypto secret}
+      SESSION_COOKIE_SECURE: "true"
+      SESSION_COOKIE_TRUSTED_URL: https://openbridger.com
+      FRONTEND_BASE_URL: https://openbridger.com
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:?Set only the actual reverse proxy addresses}
+      NODE_TYPE: master
+      GIN_MODE: release
+      PRICING_CONTROL_ENABLED: "true"
+      OPENBRIDGER_ONLINE_PAYMENT_ENABLED: "false"
+      ERROR_LOG_ENABLED: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/status | grep -q '\"success\":true'"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  openbridger_data:

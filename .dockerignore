@@ -3,6 +3,12 @@
 *.md
 .vscode
 .gitignore
+.env
+.env.*
+!.env.example
+.workbuddy
+data
+logs
 Makefile
 docs
 .eslintcache

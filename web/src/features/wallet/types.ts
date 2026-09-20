@@ -120,6 +120,8 @@ export interface WaffoPayMethod {
  * Topup configuration information
  */
 export interface TopupInfo {
+  /** Global release switch for online payment and subscription purchases */
+  online_payment_enabled?: boolean
   /** Whether online topup is enabled */
   enable_online_topup: boolean
   /** Whether Stripe topup is enabled */
