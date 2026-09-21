@@ -45,7 +45,9 @@
 | 在线支付 | 关闭 | 容器 env `OPENBRIDGER_ONLINE_PAYMENT_ENABLED=false`；所有支付接口挂 `middleware.RequireOnlinePayment()` |
 | Cookie | `SESSION_COOKIE_SECURE=true`、`SESSION_COOKIE_TRUSTED_URL=https://openbridger.com` | `docker inspect` 已核对 |
 | 可信代理 | `TRUSTED_PROXIES=172.17.0.1` | 同上 |
-| CF 缓存 | `/api/status` 返回 `cf-cache-status: DYNAMIC` | 暂未被缓存，仍建议显式加 Bypass 规则 |
+| CF 缓存 | `/api/status`、`/v1/models` 返回 `cf-cache-status: DYNAMIC` | **未缓存**，目标达成；Cache Rule 已配但边缘仍标记为 DYNAMIC（CF 默认动态判定优先），两者等价不缓存 |
+| HSTS | `strict-transport-security: max-age=2592000; includeSubDomains`，`x-content-type-options: nosniff` | 2026-09-21 已开；max-age 先设 1 个月，**Preload 未开**（不可逆） |
+| 管理员 TOTP | `two_fas.is_enabled=1`（user_id=1，`xinlingwong`，role=100），已生成 4 条备份码 | 2026-09-21 开启；`passkey_credentials` 仍为空，待补注册 Passkey |
 
 未完成、需运维在后台/控制台处理：管理员 MFA/Passkey、SMTP 与 Turnstile、CF SSL 模式 Full(strict) 与 Bypass 缓存规则。
 

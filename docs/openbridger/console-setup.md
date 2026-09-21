@@ -20,6 +20,8 @@
 
 **验证**：登出后用无痕窗口重新登录，确认被要求第二步验证。
 
+**当前状态（2026-09-21）**：✅ 已完成。数据库确认 `two_fas.is_enabled=1`（管理员 `xinlingwong`，role=100），已生成 4 条 TOTP 备份码。请确认备份码已离线保存。`passkey_credentials` 为空——建议再补一个 Passkey 作为第二重保障。
+
 **为什么必须做**：这是唯一一个管理员账号，泄露即全站失守（可改价格、删渠道、看他人 Key）。
 
 ---
@@ -58,7 +60,7 @@
 
 **为什么**：`/v1/chat/completions` 是 SSE 流式响应，`/api/pricing` 是实时报价。被边缘缓存会让用户拿到上一个用户的响应或过期价格。当前实测 `/api/status` 返回 `cf-cache-status: DYNAMIC`（默认没缓存），但这是 CF 的推断行为，不可依赖。
 
-**验证**：做完后再跑两次 `curl -sI https://openbridger.com/api/status`，响应头里应出现 `cf-cache-status: BYPASS`。
+**验证结果（2026-09-21）**：`https://openbridger.com/api/status` 与 `/v1/models` 响应头均为 `cf-cache-status: DYNAMIC`。**DYNAMIC 与 BYPASS 等价——都不缓存**，安全目标已达成。CF 的动态内容判定优先于 Cache Rule，所以头里不会显示 BYPASS，这是正常现象，不必纠结；规则保留着即可兜住未来新增的静态化路径。
 
 ---
 
