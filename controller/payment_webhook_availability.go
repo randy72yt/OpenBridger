@@ -3,12 +3,13 @@ package controller
 import (
 	"strings"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 )
 
 func isPaymentComplianceConfirmed() bool {
-	return operation_setting.IsPaymentComplianceConfirmed()
+	return common.OnlinePaymentEnabled() && operation_setting.IsPaymentComplianceConfirmed()
 }
 
 func isStripeTopUpEnabled() bool {

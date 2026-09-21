@@ -1,12 +1,55 @@
 package controller
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestOnlinePaymentReleaseGate(t *testing.T) {
+	confirmPaymentComplianceForTest(t)
+	t.Setenv("OPENBRIDGER_ONLINE_PAYMENT_ENABLED", "false")
+	require.False(t, common.OnlinePaymentEnabled())
+	require.False(t, isPaymentComplianceConfirmed())
+	require.False(t, isEpayTopUpEnabled())
+	infoRecorder := httptest.NewRecorder()
+	infoContext, _ := gin.CreateTestContext(infoRecorder)
+	infoContext.Request = httptest.NewRequest(http.MethodGet, "/api/user/topup/info", nil)
+	GetTopUpInfo(infoContext)
+	var info struct {
+		Data struct {
+			OnlinePaymentEnabled bool                `json:"online_payment_enabled"`
+			PayMethods           []map[string]string `json:"pay_methods"`
+			TopUpLink            string              `json:"topup_link"`
+		} `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(infoRecorder.Body.Bytes(), &info))
+	require.False(t, info.Data.OnlinePaymentEnabled)
+	require.Empty(t, info.Data.PayMethods)
+	require.Empty(t, info.Data.TopUpLink)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.POST("/order", middleware.RequireOnlinePayment(), func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(http.MethodPost, "/order", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	require.Equal(t, http.StatusForbidden, response.Code)
+
+	t.Setenv("OPENBRIDGER_ONLINE_PAYMENT_ENABLED", "true")
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	require.Equal(t, http.StatusNoContent, response.Code)
+}
 
 func confirmPaymentComplianceForTest(t *testing.T) {
 	t.Helper()

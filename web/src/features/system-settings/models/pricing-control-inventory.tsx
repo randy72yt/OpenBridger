@@ -69,6 +69,7 @@ export function PricingControlInventory(props: PricingControlInventoryProps) {
                 <TableHead>{t('Channel')}</TableHead>
                 <TableHead>{t('Input cost')}</TableHead>
                 <TableHead>{t('Output cost')}</TableHead>
+                <TableHead>{t('Group ratios')}</TableHead>
                 <TableHead>{t('Source')}</TableHead>
                 <TableHead>{t('Expires')}</TableHead>
               </TableRow>
@@ -85,6 +86,11 @@ export function PricingControlInventory(props: PricingControlInventoryProps) {
                   </TableCell>
                   <TableCell className='tabular-nums'>
                     ${offer.output_cost}
+                  </TableCell>
+                  <TableCell className='tabular-nums'>
+                    {offer.upstream_group_ratio == null
+                      ? '—'
+                      : `${offer.upstream_group_ratio}×`}
                   </TableCell>
                   <TableCell>
                     <Badge variant='outline'>{offer.source_type}</Badge>

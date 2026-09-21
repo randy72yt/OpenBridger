@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 func GetEnvOrDefault(env string, defaultValue int) int {
@@ -35,4 +36,14 @@ func GetEnvOrDefaultBool(env string, defaultValue bool) bool {
 		return defaultValue
 	}
 	return b
+}
+
+// OnlinePaymentEnabled preserves existing deployments when unset. An explicit
+// value must be "true" to permit new orders; typos fail closed.
+func OnlinePaymentEnabled() bool {
+	value, configured := os.LookupEnv("OPENBRIDGER_ONLINE_PAYMENT_ENABLED")
+	if !configured {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(value), "true")
 }

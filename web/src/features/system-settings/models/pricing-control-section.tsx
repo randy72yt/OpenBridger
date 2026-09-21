@@ -17,7 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Calculator, Database, ShieldCheck } from 'lucide-react'
+import {
+  AlertTriangle,
+  Calculator,
+  Database,
+  RefreshCw,
+  ShieldCheck,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -36,6 +42,7 @@ import {
   importPricingOffers,
   recalculatePricing,
   savePricingPolicy,
+  syncPricingOffers,
   updatePricingProposal,
 } from './pricing-control-api'
 import { PricingControlInventory } from './pricing-control-inventory'
@@ -43,8 +50,11 @@ import { PricingControlPolicyForm } from './pricing-control-policy-form'
 import type {
   ModelPricePolicy,
   ModelPriceProposal,
+  PricingApiResponse,
+  PricingOfferSyncResult,
   UpstreamModelOffer,
 } from './pricing-control-types'
+import { PricingOfferSyncSummary } from './pricing-offer-sync-summary'
 import { PricingProposalReview } from './pricing-proposal-review'
 
 const pricingControlKey = ['pricing-control'] as const
@@ -53,6 +63,8 @@ export function PricingControlSection() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [offerJson, setOfferJson] = useState('[]')
+  const [lastSync, setLastSync] =
+    useState<PricingApiResponse<PricingOfferSyncResult> | null>(null)
   const [publishTarget, setPublishTarget] = useState<ModelPriceProposal | null>(
     null
   )
@@ -102,6 +114,28 @@ export function PricingControlSection() {
     mutationFn: recalculatePricing,
     onSuccess: () => toast.success(t('Pricing recalculation queued')),
     onError: (error: Error) => toast.error(error.message),
+  })
+  const syncMutation = useMutation({
+    mutationFn: syncPricingOffers,
+    onSuccess: async (response) => {
+      setLastSync(response)
+      if (!response.success) {
+        toast.error(response.message)
+      } else if (
+        response.data.channels.some(
+          (channel) => channel.error || channel.warnings?.length
+        )
+      ) {
+        toast.warning(t('Upstream price sync needs review'))
+      } else {
+        toast.success(t('Upstream prices synchronized'))
+      }
+      await refresh()
+    },
+    onError: (error: Error) => {
+      setLastSync(null)
+      toast.error(error.message)
+    },
   })
 
   if (query.isLoading) return <LoadingState />
@@ -162,6 +196,23 @@ export function PricingControlSection() {
         )}
       >
         <div className='space-y-3'>
+          <div className='flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3'>
+            <p className='text-muted-foreground text-sm'>
+              {t(
+                'Fetch current model prices and effective group ratios from configured upstream channels.'
+              )}
+            </p>
+            <Button
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+            >
+              <RefreshCw
+                className={syncMutation.isPending ? 'animate-spin' : ''}
+              />
+              {t('Sync upstream prices')}
+            </Button>
+          </div>
+          {lastSync && <PricingOfferSyncSummary response={lastSync} />}
           <Textarea
             value={offerJson}
             onChange={(event) => setOfferJson(event.target.value)}
@@ -171,7 +222,7 @@ export function PricingControlSection() {
           <div className='flex flex-wrap justify-between gap-2'>
             <p className='text-muted-foreground text-sm'>
               {t(
-                'Fields: channel_id, upstream_model, public_model, input_cost, output_cost, currency, source_type, enabled.'
+                'Fields: channel_id, upstream_model, public_model, input_cost, output_cost, upstream_group_ratio, currency, source_type, enabled.'
               )}
             </p>
             <Button

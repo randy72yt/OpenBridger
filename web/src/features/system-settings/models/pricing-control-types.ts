@@ -24,6 +24,7 @@ export type UpstreamModelOffer = {
   input_cost: number
   output_cost: number
   cache_read_cost: number
+  upstream_group_ratio?: number | null
   currency: string
   source_type: string
   source_version: string
@@ -88,4 +89,17 @@ export type PricingApiResponse<T> = {
   success: boolean
   message: string
   data: T
+}
+
+export type PricingOfferSyncResult = {
+  imported: number
+  skipped: number
+  created_proposals: number
+  channels: {
+    channel_id: number
+    imported: number
+    skipped: number
+    warnings?: string[]
+    error?: string
+  }[]
 }

@@ -27,6 +27,30 @@ func ImportPricingOffers(c *gin.Context) {
 	common.ApiSuccess(c, gin.H{"imported": len(request.Offers)})
 }
 
+func SyncPricingOffers(c *gin.Context) {
+	var request struct {
+		ChannelIDs []int `json:"channel_ids"`
+	}
+	if c.Request.ContentLength > 0 {
+		if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+			return
+		}
+	}
+	result, err := service.SyncPricingOffersFromChannels(c.Request.Context(), request.ChannelIDs)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error(), "data": result})
+		return
+	}
+	result.CreatedProposals, err = service.RecalculatePricingProposals(c.Request.Context())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	recordManageAudit(c, "pricing.offers.sync", map[string]interface{}{"channel_ids": request.ChannelIDs, "imported": result.Imported})
+	common.ApiSuccess(c, result)
+}
+
 func GetPricingOffers(c *gin.Context) {
 	offers, err := model.ListUpstreamModelOffers(c.Query("model"))
 	if err != nil {

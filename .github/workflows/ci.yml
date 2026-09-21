@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+    branches: ['codex/**']
   pull_request:
     types: [opened, synchronize, closed]
 
@@ -24,7 +26,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          repository: ${{ github.event.pull_request.base.repo.full_name }}
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
           ref: ${{ github.event.action == 'closed' && github.event.pull_request.base.ref || github.ref }}
 
       - name: Set up Go
@@ -70,7 +72,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          repository: ${{ github.event.pull_request.base.repo.full_name }}
+          repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
           ref: ${{ github.event.action == 'closed' && github.event.pull_request.base.ref || github.ref }}
 
       - name: Set up Bun
@@ -86,3 +88,49 @@ jobs:
 
       - name: Test
         run: bun run test
+
+  pricing-database-matrix:
+    name: Pricing control database matrix
+    if: github.event.action != 'closed' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: qapass
+          MYSQL_DATABASE: qaprice
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pqapass"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: qapass
+          POSTGRES_DB: qaprice
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d qaprice"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    env:
+      GOWORK: 'off'
+      PRICING_DB_MATRIX_REQUIRED: 'true'
+      TEST_MYSQL_DSN: root:qapass@tcp(127.0.0.1:3306)/qaprice?charset=utf8mb4&parseTime=True&loc=Local
+      TEST_POSTGRES_DSN: host=127.0.0.1 port=5432 user=postgres password=qapass dbname=qaprice sslmode=disable
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Create frontend embed placeholder
+        run: |
+          mkdir -p web/dist
+          touch web/dist/index.html
+      - name: Run pricing database matrix
+        run: go test ./service -run '^TestQAPricingDatabaseMatrix$' -count=1 -v

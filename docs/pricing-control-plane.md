@@ -180,7 +180,7 @@ FetchHealth(ctx, channel)    -> 可选的余额和渠道状态
 
 第一阶段已集成到 OpenBridger：上游标准化成本与历史快照、模型定价策略、主备渠道加权成本、备用渠道压力成本、调价方案、风险检查、人工审批以及向现有计费表达式发布价格。管理员入口位于“系统设置 → 模型设置 → 动态定价控制”。
 
-当前接口统一使用 `/api/pricing-control` 前缀。定时重算通过 `PRICING_CONTROL_ENABLED` 和 `PRICING_RECALCULATE_INTERVAL_MINUTES` 启用。上游成本当前通过管理页或 `POST /api/pricing-control/offers/import` 导入标准化的美元/百万 Token 报价。
+当前接口统一使用 `/api/pricing-control` 前缀。开启 `PRICING_CONTROL_ENABLED=true` 后，系统会按 `PRICING_OFFER_SYNC_INTERVAL_MINUTES`（默认 60 分钟，最低 15 分钟）从兼容 New API `/api/pricing` 的已配置主、备渠道同步报价和实际分组倍率，再按 `PRICING_RECALCULATE_INTERVAL_MINUTES` 定时重算。管理员也可以在管理页手动同步，或通过 `POST /api/pricing-control/offers/import` 导入标准化的美元/百万 Token 报价。无法确认有效分组倍率、仅提供固定单价或不属于渠道模型范围的报价会被跳过，不会按倍率 1 猜测成本。
 
 最小导入示例：
 
@@ -193,6 +193,7 @@ FetchHealth(ctx, channel)    -> 可选的余额和渠道状态
     "input_cost": 1.5,
     "output_cost": 7.5,
     "cache_read_cost": 0.15,
+    "upstream_group_ratio": 1.0,
     "currency": "USD",
     "source_type": "manual",
     "source_version": "2026-09-08",
@@ -202,6 +203,8 @@ FetchHealth(ctx, channel)    -> 可选的余额和渠道状态
 ]
 ```
 
-未提供采集时间时使用导入时间，未提供有效期时默认 24 小时后过期。价格为零是允许的，但稳定线路仍会使用备用渠道压力成本计算保护售价。
+`upstream_group_ratio` 是上游账号或自动分组实际结算倍率。动态定价会先将报价乘以该倍率，再计算采购成本和售价。每条导入报价都必须显式提供大于零的倍率；如果报价已经是最终采购价，则填写 `1`。这样可以避免未知倍率被默认为无折扣价格而造成错误毛利。
+
+未提供采集时间时使用导入时间，未提供有效期时默认 24 小时后过期。输入或输出成本为零的报价会保留用于审计，但不会生成可审批的调价方案，并会进入风险列表。
 
 DDD、CodeGo 的自动采集适配器仍需根据它们实际提供的价格接口、账号折扣、充值汇率和模型名称映射实现。适配器完成前不把其公开零售价直接当成 OpenBridger 采购成本，避免产生错误毛利。有限自动发布、日志库成功率聚合和模型自动隐藏也保留在后续阶段；当前价格发布必须由管理员批准。
