@@ -43,6 +43,7 @@
 | 公开注册 | `false` | `/api/status` 的 `register_enabled=false`（写入 `options` 表 `RegisterEnabled`） |
 | 密码注册 | `false` | `password_register_enabled=false`（`PasswordRegisterEnabled`） |
 | 在线支付 | 关闭 | 容器 env `OPENBRIDGER_ONLINE_PAYMENT_ENABLED=false`；所有支付接口挂 `middleware.RequireOnlinePayment()` |
+| Turnstile | **已启用**（`TurnstileCheckEnabled=true`，Site/Secret Key 已入库） | 未带 token 的登录请求返回 `{"message":"Turnstile token 为空"}`；Secret Key 经 CF siteverify 端点确认为有效（`invalid-input-response` 而非 `invalid-input-secret`） |
 | Cookie | `SESSION_COOKIE_SECURE=true`、`SESSION_COOKIE_TRUSTED_URL=https://openbridger.com` | `docker inspect` 已核对 |
 | 可信代理 | `TRUSTED_PROXIES=172.17.0.1` | 同上 |
 | CF 缓存 | `/api/status`、`/v1/models` 返回 `cf-cache-status: DYNAMIC` | **未缓存**，目标达成；Cache Rule 已配但边缘仍标记为 DYNAMIC（CF 默认动态判定优先），两者等价不缓存 |

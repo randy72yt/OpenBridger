@@ -168,6 +168,22 @@ INSERT INTO options (`key`, value) VALUES ("ServerAddress","https://openbridger.
 | TurnstileSiteKey | 上一步的 Site Key |
 | TurnstileSecretKey | 上一步的 Secret Key |
 
+### 18.3 状态与验证（2026-09-21 已完成）
+
+Key 由服务端直接写入 `options` 表（`TurnstileSiteKey` / `TurnstileSecretKey` / `TurnstileCheckEnabled`），**密钥不记录在任何仓库文档中**。
+
+**开关启用顺序（重要）**：先写两个 Key → 等约 60s 同步 → 确认 `/api/status` 的 `turnstile_site_key` 非空 → **再**开开关。反序会让前端拿不到 site key 却被强制校验，用户直接无法登录。
+
+**三条验证全部通过**：
+
+| 验证 | 方法 | 结果 |
+| --- | --- | --- |
+| Secret Key 有效 | 服务器直连 CF `siteverify` 端点、response 传假值 | 返回 `{"error-codes":["invalid-input-response"]}`——**未出现 `invalid-input-secret`**，说明密钥被 CF 接受；同时证明服务器出网可达 CF |
+| 开关生效 | `/api/status` | `turnstile_check=true`、`turnstile_site_key` 非空 |
+| 拦截生效 | 不带 token 调 `POST /api/user/login` | `{"message":"Turnstile token 为空","success":false}` |
+
+> CF 官方测试密钥可作为对照（`1x00000000000000000000AA` 永远通过、`2x0000000000000000000000000000000AA` 永远拒绝、 `3x0000000000000000000000000000000AA` 强制报错），但本环境直接用真实密钥 + 假 token 已能证明链路完整。
+
 **代码约束**：`controller/option.go:226` 会校验——先填 Key 再开开关，否则保存失败并提示「请先填入 Turnstile 校验相关配置信息」。**顺序：先填两个 Key，保存，再打开开关。**
 
 **验证**：开启后登录/注册页会出现 Turnstile 挂件；我这边会跑一次匿名请求确认校验链路通。
