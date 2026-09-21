@@ -15,7 +15,7 @@
 | 主机 | 开放端口 | 22（限来源 IP）、80、443 | 3000 仅映射宿主 `127.0.0.1:3000`，不对外 |
 | 接入 | SSH 配置位置 | 运维本机 `~/.ssh/config`，Host `ob-prod` | 不在仓库 |
 | 接入 | 连接命令 | `ssh ob-prod` | 需要 IP、端口、用户、私钥四项，由运维保管 |
-| 域名 | 主站 / 控制台 | `openbridger.com` | Cloudflare，待解析 |
+| 域名 | 主站 / 控制台 | `openbridger.com` | Cloudflare，2026-09-21 已解析（橙云代理）；`www` 为 CNAME |
 | 域名 | 文档站 | `docs.openbridger.com` | Cloudflare，2026-09-21 已解析（橙云代理） |
 | TLS | 证书 | Let's Encrypt（certbot 签发，覆盖 `@` / `www` / `docs`） | 2026-09-21 签发，2026-12-20 到期，已配自动续期；Nginx 强制 HTTP→HTTPS（301），流式配置 `proxy_buffering off` 已保留 |
 | 数据库 | 选型 | 本机容器 **MySQL 8.0**，库 `openbridger` | 2026-09-21 部署；`innodb-buffer-pool-size=64M`、`max-connections=80`、`performance_schema=OFF`（内存占用 432MiB → 108MiB） |
