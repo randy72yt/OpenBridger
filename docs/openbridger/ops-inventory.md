@@ -36,7 +36,20 @@
 
 数据库与 Redis **不能**绑 `127.0.0.1`——应用容器经 docker0 网关访问宿主，绑 127.0.0.1 会 `connection refused`（2026-09-21 实际踩到）。
 
-## 3. 构建策略
+## 3. 已完成的安全开关（2026-09-21 生产实测）
+
+| 项 | 值 | 验证方式 |
+| --- | --- | --- |
+| 公开注册 | `false` | `/api/status` 的 `register_enabled=false`（写入 `options` 表 `RegisterEnabled`） |
+| 密码注册 | `false` | `password_register_enabled=false`（`PasswordRegisterEnabled`） |
+| 在线支付 | 关闭 | 容器 env `OPENBRIDGER_ONLINE_PAYMENT_ENABLED=false`；所有支付接口挂 `middleware.RequireOnlinePayment()` |
+| Cookie | `SESSION_COOKIE_SECURE=true`、`SESSION_COOKIE_TRUSTED_URL=https://openbridger.com` | `docker inspect` 已核对 |
+| 可信代理 | `TRUSTED_PROXIES=172.17.0.1` | 同上 |
+| CF 缓存 | `/api/status` 返回 `cf-cache-status: DYNAMIC` | 暂未被缓存，仍建议显式加 Bypass 规则 |
+
+未完成、需运维在后台/控制台处理：管理员 MFA/Passkey、SMTP 与 Turnstile、CF SSL 模式 Full(strict) 与 Bypass 缓存规则。
+
+## 4. 构建策略
 
 服务器 1.6Gi 内存，**不具备**编译 Go 与前端的能力。镜像在运维本机（x86_64 + Docker + bun）构建后传入：
 
@@ -53,7 +66,7 @@ cd /srv/openbridger/repo && docker compose --env-file /srv/openbridger/.env -f c
 
 后续若要自动化：启用 GitHub Actions → 构建推送 GHCR → 服务器 `docker pull`，可省掉本机上传。
 
-## 4. 发布记录
+## 5. 发布记录
 
 每次生产部署后追加一行：
 
@@ -61,7 +74,7 @@ cd /srv/openbridger/repo && docker compose --env-file /srv/openbridger/.env -f c
 | --- | --- | --- | --- | --- | --- | --- |
 | 2026-09-21 | `1e93ef211` | `openbridger:1e93ef211` | 生产首次部署：MySQL/Redis/应用容器启动，`/api/status` 200 且容器 healthy | 运维 | 已启动，**尚未开放对外访问**（域名未解析、未初始化管理员） | 无上一个版本；异常时可 `docker compose down` 并用 systemctl 快照回滚 |
 
-## 5. 维护规则
+## 6. 维护规则
 
 1. IP、密钥、密码、API Key 一律不写进本仓库任何文件；需要交接时单独走受控渠道。
 2. 服务器上的 `.env` 变更不通过仓库分发，直接在主机上改并留变更记录。
