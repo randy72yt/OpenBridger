@@ -181,3 +181,73 @@
 ## 下一步
 
 先核验上游渠道实际可用的模型与成本，再完成首版支付关闭、管理员试用额度发放、正式协议和生产环境准备。候选模型不等于已上线模型；所有适用 P0 验收通过后才能发布。
+
+## 上游凭证与首批模型复核（2026-09-21）
+
+### 1. `.env` 上游凭证有效，此前 403 是 URL 拼接问题
+
+`OPENBRIDGER_UPSTREAM_BASE` **已经包含 `/v1`**，再拼一层 `/v1` 会得到 `GET /v1/v1/models` → `404 Invalid URL`（部分调用方式表现为 403）。实测同一把 Key：
+
+| 请求 | 结果 |
+| --- | --- |
+| `GET $BASE/models` | 200，39 个模型 |
+| `POST $BASE/chat/completions` | 200（deepseek-v4-flash 正常返回） |
+| `GET $BASE/dashboard/billing/usage` | 200，`total_usage=11.35192` |
+| `GET $BASE/dashboard/billing/subscription` | 200，`has_payment_method=true` |
+| `GET ${BASE%/v1}/api/pricing` | 200，39 条定价 + 全量 `group_ratio` |
+| `GET $BASE/v1/models`（重复拼接） | 404 `Invalid URL` |
+| `GET $BASE/api/pricing`（路径错位） | 404 `Invalid URL` |
+
+结论：**凭证没有失效，不需要更换**；`.env` 已补充正确用法注释。首个阻断项的「403」部分已解除，剩余只是本地尚未配置渠道。
+
+### 2. 十个候选模型与上游的核对
+
+| 候选模型 | 在上游目录 | 分组 | 倍率 | 计费模式 |
+| --- | --- | --- | --- | --- |
+| `gpt-5.6-luna` | 是 | openai-luna | 1.1 | tiered_expr |
+| `claude-haiku-4-5` | 是 | claude-kiro | 0.25 | ratio |
+| `gemini-3.8-flash` | 是 | gemini | 0.3 | ratio |
+| `deepseek-flash` | **否** | — | — | 上游只有 `deepseek-v4-flash` |
+| `gpt-5.6-terra` | 是 | codex-plus | 0.15 | tiered_expr |
+| `claude-sonnet-5` | 是 | claude-kiro | 0.25 | ratio |
+| `deepseek-v4-pro` | 是 | deepseek | 1 | tiered_expr |
+| `gpt-5.6-sol` | 是 | codex-plus | 0.15 | tiered_expr |
+| `claude-opus-5` | 是 | claude-kiro | 0.25 | ratio |
+| `gemini-3.1-pro-preview` | 是 | gemini | 0.3 | tiered_expr |
+
+**9/10 可用；`deepseek-flash` 不存在**，上架前需改为 `deepseek-v4-flash` 或确认上游别名。
+
+### 3. 上游分组倍率已发生漂移（重要）
+
+与 2026-09-16 记录相比，同一上游的 `group_ratio` 变了：
+
+| 分组 | 9-16 记录 | 9-21 实测 | 变化 |
+| --- | --- | --- | --- |
+| deepseek | 6.8 | 1 | 下降 6.8 倍 |
+| kimi | 6.8 | 1 | 下降 6.8 倍 |
+| glm | 6 | 0.9 | 下降 6.7 倍 |
+| openai-luna | 1.3 | 1.1 | 下降 |
+| default | 0.2 | 0.23 | 上升 |
+| grok | 0.25 | 0.3 | 上升 |
+
+未变的：claude-max 1.8、claude-kiro 0.25、gemini 0.3、codex-plus 0.15、free 0。
+
+**含义**：倍率几天内就会变，本地手工填值必然失真。动态定价必须开启定时同步（`PRICING_CONTROL_ENABLED=true`，事项 r6UjdF），且 `test-results-pricing-control.md` 第 9 节记录的具体数值（如 deepseek 6.8）已过期，不能作为当前定价依据，只能作为方法论参考。生产验收必须按事项 rpOYB6 用上游账单差值重新核对。
+
+### 4. GitHub Actions 至今没有任何运行记录
+
+`gh api repos/randy72yt/OpenBridger/actions/runs` → `total_count = 0`；merge 提交与分支均无 check-runs。已推送 `codex/verify-ci`、`codex/verify-upstream-credentials` 两个 `codex/**` 分支以触发 `push` 事件，仍未见运行。
+
+仓库是 `QuantumNous/new-api` 的 **fork**（`fork=true`），`actions/permissions` 报 `enabled=true`、6 个 workflow 均 `state=active`。所以「CI 未产生检查记录」很可能需要在 Actions 页面手动点一次启用（fork 默认可能不跑）。**在出现真实运行记录之前，不能把远端检查计为通过。**
+
+### 5. 法律文档的空正文来自配置项，不是代码缺陷
+
+`setting/system_setting/legal.go` 注册了 `legal` 配置段，字段 `user_agreement` / `privacy_policy` **默认为空字符串**；`GET /api/user-agreement` 与 `GET /api/privacy-policy` 直接返回这两个字段（`controller/misc.go:192-197`），`/api/status` 里 `user_agreement_enabled` 由「正文非空」判定。
+
+所以要解除该项，需要的是**内容**，不是改代码：正式用户协议与隐私政策正文、运营主体名称、联系邮箱。拿到后写入 `legal` 配置段即可，无需发版。
+
+### 6. 仍待外部输入
+
+- 生产部署位置（服务器 / 平台、域名接入方式）——域名解析暂缓，不影响其他项推进
+- 运营主体名称与联系邮箱
+- 用户协议、隐私政策正式文本
