@@ -20,7 +20,38 @@
 
 **验证**：登出后用无痕窗口重新登录，确认被要求第二步验证。
 
-**当前状态（2026-09-21）**：✅ 已完成。数据库确认 `two_fas.is_enabled=1`（管理员 `xinlingwong`，role=100），已生成 4 条 TOTP 备份码。请确认备份码已离线保存。`passkey_credentials` 为空——建议再补一个 Passkey 作为第二重保障。
+**当前状态（2026-09-21）**：✅ 已完成。数据库确认 `two_fas.is_enabled=1`（管理员 `xinlingwong`，role=100），已生成 4 条 TOTP 备份码。请确认备份码已离线保存。
+
+### 15.1 Passkey 注册失败与修复（2026-09-21）
+
+**现象**：管理员在 `/security` 页面点击注册 Passkey，前端报错，服务端返回 500。
+
+**日志证据**：
+
+```
+[ERR] auth session internal error (POST /api/user/passkey/register/begin):
+      Passkey 不允许使用不安全的 Origin: http://localhost:3000
+[GIN] 500 | POST /api/user/passkey/register/begin
+```
+
+**根因（代码缺陷）**：
+
+1. `setting/system_setting/system_setting_old.go:3` 把站点地址硬编码为 `var ServerAddress = "http://localhost:3000"`
+2. `setting/system_setting/passkey.go:46-48`：Passkey 的 `Origins` 为空时会拿 `ServerAddress` 兜底
+3. `service/passkey/service.go:83-88`：Origin 以 `http://` 开头且 `AllowInsecureOrigin=false` 时直接拒绝
+
+结果：**任何生产部署，只要管理员没手动配置过站点地址，Passkey 就必然注册失败**，且错误信息完全不提示真正的修复方向。代码里其实已有更好的 `autoDetect` 分支（从请求 Host + scheme 推导，见 `service/passkey/service.go:94` 起），但因为 `ServerAddress` 非空而永远走不到。
+
+**修复（已完成）**：写入 options 表，`ServerAddress = https://openbridger.com`。`/api/status` 的 `server_address` 已验证同步为该值。
+
+```sql
+INSERT INTO options (`key`, value) VALUES ("ServerAddress","https://openbridger.com")
+  ON DUPLICATE KEY UPDATE value="https://openbridger.com";
+```
+
+**这个配置不止影响 Passkey**：`ServerAddress` 还用于 OAuth 回调 URI（`oauth/oidc.go:57` 等）、密码重置邮件链接（`controller/misc.go:256`）、支付回调地址。生产环境必须设置为真实域名。
+
+**待办**：上报上游修正 `GetPasskeySettings()` 的兜底策略——`Origins` 为空时应优先从请求推导，而不是用硬编码的 localhost。
 
 **为什么必须做**：这是唯一一个管理员账号，泄露即全站失守（可改价格、删渠道、看他人 Key）。
 
