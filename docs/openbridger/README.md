@@ -10,6 +10,15 @@
 | [生产验收](./production-acceptance.md) | 上线前逐项执行的测试用例、通过标准和证据记录 |
 | [上线计划](./launch-plan.md) | 按依赖关系推进上线准备，并记录每个阶段的完成状态 |
 
+## 法律文档草稿（仓库根目录 `legal-drafts/`）
+
+| 文件 | 用途 | 当前状态 |
+| --- | --- | --- |
+| `legal-drafts/user-agreement.zh-CN.md` | OpenBridger 用户协议 | 草稿：运营主体已填 OpenBridger、邮箱预设；仍含「待确认」，**不可直接发布** |
+| `legal-drafts/privacy-policy.zh-CN.md` | OpenBridger 隐私政策 | 同上 |
+
+定稿后写入 `legal` 配置段的 `user_agreement` / `privacy_policy` 字段即可生效，无需发版；接口为空说明配置项未填，不是代码缺陷。发布前必须消除全部「待确认」，清单见[上线计划 2026-09-21 章节](./launch-plan.md#部署位置主体与协议草稿2026-09-21)。
+
 第一个版本的发布前必做项与可延期项已整理在[上线计划的 Release 1 待办总览](./launch-plan.md#release-1-待办总览)。发布放行仍以[生产验收](./production-acceptance.md)中所有适用 P0 用例的实际证据为准。
 
 ## 动态定价控制面（pricing control）测试与缺陷资产
@@ -82,4 +91,4 @@
 - API Base URL：`https://openbridger.com/v1`
 - 文档站：`https://docs.openbridger.com`
 
-上述地址在 DNS、TLS 和反向代理完成前属于规划值。
+上述地址在 DNS、TLS 和反向代理完成前属于规划值。域名已在 Cloudflare 购买但**尚未解析**（2026-09-21），部署位置为阿里云轻量应用服务器。
