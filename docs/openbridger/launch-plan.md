@@ -307,12 +307,15 @@
 
 ### 4. 域名：Cloudflare 已购买，尚未解析
 
-- 现状：域名在 Cloudflare，处于刚买状态，无解析记录。
-- 待办（按用户安排暂缓，但上线前必须完成）：A/AAAA 记录指向阿里云轻量公网 IP、CF 代理与 SSL/TLS 模式选择、回源证书（CF Origin CA 或自签）、`compose.release.yml` 与 `.env` 中域名常量替换为实际域名、`docs.` 子域、SMTP 发件域名（含 SPF/DKIM/DMARC）。
+- 域名已确认为 **`openbridger.com`**（2026-09-21），在 Cloudflare，处于刚买状态，无解析记录。
+- 待办（按用户安排暂缓，但上线前必须完成）：A 记录 `@`→轻量公网 IP、`docs`→同 IP、`www`→CNAME、CF 代理与 SSL/TLS 为 Full(strict)、Origin CA 回源证书、`docs.` 子域、SMTP 发件域名（含 SPF/DKIM/DMARC）。**`/v1/*` 与 `/api/*` 必须在 CF 设为 Bypass cache**，否则流式响应和报价会被边缘缓存。
+- `compose.release.yml` 中硬编码的 `https://openbridger.com` 与实际域名一致，无需替换。
+- 逐步骤操作见[上线执行手册](./launch-runbook.md) 段 2（S06–S09）。
 - 依赖：域名未解析前，无法完成 OPS-002（DNS/TLS）、AUTH-001（邮件）与 LEGAL-001 的最终验收。
 
 ### 5. 更新后仍待外部输入
 
-- 域名实际名称（用于解析、邮箱、Cookie 可信地址）。
-- 服务器规格/公网 IP、数据库与 Redis 选型。
+- 服务器规格与系统版本、数据库与 Redis 选型（公网 IP 不进文档）。
 - 上表 11 项协议待确认的决策结果，或确认「首版不开支付」以缩小范围。
+
+域名已定为 `openbridger.com`，不再是待输入项。逐步骤执行见[上线执行手册](./launch-runbook.md)。

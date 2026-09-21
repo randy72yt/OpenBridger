@@ -9,6 +9,7 @@
 | [项目档案](./project-profile.md) | 保存产品定位、系统组成、已确认决定、当前状态、外部依赖和待确认事项 |
 | [生产验收](./production-acceptance.md) | 上线前逐项执行的测试用例、通过标准和证据记录 |
 | [上线计划](./launch-plan.md) | 按依赖关系推进上线准备，并记录每个阶段的完成状态 |
+| [上线执行手册](./launch-runbook.md) | **逐步骤操作手册（S01–S34）**：每步的操作命令、通过标准、证据与回退方式 |
 
 ## 法律文档草稿（仓库根目录 `legal-drafts/`）
 
@@ -91,4 +92,4 @@
 - API Base URL：`https://openbridger.com/v1`
 - 文档站：`https://docs.openbridger.com`
 
-上述地址在 DNS、TLS 和反向代理完成前属于规划值。域名已在 Cloudflare 购买但**尚未解析**（2026-09-21），部署位置为阿里云轻量应用服务器。
+域名已确认为 `openbridger.com`（在 Cloudflare，**尚未解析**），部署位置为阿里云轻量应用服务器；上述地址在 DNS、TLS 和反向代理完成前属于规划值。逐步骤操作见[上线执行手册](./launch-runbook.md)。
