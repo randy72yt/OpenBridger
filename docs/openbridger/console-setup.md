@@ -20,7 +20,14 @@
 
 **验证**：登出后用无痕窗口重新登录，确认被要求第二步验证。
 
-**当前状态（2026-09-21）**：✅ 已完成。数据库确认 `two_fas.is_enabled=1`（管理员 `xinlingwong`，role=100），已生成 4 条 TOTP 备份码。请确认备份码已离线保存。
+**当前状态（2026-09-21）**：✅ 已完成，双因子齐备。
+
+| 因子 | 证据 |
+| --- | --- |
+| TOTP | `two_fas.is_enabled=1`（user_id=1，`xinlingwong`，role=100），4 条备份码 |
+| Passkey | `passkey_credentials` 已有 1 条凭证记录，attestation_type=`none`、sign_count=0（注册后尚未用于登录） |
+
+建议用 Passkey **实际登录一次**（登出 → 选 Passkey），确认 sign_count 正常递增，避免首次使用才发现兼容问题。
 
 ### 15.1 Passkey 注册失败与修复（2026-09-21）
 

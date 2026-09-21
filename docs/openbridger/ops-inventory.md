@@ -48,7 +48,7 @@
 | 可信代理 | `TRUSTED_PROXIES=172.17.0.1` | 同上 |
 | CF 缓存 | `/api/status`、`/v1/models` 返回 `cf-cache-status: DYNAMIC` | **未缓存**，目标达成；Cache Rule 已配但边缘仍标记为 DYNAMIC（CF 默认动态判定优先），两者等价不缓存 |
 | HSTS | `strict-transport-security: max-age=2592000; includeSubDomains`，`x-content-type-options: nosniff` | 2026-09-21 已开；max-age 先设 1 个月，**Preload 未开**（不可逆） |
-| Passkey 修复 | `ServerAddress = https://openbridger.com`（写入 options 表） | 2026-09-21；原因与代码缺陷见 [控制台指引 15.1](./console-setup.md#151-passkey-注册失败与修复2026-09-21)。该值同时影响 OAuth 回调、密码重置邮件链接 |
+| 管理员双因子 | TOTP `is_enabled=1` + Passkey 已注册（2026-09-21） | `two_fas`、`passkey_credentials` 均有记录；备份码 4 条需离线保管。缺陷与修复见 [控制台指引 15.1](./console-setup.md#151-passkey-注册失败与修复2026-09-21) |
 
 未完成、需运维在后台/控制台处理：管理员 MFA/Passkey、SMTP 与 Turnstile、CF SSL 模式 Full(strict) 与 Bypass 缓存规则。
 
