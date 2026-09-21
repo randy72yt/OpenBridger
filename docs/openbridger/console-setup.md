@@ -42,12 +42,31 @@
 
 结果：**任何生产部署，只要管理员没手动配置过站点地址，Passkey 就必然注册失败**，且错误信息完全不提示真正的修复方向。代码里其实已有更好的 `autoDetect` 分支（从请求 Host + scheme 推导，见 `service/passkey/service.go:94` 起），但因为 `ServerAddress` 非空而永远走不到。
 
-**修复（已完成）**：写入 options 表，`ServerAddress = https://openbridger.com`。`/api/status` 的 `server_address` 已验证同步为该值。
+**修复（已完成）**：
 
-```sql
-INSERT INTO options (`key`, value) VALUES ("ServerAddress","https://openbridger.com")
-  ON DUPLICATE KEY UPDATE value="https://openbridger.com";
+1. 写入 options 表，`ServerAddress = https://openbridger.com`
+2. **追加显式配置**（关键：`GetPasskeySettings()` 会把推导结果原地写回包变量，之后永不刷新——见下方说明）
+   ```sql
+   INSERT INTO options (`key`, value) VALUES ("ServerAddress","https://openbridger.com")
+     ON DUPLICATE KEY UPDATE value="https://openbridger.com";
+   INSERT INTO options (`key`, value) VALUES ("passkey.origins","https://openbridger.com")
+     ON DUPLICATE KEY UPDATE value="https://openbridger.com";
+   INSERT INTO options (`key`, value) VALUES ("passkey.rp_id","openbridger.com")
+     ON DUPLICATE KEY UPDATE value="openbridger.com";
+   ```
+3. 重启应用容器清掉已污染的包变量
+
+**为什么第 1 步不够（同一缺陷的第二半）**：`GetPasskeySettings()` 是**原地写**包变量的：
+
+```go
+if defaultPasskeySettings.Origins == "" || defaultPasskeySettings.Origins == "[]" {
+    defaultPasskeySettings.Origins = ServerAddress   // 原地写回
+}
 ```
+
+容器启动后第一次调用时若 `ServerAddress` 仍是默认值 `http://localhost:3000`，`Origins` 就被写成 localhost 并**固化**；之后再改 `ServerAddress` 也不会回落更新，因为判定条件是「Origins 为空」。表现为：配置改对了、`/api/status` 里 `server_address` 也正确，但 Passkey 仍然报同一个错——**必须显式写 `passkey.origins` 或重启进程**。
+
+配置项采用 `<模块名>.<json tag>` 的扁平键（见 `setting/config/config.go:46-56`），所以 `passkey.origins`、`passkey.rp_id`、`passkey.enabled` 都可以直接写 `options` 表。
 
 **这个配置不止影响 Passkey**：`ServerAddress` 还用于 OAuth 回调 URI（`oauth/oidc.go:57` 等）、密码重置邮件链接（`controller/misc.go:256`）、支付回调地址。生产环境必须设置为真实域名。
 
