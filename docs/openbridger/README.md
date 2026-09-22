@@ -12,6 +12,8 @@
 | [上线执行手册](./launch-runbook.md) | **逐步骤操作手册（S01–S34）**：每步的操作命令、通过标准、证据与回退方式 |
 | [生产环境台账](./ops-inventory.md) | 主机、域名、数据库、备份与发布记录。**不含 IP、密钥、密码**——连接信息在运维本机 `~/.ssh/config`，运行时变量在服务器 `/srv/openbridger/.env` |
 | [控制台操作指引](./console-setup.md) | **S15–S19 人工步骤**：管理员 MFA、Cloudflare SSL 与缓存规则、SMTP（Resend）、Turnstile。含入口 URL 与逐字段填写值 |
+| [上线前测试计划](./prelaunch-test-plan.md) | 三阶段安排：无上游基础流程 → 挂渠道后转接与定价 → 总验收与韧性。含已自动验证项、人工项、阻塞项 |
+| `scripts/prod-acceptance.sh` | 生产验收回归脚本，每次发版后执行，退出码非 0 表示有 FAIL。用法见脚本头部注释 |
 
 ## 法律文档草稿（仓库根目录 `legal-drafts/`）
 
@@ -57,7 +59,7 @@
 
 ### 代码位置
 
-上述资产与修复代码位于分支 **`codex/fix-pricing-control-qa`**（以当前分支 HEAD 为准，**未合并到 main**）。合入前请以 `fix-review-pricing-control.md` 第 0.1 节结论为准，遗留项按[上线计划](./launch-plan.md#release-1-待办总览)区分是否阻断首版；`r6UjdF` 为上线必做项。
+定价修复已随 PR #1 合入 `main`；`codex/fix-pricing-control-qa` 与 `test/openbridger-qa` 已废弃。当前工作分支为 `codex/verify-upstream-credentials`，生产运行在 tag `openbridger:1e93ef211`。合入前请以 `fix-review-pricing-control.md` 第 0.1 节结论为准，遗留项按[上线计划](./launch-plan.md#release-1-待办总览)区分是否阻断首版；`r6UjdF` 为上线必做项。
 
 ### 复用价值高的两条经验
 
@@ -86,12 +88,12 @@
 
 ## 当前发布目标
 
-第一阶段采用邀请制生产试运行，优先验证首批文本模型 API、内部渠道路由、计费、余额、日志和管理流程；不开放在线支付。首批候选模型与逐项上架条件见[上线计划](./launch-plan.md#首批文本模型候选2026-09-20)。
+发布策略（2026-09-22 确定）：**注册常开**，不走邀请制；**首版不开放在线支付**，试用额度由管理员手工发放。API Base URL：`https://openbridger.com/v1`。
 
-生产入口规划：
+生产入口：
 
 - 主站与控制台：`https://openbridger.com`
 - API Base URL：`https://openbridger.com/v1`
-- 文档站：`https://docs.openbridger.com`
+- 文档站：`https://docs.openbridger.com`（尚未部署内容，返回 403）
 
-域名已确认为 `openbridger.com`（在 Cloudflare，**尚未解析**），部署位置为阿里云轻量应用服务器；上述地址在 DNS、TLS 和反向代理完成前属于规划值。逐步骤操作见[上线执行手册](./launch-runbook.md)。
+域名 `openbridger.com` 在 Cloudflare，**已解析且已签发 HTTPS**。部署位置为阿里云轻量应用服务器（Ubuntu 24.04，2C/1.6Gi）——内存偏紧，镜像在运维本机构建后 `docker save | ssh docker load` 传上去。逐步骤操作见[上线执行手册](./launch-runbook.md)，当前测试重点是[上线前测试计划](./prelaunch-test-plan.md)。
