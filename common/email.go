@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
@@ -9,6 +10,59 @@ import (
 	"strings"
 	"time"
 )
+
+// emailDailyQuotaScript atomically increments the per-day counter and arms the
+// expiry on first use, so concurrent senders can never overshoot the cap.
+const emailDailyQuotaScript = `
+local c = redis.call('INCR', KEYS[1])
+if c == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return c
+`
+
+func emailDailyQuotaKey() string {
+	return fmt.Sprintf("email:daily:%s", time.Now().Format("2006-01-02"))
+}
+
+// secondsUntilTomorrow returns how long the current day's counter should live.
+func secondsUntilTomorrow() int64 {
+	now := time.Now()
+	tomorrow := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+	remaining := int64(tomorrow.Sub(now) / time.Second)
+	if remaining <= 0 {
+		return 60
+	}
+	return remaining + 60
+}
+
+// takeEmailDailyQuota enforces a global daily ceiling on outbound email.
+//
+// It fails open: if Redis is unavailable or errors, the send is allowed and the
+// failure is logged. Availability of verification and password-reset mail takes
+// priority over quota accounting.
+func takeEmailDailyQuota() error {
+	if !EmailDailyLimitEnable || EmailDailyLimitNum <= 0 {
+		return nil
+	}
+	if !RedisEnabled || RDB == nil {
+		return nil
+	}
+	used, err := RDB.Eval(
+		context.Background(),
+		emailDailyQuotaScript,
+		[]string{emailDailyQuotaKey()},
+		secondsUntilTomorrow(),
+	).Int64()
+	if err != nil {
+		SysLog(fmt.Sprintf("email daily quota check failed, allowing send: %v", err))
+		return nil
+	}
+	if used > int64(EmailDailyLimitNum) {
+		return fmt.Errorf("今日邮件发送量已达上限（%d 封），请稍后再试", EmailDailyLimitNum)
+	}
+	return nil
+}
 
 func generateMessageID() (string, error) {
 	split := strings.Split(SMTPFrom, "@")
@@ -76,6 +130,10 @@ func newSMTPClient(addr string) (*smtp.Client, error) {
 }
 
 func SendEmail(subject string, receiver string, content string) error {
+	if err := takeEmailDailyQuota(); err != nil {
+		SysLog(fmt.Sprintf("email rejected by daily quota: subject=%s receiver=%s", subject, receiver))
+		return err
+	}
 	if SMTPFrom == "" { // for compatibility
 		SMTPFrom = SMTPAccount
 	}

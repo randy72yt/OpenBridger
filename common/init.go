@@ -135,6 +135,11 @@ func InitEnv() {
 	SearchRateLimitEnable = GetEnvOrDefaultBool("SEARCH_RATE_LIMIT_ENABLE", true)
 	SearchRateLimitNum = GetEnvOrDefault("SEARCH_RATE_LIMIT", 10)
 	SearchRateLimitDuration = int64(GetEnvOrDefault("SEARCH_RATE_LIMIT_DURATION", 60))
+
+	// Daily cap on outbound email. Default 80 leaves headroom below the Resend
+	// free tier limit of 100/day.
+	EmailDailyLimitEnable = GetEnvOrDefaultBool("EMAIL_DAILY_LIMIT_ENABLE", true)
+	EmailDailyLimitNum = GetEnvOrDefault("EMAIL_DAILY_LIMIT", 80)
 	initConstantEnv()
 }
 
