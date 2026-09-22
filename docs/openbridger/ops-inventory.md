@@ -76,6 +76,14 @@ cd /srv/openbridger/repo && docker compose --env-file /srv/openbridger/.env -f c
 | 日期 | commit sha | 镜像 tag | 变更摘要 | 执行人 | 结果 | 回滚目标 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 2026-09-21 | `1e93ef211` | `openbridger:1e93ef211` | 生产首次部署：MySQL/Redis/应用容器启动，`/api/status` 200 且容器 healthy | 运维 | 已启动，**尚未开放对外访问**（域名未解析、未初始化管理员） | 无上一个版本；异常时可 `docker compose down` 并用 systemctl 快照回滚 |
+| 2026-09-22 | `63fb5ea55` | `openbridger:63fb5ea55` | 邮件配额保护：发信入口 `common.SendEmail()` 加 Redis 每日上限（默认 80 封/天），防匿名接口耗尽 Resend 配额导致当天邮件静默失效 | 运维 | 已部署并 healthy；回归脚本 17 项全通过。配额拦截的端到端行为待首次发信后确认计数 | `openbridger:1e93ef211` |
+
+### 与主版本相关的运行时变量
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `EMAIL_DAILY_LIMIT_ENABLE` | `true` | 邮件每日上限开关 |
+| `EMAIL_DAILY_LIMIT` | `80` | 每日上限。Resend 免费版为 100/天，留出 20 封余量调阈值时要兼顾告警邮件 |
 
 ## 6. 维护规则
 

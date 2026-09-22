@@ -46,11 +46,32 @@
 
 - **缺一枚有额度的测试令牌** → `OB_API_KEY=sk-xxx ./scripts/prod-acceptance.sh` 才能跑 C 组（认证后闭环）。
 
-### 1.4 本阶段暴露的问题
+### 1.4 邮件配额保护（原 N1，已实施）
+
+**为什么现有的每 IP 限流不够**：匿名可发信的接口不止一个——`/api/verification`（注册验证码）和 `/api/reset_password`（找回密码）都没有 `UserAuth()`。攻击者轮换接口、轮换 IP 就能把当天配额打满；打满之后的表现不是报错，而是**当天所有邮件静默失效**。
+
+**实施**：在 `common/email.go:78 SendEmail()` 这个唯一发信入口加了 Redis 每日计数器，无论从哪个接口发起都计入同一份配额。
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `EMAIL_DAILY_LIMIT_ENABLE` | `true` | 开关 |
+| `EMAIL_DAILY_LIMIT` | `80` | 每日上限。Resend 免费版为 100/天，留 20 封余量 |
+
+行为约定：
+
+- 计数器 key 为 `email:daily:YYYY-MM-DD`，TTL 到次日零点（自动清零，无需人工干预）。
+- **fail open**：Redis 不可用或出错时放行并记录日志——宁可失去计数，也不能让验证码邮件整体中断。
+- 超限后 `SendEmail()` 返回错误，调用方给出失败提示；配额次日自动恢复。
+- 覆盖范围：**所有**邮件，包括未来的告警通知。调整阈值时要留出告警邮件的余量。
+
+回归测试：`common/email_daily_limit_test.go`（5 个用例，覆盖日期 key、TTL 范围、三种 fail-open 场景）。
+
+> 可选加固：Cloudflare Rate Limiting 规则（路径匹配两个接口，每 IP 每 10 分钟 5 次 → 阻断 1 小时）。它能进一步降低单 IP 暴力刷的效率，但免费版窗口最长 1 小时、按 IP 计，防不住分布式；本方案才是兜底。
+
+### 1.5 其余待处理问题
 
 | # | 问题 | 影响 | 处理 |
 | --- | --- | --- | --- |
-| N1 | `GET /api/verification` **无需登录**即可发送验证码，限流为每 IP 30 秒 2 次（`middleware/email-verification-rate-limit.go:12`）。Resend 免费额度 100 封/天，单 IP 约 25 分钟即可耗尽 | 注册常开后，真实用户的注册验证码与找回密码邮件会被静默打瘫 | 待决策：加按域名/日期维度的发送上限，或改用带配额的邮件服务 |
 | N2 | `User-Agent: Python-urllib/x.y` 被 CF 拦（403 error 1010） | 主流 SDK 不受影响；仅裸 urllib 脚本受影响，改 UA 或加 `Accept` 头即可绕开 | 已记录，不修 |
 | N3 | `/api/user-agreement`、`/api/privacy-policy` 返回空字符串 | 协议未写入配置段 | S26 |
 | N4 | `docs.openbridger.com` 返回 403 | 静态目录 `/srv/openbridger/docs-site` 为空，未部署 | S27 |
