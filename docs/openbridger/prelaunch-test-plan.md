@@ -66,7 +66,24 @@
 
 回归测试：`common/email_daily_limit_test.go`（5 个用例，覆盖日期 key、TTL 范围、三种 fail-open 场景）。
 
-> 可选加固：Cloudflare Rate Limiting 规则（路径匹配两个接口，每 IP 每 10 分钟 5 次 → 阻断 1 小时）。它能进一步降低单 IP 暴力刷的效率，但免费版窗口最长 1 小时、按 IP 计，防不住分布式；本方案才是兜底。
+> **原「可选加固：Cloudflare Rate Limiting」已作废**——CF 旧版 Rate Limiting 产品已于 2025-06-15 下线，且免费套餐只允许 1 条规则、计数周期与封禁时长均锁死 10 秒，配不出「10 分钟窗口」。该建议已于 2026-09-22 删除。
+
+### 1.5 边缘层限流（已实施，替代 CF Rate Limiting）
+
+在源站 Nginx 上做，不受 Cloudflare 套餐限制。定位是**洪水兜底，不做业务配额**——业务配额由应用层的 `CriticalRateLimit`（20 次/20 分钟）、`EmailVerificationRateLimit`（2 次/30 秒）和上面的邮件每日上限负责，Nginx 阈值故意比应用层宽松一个量级，只用于在请求打到 Go 之前丢掉明显的脚本洪水。
+
+| 文件 | 作用 |
+| --- | --- |
+| `/etc/nginx/conf.d/ob-ratelimit.conf` | `map $http_cf_connecting_ip $ob_client_ip` + `ob_mail`(10r/m) / `ob_auth`(30r/m) 两个 zone |
+| `/etc/nginx/snippets/ob-proxy.conf` | 反代头部公共片段，所有 location 共用（含 `proxy_buffering off`，不能丢） |
+| `/etc/nginx/sites-available/openbridger` | 4 个 `location =` 精确匹配：`/api/verification`、`/api/reset_password`（ob_mail, burst=6）、`/api/user/register`、`/api/user/login`（ob_auth, burst=20） |
+
+**两个必须记住的坑**：
+
+1. **计数键必须取 `CF-Connecting-IP`**。本站全部流量经 Cloudflare，`$remote_addr` 是 CF 边缘 IP；若直接用它计数，全世界访客共享一个桶，第一个触发的人会把所有人挡掉。`map` 里保留了直连绕 CF 时回退 `$remote_addr` 的兜底。
+2. **`limit_req_log_level` 必须保持 `error`**。设为 `warn`/`info` 时，nginx 默认的 `error_log` 级别（error 及以上）会把限流日志全部过滤掉，事后无法审计。
+
+**验证方法**（已跑过，见下方"交付验证"）：用临时探针 location 走 `proxy_pass`，两个伪造的 `CF-Connecting-IP` 交替打——A 在 burst 耗尽后被拦，全新 IP B 完全不受影响，即证明隔离正确。注意探针**不能用 `return 200`**：`return` 在 rewrite 阶段执行，早于 `limit_req` 所在的 preaccess 阶段，请求会直接结束、限流永远不触发。
 
 ### 1.5 其余待处理问题
 

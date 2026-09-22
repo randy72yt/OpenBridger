@@ -231,6 +231,13 @@ curl -s http://127.0.0.1:3000/api/status | head -c 300
 - 检查登录失败锁定、限流；
 - 配置日志轮转与基础告警（ERROR_LOG_ENABLED 已 true），确认日志中不出现密钥、完整 Key、密码（OBS-001）。
 
+**边缘层限流（2026-09-22 已上线）**：源站 Nginx `/etc/nginx/conf.d/ob-ratelimit.conf` 定义了 `ob_mail`(10r/m, burst 6) 与 `ob_auth`(30r/m, burst 20)，命中路由为 `/api/verification`、`/api/reset_password`、`/api/user/register`、`/api/user/login`。运维要点：
+
+- **误伤排查**：`grep 'limiting requests' /var/log/nginx/error.log`（驳回时每条都记，`zone=` 字段标明是 ob_mail 还是 ob_auth）。
+- **临时放宽**：注释掉配置里对应的 `limit_req` 行 → `nginx -t` → `systemctl reload nginx`（reload 平滑，不断连接）。
+- **回滚**：`/etc/nginx/sites-available/openbridger.bak.<时间戳>` 是当次改动的备份。
+- **禁止**改动 `map $http_cf_connecting_ip $ob_client_ip` 与 `limit_req_log_level error`，原因见 `prelaunch-test-plan.md` 1.5。
+
 通过标准：自动化注册被拦截；日志无敏感明文。
 
 ---

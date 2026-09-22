@@ -1,6 +1,6 @@
 # 生产环境台账
 
-最后更新：2026-09-21
+最后更新：2026-09-22
 
 **本文件不记录公网 IP、密钥、密码、Token。** 主机连接信息保存在运维本机的 `~/.ssh/config`（Host 别名 `ob-prod`），应用运行时变量保存在服务器 `/srv/openbridger/.env`（权限 600）。这里只登记非敏感资产与「去哪儿找」的指针，供交接和回滚使用。
 
@@ -50,7 +50,28 @@
 | HSTS | `strict-transport-security: max-age=2592000; includeSubDomains`，`x-content-type-options: nosniff` | 2026-09-21 已开；max-age 先设 1 个月，**Preload 未开**（不可逆） |
 | 管理员双因子 | TOTP `is_enabled=1` + Passkey 已注册（2026-09-21） | `two_fas`、`passkey_credentials` 均有记录；备份码 4 条需离线保管。缺陷与修复见 [控制台指引 15.1](./console-setup.md#151-passkey-注册失败与修复2026-09-21) |
 
-未完成、需运维在后台/控制台处理：管理员 MFA/Passkey、SMTP 与 Turnstile、CF SSL 模式 Full(strict) 与 Bypass 缓存规则。
+未完成、需运维处理：CF SSL 模式 Full(strict) 与缓存规则待复核；根域 SPF 仍缺失（DKIM 已生效）；Turnstile Secret 曾在对话中明文出现，建议轮换。（MFA/Passkey、SMTP、Turnstile 三项已于 2026-09-21/22 完成）
+
+### Nginx 配置资产（2026-09-22 上线）
+
+Web 层配置**不在仓库**，全部落在主机：
+
+| 文件 | 作用 |
+| --- | --- |
+| `/etc/nginx/sites-available/openbridger` | 主站 + 文档站 server 块，含 4 个限流 location；最近一次改动备份为同目录 `openbridger.bak.<时间戳>` |
+| `/etc/nginx/conf.d/ob-ratelimit.conf` | `$ob_client_ip` map + `ob_mail`(10r/m, burst 6) / `ob_auth`(30r/m, burst 20) 两个 zone |
+| `/etc/nginx/snippets/ob-proxy.conf` | 反代头部公共片段（含 `proxy_buffering off`，流式必须保留） |
+| `/etc/nginx/snippets/ob-block-scan.conf` | 扫描路径（`/wp-*`、`/.env`、`/.git` 等）返回 404 |
+
+- 限流驳回记录：`grep 'limiting requests' /var/log/nginx/error.log`（`zone=` 字段标明来源）。
+- 两个不可随意改动的点：计数键必须取 `CF-Connecting-IP`（否则全世界共享一个桶）；`limit_req_log_level` 必须保持 `error`（设 warn/info 会被默认 `error_log` 级别过滤掉）。详见[上线前测试计划 1.5 节](./prelaunch-test-plan.md)。
+- 改配置的标准动作：编辑 → `nginx -t` → `systemctl reload nginx`（平滑，不断连接）。
+
+### 文档站（docs.openbridger.com）
+
+2026-09-22 已部署，此前因静态目录为空返回 403。产物来自仓库 `docs-site/dist`（54 个文件 / 约 460K），上传至主机 `/srv/openbridger/docs-site`；`/`、`/en/`、`/zh/`、`/app.js`、`/styles.css` 均 200。
+
+更新方式：本机在 `docs-site/` 下 `npm run build`（即 `node scripts/build.mjs`），然后把 `dist/` 覆盖上传即可，**不要在服务器上构建**（内存不足）。
 
 ## 4. 构建策略
 
