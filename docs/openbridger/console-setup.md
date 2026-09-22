@@ -161,7 +161,31 @@ if defaultPasskeySettings.Origins == "" || defaultPasskeySettings.Origins == "[]
 | Insecure Skip Verify | 关闭 |
 | Force Auth Login | 关闭 |
 
-**填写后找我验证**：我会触发一封测试邮件，并在服务器侧确认连接与认证结果。
+### 17.3 状态与验证（2026-09-22 已完成）
+
+**配置已生效**：`SMTPServer=smtp.resend.com`、`SMTPPort=465`、`SMTPSSLEnabled=true`、`SMTPAccount=resend`、`SMTPFrom=support@openbridger.com`，API Key 已入库（不记录在任何仓库文档中）。
+
+**踩过的坑：发件地址留了示例值**
+
+后台邮件设置页的「发件地址」输入框带 placeholder `OpenBridger <noreply@example.com>`。**若不改动直接保存，数据库里就会落成 `noreply@example.com`**，发信时 Resend 返回：
+
+```
+550 The example.com domain is not verified.
+Please, add and verify your domain on https://resend.com/domains
+```
+
+这个报错容易被误读成「域名没验证」，实际根因是发件地址没改成自己的域名。排查顺序：**先看 `SMTPFrom` 的值**。
+
+另一个格式坑：`SMTPFrom` **只能填纯邮箱地址**（`support@openbridger.com`），不能填 `Name <email>` 形式——后端 `common/email.go:91` 会自己拼 `From: {SystemName} <{SMTPFrom}>`，带名字会让 `MAIL FROM` 出错。
+
+**验证结果**：
+
+| 验证 | 方法 | 结果 |
+| --- | --- | --- |
+| SMTP 通道与凭证 | 服务器用 Python `smtplib.SMTP_SSL("smtp.resend.com", 465)` + `login("resend", API_KEY)` 发信 | `RESULT: SENT OK`，邮件已投递 |
+| 应用代码路径 | 管理员在 `/security` 绑定邮箱，触发应用发验证码 | 待执行 |
+
+**遗留**：根域 SPF 记录未配置（`dig TXT openbridger.com` 无 `v=spf1`）。DKIM 已生效（`resend._domainkey`）。Resend 靠 DKIM 对齐即可通过多数收件方，但微软系/企业邮箱可能扣分进垃圾箱，建议按 Resend 给出的清单补齐 SPF。CF 控制台的「DMARC Management」页面显示 DKIM `No, Fail` 属误报——它只扫常见 selector，不认 `resend._domainkey`，不要被它误导去改 DKIM。
 
 **兼容性已确认**：`common/email.go:45` 在 `SMTPSSLEnabled=true` 时走 `tls.Dial`，`AutoSMTPAuth` 默认选 PLAIN——Resend 两者都支持。
 
