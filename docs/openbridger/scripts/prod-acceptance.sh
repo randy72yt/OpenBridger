@@ -90,14 +90,20 @@ check B5 "聊天补全 /v1/chat/completions" "401|403|400" -X POST "$BASE/v1/cha
 check B6 "支付接口 /api/user/pay" "401|403" -X POST "$BASE/api/user/pay"
 
 echo
-echo "[C] 认证后闭环（需要 OB_API_KEY）"
+echo "[C] 认证后闭环（需要 OB_API_KEY，可选 OB_TEST_MODEL 指定一个已上架模型）"
+TEST_MODEL="${OB_TEST_MODEL:-deepseek-v4-flash}"
 if [ -n "$API_KEY" ]; then
   check C1 "用令牌取模型清单" "200" "$BASE/v1/models" -H "Authorization: Bearer $API_KEY"
-  check C2 "用令牌发起对话（无渠道应为 4xx）" "200|400|402|403|404|429" -X POST "$BASE/v1/chat/completions" \
+  # 渠道已上架时的正向用例：真实模型必须 200（501/503 说明模型未定价或无可用渠道）
+  check C2 "真实模型对话成功 ${TEST_MODEL}" "200" -X POST "$BASE/v1/chat/completions" \
+       -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
+       -d "{\"model\":\"$TEST_MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"Say OK\"}],\"max_tokens\":16}"
+  # 反向用例：不存在的模型应被拒（渠道已配置时多为 503 无可用渠道，未配置时为 4xx）
+  check C3 "不存在的模型被拒" "400|401|402|403|404|429|503" -X POST "$BASE/v1/chat/completions" \
        -H "Authorization: Bearer $API_KEY" -H "Content-Type: application/json" \
        -d '{"model":"probe-not-exist","messages":[{"role":"user","content":"hi"}],"max_tokens":1}'
 else
-  printf "  ${Y}跳过${N}  C1-C2 未提供 OB_API_KEY\n"; NA=$((NA+2))
+  printf "  ${Y}跳过${N}  C1-C3 未提供 OB_API_KEY\n"; NA=$((NA+3))
 fi
 
 echo
