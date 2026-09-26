@@ -5,6 +5,7 @@ on:
     branches: ['codex/**']
   pull_request:
     types: [opened, synchronize, closed]
+  workflow_dispatch:
 
 permissions:
   contents: read
