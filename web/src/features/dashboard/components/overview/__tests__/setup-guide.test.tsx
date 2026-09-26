@@ -231,9 +231,12 @@ describe('overview setup guide', () => {
     keyLookupError = new Error('Key lookup unavailable')
     await renderOverview()
 
-    expect(
-      await screen.findByRole('button', { name: 'Hide setup guide' })
-    ).toBeVisible()
+    const hideButton = await screen.findByRole('button', {
+      name: 'Hide setup guide',
+    })
+    // The guide panel animates in (ancestors start at opacity 0), so poll
+    // for visibility instead of asserting it immediately.
+    await waitFor(() => expect(hideButton).toBeVisible())
     expect(
       screen.queryByRole('button', { name: 'Setup guide' })
     ).not.toBeInTheDocument()

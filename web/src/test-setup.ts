@@ -17,10 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import i18next from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import { afterEach, beforeAll } from 'vitest'
+
+// The default 1s async timeout is too tight for heavier viewer/dashboard
+// renders on slower CI runners; give findBy*/waitFor more headroom.
+configure({ asyncUtilTimeout: 5000 })
 
 beforeAll(async () => {
   await i18next.use(initReactI18next).init({
