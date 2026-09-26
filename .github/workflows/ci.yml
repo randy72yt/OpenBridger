@@ -2,9 +2,13 @@ name: CI
 
 on:
   push:
-    branches: ['codex/**']
+    branches: ['codex/**', 'main']
   pull_request:
     types: [opened, synchronize, closed]
+  # fork 上 push/pull_request 事件实测不投递（2026-09-26 三次验证），
+  # 每日定时跑一次兜底，保证主干始终有近期检查记录。
+  schedule:
+    - cron: '23 17 * * *' # 每日 01:23 北京时间（UTC+8）
   workflow_dispatch:
 
 permissions:
