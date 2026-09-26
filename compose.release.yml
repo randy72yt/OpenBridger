@@ -30,7 +30,7 @@ services:
       NODE_TYPE: master
       GIN_MODE: release
       PRICING_CONTROL_ENABLED: "true"
-      OPENBRIDGER_ONLINE_PAYMENT_ENABLED: "false"
+      OPENBRIDGER_ONLINE_PAYMENT_ENABLED: "true"
       ERROR_LOG_ENABLED: "true"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/status | grep -q '\"success\":true'"]
