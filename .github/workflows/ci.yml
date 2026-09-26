@@ -90,8 +90,8 @@ jobs:
       - name: Test
         run: bun run test
 
-  pricing-database-matrix:
-    name: Pricing control database matrix
+  database-matrix:
+    name: Database matrix (pricing + security)
     if: github.event.action != 'closed' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -135,3 +135,14 @@ jobs:
           touch web/dist/index.html
       - name: Run pricing database matrix
         run: go test ./service -run '^TestQAPricingDatabaseMatrix$' -count=1 -v
+
+      # 安全验证的并发断言（proof 单次消费、并发注销只有一个赢家）依赖真实行锁，
+      # SQLite 上会间歇性 SQLITE_BUSY，因此只在 MySQL / PostgreSQL 上跑。
+      - name: Run security verification tests on MySQL
+        env:
+          TEST_SECURITY_DIALECT: mysql
+        run: go test ./controller -run '^TestSecurity' -count=1
+      - name: Run security verification tests on PostgreSQL
+        env:
+          TEST_SECURITY_DIALECT: postgres
+        run: go test ./controller -run '^TestSecurity' -count=1

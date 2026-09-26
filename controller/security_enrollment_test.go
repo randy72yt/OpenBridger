@@ -39,6 +39,14 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+// securityTestDialect 返回安全验证测试使用的数据库方言，默认 sqlite。
+func securityTestDialect() string {
+	if dialect := os.Getenv("TEST_SECURITY_DIALECT"); dialect != "" {
+		return dialect
+	}
+	return "sqlite"
+}
+
 func setupSecurityEnrollmentTest(t *testing.T) (*model.User, service.AuthIdentity) {
 	t.Helper()
 	require.NoError(t, i18n.Init())
@@ -48,10 +56,7 @@ func setupSecurityEnrollmentTest(t *testing.T) (*model.User, service.AuthIdentit
 	previousRedis, previousSecret := common.RedisEnabled, common.SessionSecret
 	previousEncryption := common.PasswordLoginEncryptionEnabled
 	previousSettings := *system_setting.GetPasskeySettings()
-	dialect := os.Getenv("TEST_SECURITY_DIALECT")
-	if dialect == "" {
-		dialect = "sqlite"
-	}
+	dialect := securityTestDialect()
 	dsn := os.Getenv("TEST_" + strings.ToUpper(dialect) + "_DSN")
 	db, _ := newAuditTestDatabase(t, dialect, dsn)
 	logDB, _ := newAuditTestDatabase(t, dialect, dsn)
