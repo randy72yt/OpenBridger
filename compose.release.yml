@@ -9,6 +9,11 @@ services:
     image: openbridger:${OPENBRIDGER_IMAGE_TAG:?Set an immutable release tag}
     restart: unless-stopped
     init: true
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: "3"
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
