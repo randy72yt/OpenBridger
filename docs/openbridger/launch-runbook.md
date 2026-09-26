@@ -285,15 +285,26 @@ curl -s http://127.0.0.1:3000/api/status | head -c 300
 草稿在仓库根目录 `legal-drafts/`（用户协议、隐私政策）。发布前必须：
 
 1. 拍板 `launch-plan.md` 2026-09-21 章节列出的 11 项待确认；
-2. **建议首版不开放在线支付**，据此删除协议五/六、隐私七中支付与退款相关表述，可显著减少待确认项；
+2. **首版不开放在线支付**，协议五/六、隐私七的支付相关表述据此收窄；
 3. 删除全部「待确认／待公布」字样，补上版本号与生效日期。
 
-通过标准：正文无「待确认」；主体为 OpenBridger；联系邮箱真实可收信（`support@openbridger.com` 当前为预设占位）。
+通过标准：正文无「待确认」；主体为 OpenBridger；联系邮箱真实可收信。
+
+**状态：已完成（2026-09-26）**
+
+- 运营主体 **OpenBridger**、联系邮箱 **support@openbridger.com**（已验证可收信）已确认。
+- 定稿正文在 `legal-drafts/published/{user-agreement,privacy-policy}.zh-CN.md`，v1.0 / 2026-09-26。
+- **退款条款按用户决定保留并加注，未删除**：正文写明「当前未开放在线支付，暂无适用退款情形；开放付费前随协议更新公布」。原建议（整段删除）已作废。
+- 其余 11 项待确认的处理方式：能确认的写死（主体、邮箱、支付关闭、退款标注）；不能确认的一律改为中性表述或权利保留条款（不指定管辖地、不承诺具体保留期限、不作「零日志」承诺），**不留下「待确认/待公布」字样**。`legal-drafts/*.md` 保留审阅留痕稿。
 
 ### S26 写入 legal 配置段
 
 把定稿正文写入 `legal` 配置段的 `user_agreement` / `privacy_policy`（后台系统设置或数据库对应记录），**无需发版**。
 通过标准：`GET /api/user-agreement` 与 `GET /api/privacy-policy` 返回非空正文；`/api/status` 中 `user_agreement_enabled`、`privacy_policy_enabled` 均为 `true`（LEGAL-001）。
+
+**状态：已完成（2026-09-26）**。写入方式：`PUT /api/option/` 提交 `legal.user_agreement` / `legal.privacy_policy`（点号键由 `handleConfigUpdate` 处理，同时更新内存，无需重启容器）。落库 6834 / 6604 字节；匿名 `GET /api/user-agreement` 返回 200；`/api/status` 两个开关均为 `true`。
+
+> 更新正文复用同一接口即可。不要用 `source /srv/openbridger/.env` 取数据库密码（含括号会报语法错并回显密码），改用 `grep "^SQL_DSN=" ... | sed -E 's|^SQL_DSN=[^:]+:([^@]+)@.*$|\1|'`。
 
 ### S27 部署文档站
 

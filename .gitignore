@@ -16,6 +16,7 @@ web/node_modules
 docs-site/dist
 docs-site/node_modules
 .env
+.env.bak*
 one-api
 new-api
 /__debug_bin*
