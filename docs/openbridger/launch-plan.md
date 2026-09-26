@@ -1,6 +1,6 @@
 # OpenBridger 上线实施计划
 
-最后更新：2026-09-20
+最后更新：2026-09-21
 
 ## 总体原则
 
@@ -17,7 +17,7 @@
 | 3 | 准备真实上游并定价：至少一个可用 Key；启用备用路由时需第二渠道；配置模型映射、额度、毛利和审核流程 | 首批模型流式/非流式调用、实际扣费对账通过；启用自动切换时验证切换与不重复结算 | 待实施 |
 | 4 | 完成生产基础设施：staging/production、数据库、Redis、秘密、DNS/TLS、备份、监控和回滚 | OPS-001～004 通过，隔离环境成功恢复备份并演练回滚 | 发布 Compose 和本地镜像构建已验证；实际生产资源待接入 |
 | 5 | 完成账号与反滥用流程：SMTP、验证/找回、注册限制、管理员 MFA/Passkey | 适用 AUTH-001～004 通过，公开注册时反自动化保护生效 | 待实施 |
-| 6 | 完成正式对外资料：联系方式、协议、隐私政策、服务范围、文档站 | LEGAL-001 通过；公开页面无“待确认/待公布”、参考站信息或未提供的服务承诺 | 待确认 |
+| 6 | 完成正式对外资料：联系方式、协议、隐私政策、服务范围、文档站 | LEGAL-001 通过；公开页面无“待确认/待公布”、参考站信息或未提供的服务承诺 | **已完成（2026-09-26）**：主体 OpenBridger、邮箱 support@openbridger.com、v1.0 已写入 `legal` 段；文档站已上线 |
 | 7 | 处理支付发布门：首版隐藏支付入口并阻断订单接口，明确额度发放方式 | PAY-001～003 记录首版不适用，付款入口及接口不可用 | 服务端开关与钱包页已实现，本地源码容器及相关测试通过；管理员发放流程待验收 |
 | 8 | 启用并验证动态定价：配置 `PRICING_CONTROL_ENABLED=true`，确认定时同步与重算、报价新鲜度、人工审批 | 任务连续运行，报价未过期，管理员可审核但任务不会自动发布售价 | 待实施 |
 | 9 | 发布候选版并逐项验收 | 合并/打候选标签、CI 通过、所有适用 P0 用例通过且证据完整；无阻断项 | 待实施 |
@@ -87,10 +87,10 @@
 状态：**待实施**
 
 - [ ] 获取首发实际上游的 API Key、价格来源和调用限额；若启用内部备用路由，再准备第二渠道。
-- [ ] 确定生产数据库、Redis、服务器和备份存储。
-- [ ] 准备 SMTP 发件域名和账号。
+- [x] 确定生产服务器：**阿里云轻量应用服务器**（2026-09-21 确认）。数据库、Redis 与备份存储选型待定。
+- [ ] 准备 SMTP 发件域名和账号（依赖域名解析完成）。
 - [ ] 后续开放在线支付前，再准备商户生产/沙箱资料和 Webhook 配置。
-- [ ] 确定客服、隐私、安全和商务联系方式。
+- [x] 确定运营主体：**OpenBridger**（2026-09-21 确认）；客服/隐私/安全联系邮箱预设 `support@openbridger.com`（占位，须验证可收信）。
 
 输出：外部依赖登记完整；秘密只进入受控密钥存储。
 
@@ -101,7 +101,7 @@
 - [ ] 创建 staging 和 production 环境。
 - [ ] 使用 `compose.release.yml` 从当前源码构建发布镜像：先生成 `web/dist`，再构建镜像；发布环境由外部注入数据库、Redis 和会话密钥，不使用根目录示例 Compose 的上游 `new-api:latest` 镜像或示例密码。
 - [ ] 配置 PostgreSQL/MySQL、Redis 和高强度会话密钥。
-- [ ] 配置 `openbridger.com` 与 `docs.openbridger.com` 的 DNS、TLS 和反向代理。
+- [ ] 配置生产域名与 `docs.` 子域的 DNS、TLS 和反向代理（部署位置已定为阿里云轻量服务器；域名已在 Cloudflare 购买但尚未解析，见文末 2026-09-21 章节）。
 - [ ] 启用生产 Secure Cookie、可信 Origin 和可信代理。
 - [ ] 限制数据库和 Redis 网络访问。
 - [ ] 建立数据库备份、日志轮转、健康检查和基础告警。
@@ -134,7 +134,14 @@
 
 ## 阶段 6：支付与正式协议
 
-状态：**首版关闭在线支付；正式协议待确认**
+状态：**首版关闭在线支付；正式协议 v1.0 已定稿并上线（2026-09-26）**
+
+协议定稿要点（2026-09-26 已写入 `legal` 段）：
+
+- 运营主体 **OpenBridger**；联系邮箱 **support@openbridger.com**（已验证可收信）。
+- 定稿正文：`legal-drafts/published/*.zh-CN.md`，版本 v1.0，生效日期 2026-09-26。
+- **退款条款保留并加注，不删除**：当前未开放在线支付，暂无适用退款情形；开放付费前随协议更新公布。
+- 剩余待确认项一律改为中性表述或权利保留条款，公开正文不含「待确认/待公布」。
 
 首版关闭在线支付：隐藏支付入口并阻断订单接口，记录本阶段支付用例“不适用”，明确管理员发放试用额度流程。
 
@@ -142,7 +149,8 @@
 
 - [ ] 确认币种、最低充值、套餐、退款和争议规则。
 - [ ] 完成真实商户创建订单、回调、幂等、退款和对账测试。
-- [ ] 根据实际供应商和数据流完成用户协议与隐私政策。
+- [x] 完成首版用户协议与隐私政策（v1.0，2026-09-26），运营主体与联系邮箱已确认。
+- [ ] 根据实际供应商和数据流更新用户协议与隐私政策（开放在线支付后）。
 - [ ] 增加协议版本接受记录。
 
 无论是否开放支付，都必须：
@@ -181,3 +189,141 @@
 ## 下一步
 
 先核验上游渠道实际可用的模型与成本，再完成首版支付关闭、管理员试用额度发放、正式协议和生产环境准备。候选模型不等于已上线模型；所有适用 P0 验收通过后才能发布。
+
+## 上游凭证与首批模型复核（2026-09-21）
+
+### 1. `.env` 上游凭证有效，此前 403 是 URL 拼接问题
+
+`OPENBRIDGER_UPSTREAM_BASE` **已经包含 `/v1`**，再拼一层 `/v1` 会得到 `GET /v1/v1/models` → `404 Invalid URL`（部分调用方式表现为 403）。实测同一把 Key：
+
+| 请求 | 结果 |
+| --- | --- |
+| `GET $BASE/models` | 200，39 个模型 |
+| `POST $BASE/chat/completions` | 200（deepseek-v4-flash 正常返回） |
+| `GET $BASE/dashboard/billing/usage` | 200，`total_usage=11.35192` |
+| `GET $BASE/dashboard/billing/subscription` | 200，`has_payment_method=true` |
+| `GET ${BASE%/v1}/api/pricing` | 200，39 条定价 + 全量 `group_ratio` |
+| `GET $BASE/v1/models`（重复拼接） | 404 `Invalid URL` |
+| `GET $BASE/api/pricing`（路径错位） | 404 `Invalid URL` |
+
+结论：**凭证没有失效，不需要更换**；`.env` 已补充正确用法注释。首个阻断项的「403」部分已解除，剩余只是本地尚未配置渠道。
+
+### 2. 十个候选模型与上游的核对
+
+| 候选模型 | 在上游目录 | 分组 | 倍率 | 计费模式 |
+| --- | --- | --- | --- | --- |
+| `gpt-5.6-luna` | 是 | openai-luna | 1.1 | tiered_expr |
+| `claude-haiku-4-5` | 是 | claude-kiro | 0.25 | ratio |
+| `gemini-3.8-flash` | 是 | gemini | 0.3 | ratio |
+| `deepseek-flash` | **否** | — | — | 上游只有 `deepseek-v4-flash` |
+| `gpt-5.6-terra` | 是 | codex-plus | 0.15 | tiered_expr |
+| `claude-sonnet-5` | 是 | claude-kiro | 0.25 | ratio |
+| `deepseek-v4-pro` | 是 | deepseek | 1 | tiered_expr |
+| `gpt-5.6-sol` | 是 | codex-plus | 0.15 | tiered_expr |
+| `claude-opus-5` | 是 | claude-kiro | 0.25 | ratio |
+| `gemini-3.1-pro-preview` | 是 | gemini | 0.3 | tiered_expr |
+
+**9/10 可用；`deepseek-flash` 不存在**，上架前需改为 `deepseek-v4-flash` 或确认上游别名。
+
+### 3. 上游分组倍率已发生漂移（重要）
+
+与 2026-09-16 记录相比，同一上游的 `group_ratio` 变了：
+
+| 分组 | 9-16 记录 | 9-21 实测 | 变化 |
+| --- | --- | --- | --- |
+| deepseek | 6.8 | 1 | 下降 6.8 倍 |
+| kimi | 6.8 | 1 | 下降 6.8 倍 |
+| glm | 6 | 0.9 | 下降 6.7 倍 |
+| openai-luna | 1.3 | 1.1 | 下降 |
+| default | 0.2 | 0.23 | 上升 |
+| grok | 0.25 | 0.3 | 上升 |
+
+未变的：claude-max 1.8、claude-kiro 0.25、gemini 0.3、codex-plus 0.15、free 0。
+
+**含义**：倍率几天内就会变，本地手工填值必然失真。动态定价必须开启定时同步（`PRICING_CONTROL_ENABLED=true`，事项 r6UjdF），且 `test-results-pricing-control.md` 第 9 节记录的具体数值（如 deepseek 6.8）已过期，不能作为当前定价依据，只能作为方法论参考。生产验收必须按事项 rpOYB6 用上游账单差值重新核对。
+
+### 4. GitHub Actions 至今没有任何运行记录
+
+`gh api repos/randy72yt/OpenBridger/actions/runs` → `total_count = 0`；merge 提交与分支均无 check-runs。已推送 `codex/verify-ci`、`codex/verify-upstream-credentials` 两个 `codex/**` 分支以触发 `push` 事件，仍未见运行。
+
+仓库是 `QuantumNous/new-api` 的 **fork**（`fork=true`），`actions/permissions` 报 `enabled=true`、6 个 workflow 均 `state=active`。所以「CI 未产生检查记录」很可能需要在 Actions 页面手动点一次启用（fork 默认可能不跑）。**在出现真实运行记录之前，不能把远端检查计为通过。**
+
+### 5. 法律文档的空正文来自配置项，不是代码缺陷
+
+`setting/system_setting/legal.go` 注册了 `legal` 配置段，字段 `user_agreement` / `privacy_policy` **默认为空字符串**；`GET /api/user-agreement` 与 `GET /api/privacy-policy` 直接返回这两个字段（`controller/misc.go:192-197`），`/api/status` 里 `user_agreement_enabled` 由「正文非空」判定。
+
+所以要解除该项，需要的是**内容**，不是改代码：正式用户协议与隐私政策正文、运营主体名称、联系邮箱。拿到后写入 `legal` 配置段即可，无需发版。
+
+## 部署位置、主体与协议草稿（2026-09-21）
+
+### 1. 部署位置：阿里云轻量应用服务器
+
+已确认生产运行在**阿里云轻量应用服务器**。据此确定的部署方式：
+
+| 项 | 结论 |
+| --- | --- |
+| 部署形态 | 服务器上用 `compose.release.yml` 从源码构建发布镜像（先生成 `web/dist`，再 `docker build`），不用上游 `new-api:latest` 镜像 |
+| 端口与 TLS | 容器只监听 `127.0.0.1:3000`，由宿主机反向代理（Nginx/Caddy）终止 TLS；轻量服务器防火墙与安全组只放行 80/443，SSH 限制来源 IP |
+| 秘密注入 | `SQL_DSN`、`REDIS_CONN_STRING`、`SESSION_SECRET`、`CRYPTO_SECRET`、`TRUSTED_PROXIES` 由部署环境注入，不进版本库 |
+| 数据库 | 生产不使用 SQLite；本机容器化 PostgreSQL/MySQL 或阿里云 RDS 二选一，须与三库测试矩阵中实际验证过的版本一致（MySQL 8.0 / PostgreSQL 17） |
+| 备份 | `openbridger_data` 卷 + 定期数据库 dump 到异地存储；上线前演练一次恢复 |
+| 动态定价 | `PRICING_CONTROL_ENABLED=true` 已在发布 Compose 中默认开启，上线后按事项 r6UjdF 观察同步 |
+
+**已发现的硬编码待办**：`compose.release.yml` 中 `SESSION_COOKIE_TRUSTED_URL` 与 `FRONTEND_BASE_URL` 写死了 `https://openbridger.com`。若最终域名不同，必须改为实际域名（建议改成环境变量），否则登录 Cookie 与前端地址会错。此项随域名一起处理。
+
+仍待确认：服务器规格与公网 IP、数据库/Redis 选型、是否单独建 staging。
+
+### 2. 运营主体与联系方式
+
+- 运营主体：**OpenBridger**（已确认，已写入两份协议草稿）。
+- 联系邮箱：预设 `support@openbridger.com`（占位）。域名解析完成后须验证可收信，否则不能在正式文本中出现。
+- 仍缺：所在地与联系地址、安全/隐私受理的独立渠道（是否另设 `privacy@`、`security@`）。
+
+### 3. 协议草稿已找到，但仍是草稿
+
+位置（仓库内）：
+
+- `legal-drafts/user-agreement.zh-CN.md`——OpenBridger 用户协议草稿
+- `legal-drafts/privacy-policy.zh-CN.md`——OpenBridger 隐私政策草稿
+
+两稿整理于 2026-09-07，本次已填入运营主体 `OpenBridger` 与预设邮箱。**状态仍是「本地审阅草稿 · 尚未生效」**：正文里保留了大量「待确认」，按 LEGAL-001（公开页面不得出现待确认/待公布字样）**不能直接填进生产配置**。
+
+发布路径（定稿后执行，无需发版）：
+
+1. 消除全部待确认项（见下）。
+2. 把正文写入 `legal` 配置段的 `user_agreement` / `privacy_policy` 字段（后台系统设置，或数据库 `options` 表对应记录）。
+3. `GET /api/user-agreement`、`GET /api/privacy-policy` 立即返回正文，`/api/status` 的 `user_agreement_enabled` / `privacy_policy_enabled` 变为 `true`。
+4. `docs-site/src/pages/legal--*.md` 当前的占位页可在主站上线后改为直链正式页面。
+
+**仍需拍板的待确认项**（法律决策，不由工程代定）：
+
+| # | 事项 | 涉及章节 |
+| --- | --- | --- |
+| 1 | 最低使用年龄与未成年人规则 | 协议一、隐私十三 |
+| 2 | 退款条件、处理时限、服务中断补偿 | 协议六 |
+| 3 | 可用性承诺、责任限制与赔偿上限 | 协议十 |
+| 4 | 适用法律、争议解决与管辖 | 协议十一 |
+| 5 | 账号共享、商业转售、研究评测与模型训练的边界 | 协议四 |
+| 6 | 协议版本号与生效日期 | 协议十二、隐私十四 |
+| 7 | 数据保留期限（各类） | 隐私九 |
+| 8 | 上游模型/云/邮件/分析服务商清单与跨境地区 | 隐私六、八 |
+| 9 | 完整请求与响应是否落盘、日志脱敏范围 | 隐私四、十 |
+| 10 | 是否启用 Cookie/分析工具及同意机制 | 隐私五 |
+| 11 | 数据权利受理入口与响应时限 | 隐私十一 |
+
+首版若不开放在线支付，协议五/六、隐私七中与支付、退款相关的表述可整体删除，能显著减少待确认项，建议优先走这条路。
+
+### 4. 域名：Cloudflare 已购买，尚未解析
+
+- 域名已确认为 **`openbridger.com`**（2026-09-21），在 Cloudflare，处于刚买状态，无解析记录。
+- 待办（按用户安排暂缓，但上线前必须完成）：A 记录 `@`→轻量公网 IP、`docs`→同 IP、`www`→CNAME、CF 代理与 SSL/TLS 为 Full(strict)、Origin CA 回源证书、`docs.` 子域、SMTP 发件域名（含 SPF/DKIM/DMARC）。**`/v1/*` 与 `/api/*` 必须在 CF 设为 Bypass cache**，否则流式响应和报价会被边缘缓存。
+- `compose.release.yml` 中硬编码的 `https://openbridger.com` 与实际域名一致，无需替换。
+- 逐步骤操作见[上线执行手册](./launch-runbook.md) 段 2（S06–S09）。
+- 依赖：域名未解析前，无法完成 OPS-002（DNS/TLS）、AUTH-001（邮件）与 LEGAL-001 的最终验收。
+
+### 5. 更新后仍待外部输入
+
+- 服务器规格与系统版本、数据库与 Redis 选型（公网 IP 不进文档）。
+- 上表 11 项协议待确认的决策结果，或确认「首版不开支付」以缩小范围。
+
+域名已定为 `openbridger.com`，不再是待输入项。逐步骤执行见[上线执行手册](./launch-runbook.md)。

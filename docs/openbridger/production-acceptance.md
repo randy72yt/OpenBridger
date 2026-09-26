@@ -30,6 +30,8 @@
 | 状态接口 | `http://localhost:3000/api/status` |
 | OpenBridger 文档 | `http://localhost:4173` |
 
+**生产环境（2026-09-22 已上线）**：把所有 `http://localhost:3000` 替换为 `https://openbridger.com`。凡是需要浏览器交互的步骤请在生产站实际操作；纯接口步骤可先跑 `scripts/prod-acceptance.sh` 做快速回归，它已经覆盖了本文件第 B、D 组的大部分边界项。 |
+
 ### 阶段 A：确认系统能打开并完成首次初始化
 
 本阶段不需要上游 API Key。

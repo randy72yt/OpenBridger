@@ -16,6 +16,7 @@ web/node_modules
 docs-site/dist
 docs-site/node_modules
 .env
+.env.bak*
 one-api
 new-api
 /__debug_bin*
@@ -39,6 +40,9 @@ electron/dist
 token_estimator_test.go
 skills-lock.json
 .playwright-mcp
+
+# Local agent workspace (session memory, scratch state).
+.workbuddy/
 
 # Local-only live probes and scratch test workspaces.
 .local-tests/

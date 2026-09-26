@@ -229,6 +229,13 @@ var (
 	SearchRateLimitEnable         = true
 	SearchRateLimitNum            = 10
 	SearchRateLimitDuration int64 = 60
+
+	// Global daily outbound email cap. Anonymous endpoints such as /api/verification
+	// and /api/reset_password can trigger emails without authentication; without a
+	// daily ceiling a small number of requests can exhaust the upstream provider's
+	// quota (Resend free tier is 100/day) and silently break every mail the same day.
+	EmailDailyLimitEnable bool
+	EmailDailyLimitNum    int
 )
 
 var RateLimitKeyExpirationDuration = 20 * time.Minute
