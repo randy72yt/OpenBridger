@@ -98,6 +98,7 @@ agent_created: true
 - 多步操作用 `ssh ob-prod 'sh -s' <<'EOS' ... EOS`，PAT/密码用 `openssl rand -hex` 在服务器本地生成
 - 改 channels.models 后**必须同步删 abilities 表对应行**，否则 /v1/models 不生效：`DELETE FROM abilities WHERE channel_id=1 AND model IN (...)`；删完等 60s 缓存
 - options 表直改有缓存延迟：改 DB 后等约 1 分钟或走 API 写入（Turnstile 等）
+- **只读账号 `obreader`@`%`（仅 SELECT on openbridger.*）**：用户日常查数据用，密码存 /srv/openbridger/.env `OB_READER_PASSWORD`。用户 Mac 用 **DBeaver** 查看（密码存 DBeaver 自己的加密 credentials-config.json，不会触发 macOS 钥匙串弹窗）；前置本机 SSH 隧道 `~/bin/ob-db-tunnel.sh`（`-L 3307:172.17.0.1:3306 ob-prod`），DBeaver 连 `127.0.0.1:3307`。**已弃用 Sequel Ace**：沙箱读不到 ~/.ssh 密钥，钥匙串反复弹窗（deny 后反能连）
 
 ## 临时管理员/用户认证（PAT 模式）
 - `UPDATE users SET access_token='<32hex>', access_token_created_at=NOW() WHERE id=1;` → 请求头 `Authorization: Bearer <pat>` 可调 RootAuth 接口 → 用完立刻 `SET access_token=NULL`
