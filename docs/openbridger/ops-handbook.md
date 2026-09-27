@@ -152,6 +152,19 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 
 **机密纪律**（不可违反）：.env 只存服务器 600 权限；密码不出现在命令行/文件（SQL 一律 `obctl sql file`）；PAT 用完即 NULL；令牌泄露按 S1 处置。
 
+## 5.5 运营配置（试运行，2026-09-27 落地）
+
+| 项 | 现状 | 怎么改 |
+| --- | --- | --- |
+| 新用户注册送额度 | `QuotaForNewUser=500000`（$1；1 USD = 500000 quota） | 后台或 `PUT /api/option/`，改完注册测试号验证 |
+| 兑换码 | 已开通：`OB-Beta-5USD`（20 张 × $5）、`OB-Beta-20USD`（10 张 × $20）；用户控制台「充值与支付」自助兑换 | 后台批量生成（单次上限 100 张）；发额度 = 发个码，不再改库 |
+| 定价页 | `/pricing` 已开放（`HeaderNavModules.pricing.enabled=true`，无需登录）；数据来自 `/api/pricing`（38 个模型，35 个带计费表达式，v4 峰谷表达式已核对保留） | 要下线：把 pricing.enabled 改 false |
+| 支付合规确认 | `payment_setting.compliance_*` 已确认（user 1，v1） | 该字段禁止走通用 option 接口，只能在后台确认 |
+| 支持渠道 | 页脚挂 `support@openbridger.com` + 状态页链接；docs 站新增「联系与故障申报」页（中英） | 页脚改 `Footer` option（支持 HTML）；docs 改 `docs-site/src/pages*/guide--support.md` 后 `node scripts/build.mjs` + rsync 到 `/srv/openbridger/docs-site/` |
+| status 子域 | 用 UptimeRobot 默认地址（免费计划不支持自定义域名） | 想要 `status.openbridger.com` 需在 CF 配 Redirect Rule |
+
+**注意**：Email Obfuscation 会把页面里的 mailto 改写成 `/cdn-cgi/l/email-protection#...`，验证时不要 grep 原始邮箱字符串。
+
 ## 6. 已知缺口清单（按优先级）
 
 | # | 缺口                                                                                                                                                                                                                                           | 需要谁                   | 动作                                      |

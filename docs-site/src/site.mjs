@@ -42,6 +42,7 @@ export const site = {
       pages: [
         ['faq', '常见问题'],
         ['troubleshooting', '故障排查'],
+        ['guide--support', '联系与故障申报'],
         ['legal--terms', '用户协议'],
         ['legal--privacy', '隐私政策'],
       ],
@@ -72,6 +73,7 @@ export const siteEn = {
     ] },
     { title: 'Help', pages: [
       ['faq', 'FAQ'], ['troubleshooting', 'Troubleshooting'],
+      ['guide--support', 'Contact and incidents'],
       ['legal--terms', 'Terms of service'], ['legal--privacy', 'Privacy policy'],
     ] },
   ],
