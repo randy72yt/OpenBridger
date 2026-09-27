@@ -36,14 +36,17 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 | 备份新鲜度  | obctl backup-check（人工/周检）                | 按需      | latest dump >26h | 人工        |
 | 日志体量   | docker json-file 轮转                      | 持续      | 50m×3 自动截断       | —         |
 | 告警链路本身 | obctl alert-test                         | 每月/改配置后 | 测试邮件到达           | 人工        |
+| 外部拨测   | UptimeRobot 云看板（4 监控点：主域/主域 api/api 子域/docs） | 5 min | 非 2xx/3xx | 邮件 xinlingwong668@gmail.com（宕+恢复） |
 
 告警邮件：`support@openbridger.com`（CF Email Routing → 私人邮箱），SMTP 凭据从 DB options 读，SMTP 改密码后告警链路易断——**改完必须跑一次 `obctl alert-test`**。
+
+外部看板（2026-09-27 上线）：UptimeRobot 免费计划，4 个监控点（主域首页、主域 /api/status、api 子域 /api/status、docs），5 分钟间隔，邮件通知 Up+Down。**公开状态页：https://stats.uptimerobot.com/aHV66DcfpB**。注意：免费计划不支持自定义域名（status.openbridger.com 如需可用 CF Redirect Rule 跳转）；v2 API 新建监控已对新账户关闭（报 plan 错误），须用 v3（Bearer + JSON，`timeout` 必填 ≤60）；短信联系人需后台激活。
 
 ### 1.2 已知监控盲区（如实陈述，按需补齐）
 
 | 盲区           | 影响                   | 补齐方式                                                                                  |
 | ------------ | -------------------- | ------------------------------------------------------------------------------------- |
-| 无外部拨测        | 服务器能自查但 CF/出口断时收不到告警 | **已定方案（2026-09-27）：UptimeRobot 免费云看板**，弃选 Uptime Kuma 自建（吃内存且整机故障时看板同死）。待实施：用户注册 → 拨测主域+api 子域 /api/status（5 分钟间隔）→ 公开状态页绑 `status.openbridger.com`（CNAME） |
+| 无外部拨测        | 服务器能自查但 CF/出口断时收不到告警 | ✅ 已解决（2026-09-27）：UptimeRobot 云看板上线，见 §1.1 |
 | 无请求错误率/延迟监控  | 上游 dddai 劣化只能从用户反馈发现 | 应用 logs 表已有用量记录；需要时写 SQL 查近 1h 错误占比                                                   |
 | 无 TLS 证书到期监控 | certbot 自动续签失败时无感知   | UptimeRobot 拨测 HTTPS 自带证书告警                                                           |
 | 内存无告警        | OOM 前无预警             | monitor.py 加一条 free 检查（P2）                                                            |
@@ -154,7 +157,7 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 | # | 缺口                                                                                                                                                                                                                                           | 需要谁                   | 动作                                      |
 | - | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | --------------------------------------- |
 | 1 | ~~`api.openbridger.com` DNS 记录不存在~~ ✅ 2026-09-27 已修复：CF A 记录 + nginx server 块（复用主站 LE 证书）+ 全链路 200 验证。**注意**：origin 证书 CN 不含 api 主机名，CF SSL 模式若改为 Full (strict) 会 526，届时需给 api 签独立证书（DNS-01 需 CF API token）；另需确认 CF 缓存 Bypass 规则对 api 子域同样生效 | —                     | 已完成                                     |
-| 2 | 无外部拨测（方案已定：UptimeRobot 云看板，见 §1.2）                                                                                                                                                                                          | 用户注册 UptimeRobot | 拨测主域+api 子域 /api/status；状态页 CNAME 绑 status.openbridger.com |
+| 2 | ~~无外部拨测~~ ✅ 2026-09-27 已上线：UptimeRobot 4 监控点 + 公开状态页 https://stats.uptimerobot.com/aHV66DcfpB（免费计划不支持自定义域名；status.openbridger.com 如需可做 CF Redirect Rule） | — | 已完成 |
 | 3 | 整机重建未端到端演练                                                                                                                                                                                                                                   | Agent + 用户开临时新机       | rebuild-runbook 全流程走一遍                  |
 | 4 | 异地备份依赖 Mac 开机                                                                                                                                                                                                                                | 可选                    | 加对象存储（COS/OSS 约 ¥1/月）双写                 |
 | 5 | Redis 不异地、CF 配置靠文字清单                                                                                                                                                                                                                         | 已接受                   | dr-plan §8                              |

@@ -114,6 +114,7 @@ agent_created: true
 - 备份：/srv/openbridger/backup.sh，cron 每天 03:30，mysqldump --single-transaction | gzip + Redis AOF + config 归档（10 项含 nginx/crontab/ufw），日×7 周×4，latest 指针；异地 Mac `~/backups/openbridger/` 每日 09:30 WorkBuddy 自动化拉取
 - 恢复演练：临时 `docker run --rm mysql:8.0` + zcat 灌入验证；生产恢复用 `obctl restore`
 - 监控：/srv/openbridger/monitor.py，cron 每 5min，查 /api/status + 3 容器 + 磁盘 85%，状态变化才发邮件（SMTP 凭据从 DB options 读，收件人 /srv/openbridger/alert-email.txt）
+- 外部拨测：UptimeRobot 免费计划（2026-09-27 上线），4 监控点 5min 间隔，公开状态页 https://stats.uptimerobot.com/aHV66DcfpB；改配置用 v3 API（Bearer+JSON，timeout 必填 ≤60），v2 新建监控对新账户已关闭
 - 所有容器已配 json-file 日志轮转 50m×3
 
 ## 本机网络注意
