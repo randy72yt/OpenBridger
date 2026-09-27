@@ -158,6 +158,8 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 | --- | --- | --- |
 | 新用户注册送额度 | `QuotaForNewUser=500000`（$1；1 USD = 500000 quota） | 后台或 `PUT /api/option/`，改完注册测试号验证 |
 | 兑换码 | 已开通：`OB-Beta-5USD`（20 张 × $5）、`OB-Beta-20USD`（10 张 × $20）；用户控制台「充值与支付」自助兑换 | 后台批量生成（单次上限 100 张）；发额度 = 发个码，不再改库 |
+| **自助在线支付充值** | 已开通（`OPENBRIDGER_ONLINE_PAYMENT_ENABLED=true`），支付方式仅保留支付宝/微信（最低 ¥10；$10 → ¥73，按 1 USD=¥7.30）。订单创建、签名、回调地址均正常；**支付完成后跳 `/wallet?pay=success`**（v0.1.4 修复，原为 `/usage-logs`） | ⚠️ **当前不可付款**：epay 网关返回「该域名不可发起支付：域名没过白」，需商户在柠檬支付后台把 `openbridger.com` 加入支付域名白名单 |
+| **低余额自动提醒** | 内置：消费后余额 < `QuotaRemindThreshold=250000`（$0.5）自动发邮件，含钱包充值链接 | 改 `QuotaRemindThreshold`；用户级阈值用 `QuotaWarningThreshold` |
 | 定价页 | `/pricing` 已开放（`HeaderNavModules.pricing.enabled=true`，无需登录）；数据来自 `/api/pricing`（38 个模型，35 个带计费表达式，v4 峰谷表达式已核对保留） | 要下线：把 pricing.enabled 改 false |
 | 支付合规确认 | `payment_setting.compliance_*` 已确认（user 1，v1） | 该字段禁止走通用 option 接口，只能在后台确认 |
 | 支持渠道 | 页脚挂 `support@openbridger.com` + 状态页链接；docs 站新增「联系与故障申报」页（中英） | 页脚改 `Footer` option（支持 HTML）；docs 改 `docs-site/src/pages*/guide--support.md` 后 `node scripts/build.mjs` + rsync 到 `/srv/openbridger/docs-site/` |
@@ -165,15 +167,18 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 
 **注意**：Email Obfuscation 会把页面里的 mailto 改写成 `/cdn-cgi/l/email-protection#...`，验证时不要 grep 原始邮箱字符串。
 
+**坑：`PayMethods` 的值必须是 `[]map[string]string`**——即**所有字段值都要是字符串**。写成 `{"min_topup":10}`（数字）会导致 `json: cannot unmarshal number into Go value of type string`，配置同步每分钟报一条错且该项不生效。正确写法：`{"min_topup":"10"}`。同理，用 `PUT /api/option/` 写数组型配置会被存成 Go 的 `[map[...]]` 格式（非法 JSON），数组型配置**一律用 SQL 直接写**。
+
 ## 6. 已知缺口清单（按优先级）
 
 | # | 缺口                                                                                                                                                                                                                                           | 需要谁                   | 动作                                      |
 | - | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | --------------------------------------- |
 | 1 | ~~`api.openbridger.com` DNS 记录不存在~~ ✅ 2026-09-27 已修复：CF A 记录 + nginx server 块（复用主站 LE 证书）+ 全链路 200 验证。**注意**：origin 证书 CN 不含 api 主机名，CF SSL 模式若改为 Full (strict) 会 526，届时需给 api 签独立证书（DNS-01 需 CF API token）；另需确认 CF 缓存 Bypass 规则对 api 子域同样生效 | —                     | 已完成                                     |
 | 2 | ~~无外部拨测~~ ✅ 2026-09-27 已上线：UptimeRobot 4 监控点 + 公开状态页 https://stats.uptimerobot.com/aHV66DcfpB（免费计划不支持自定义域名；status.openbridger.com 如需可做 CF Redirect Rule） | — | 已完成 |
-| 3 | 整机重建未端到端演练                                                                                                                                                                                                                                   | Agent + 用户开临时新机       | rebuild-runbook 全流程走一遍                  |
-| 4 | 异地备份依赖 Mac 开机                                                                                                                                                                                                                                | 可选                    | 加对象存储（COS/OSS 约 ¥1/月）双写                 |
-| 5 | Redis 不异地、CF 配置靠文字清单                                                                                                                                                                                                                         | 已接受                   | dr-plan §8                              |
+| 3 | **在线支付实际不可付款**（订单能建、网关拒绝）：epay 商户后台未授权支付域名，`submit.php` 返回「该域名不可发起支付」；支付→回调→到账闭环因此未经验证 | 用户（柠檬支付商户后台） | 把 `openbridger.com` 加入支付域名白名单，然后小额实测（¥10）验证回调与到账 |
+| 4 | 整机重建未端到端演练                                                                                                                                                                                                                                   | Agent + 用户开临时新机       | rebuild-runbook 全流程走一遍                  |
+| 5 | 异地备份依赖 Mac 开机                                                                                                                                                                                                                                | 可选                    | 加对象存储（COS/OSS 约 ¥1/月）双写                 |
+| 6 | Redis 不异地、CF 配置靠文字清单                                                                                                                                                                                                                         | 已接受                   | dr-plan §8                              |
 
 ## 附录：命令速查
 

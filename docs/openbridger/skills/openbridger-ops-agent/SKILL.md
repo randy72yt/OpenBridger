@@ -111,6 +111,15 @@ agent_created: true
 - 固定价格模型（gpt-image-2 等 3 个）sync 会 skipped，正常
 - **v4-pro/v4-flash 是峰谷表达式定价**：pricing publish 会覆盖成线性价，批量发布后必须单独 PATCH 回峰谷表达式（`billing_setting.billing_expr` option）
 
+## 运营配置（额度/支付/提醒）
+- 注册送额度：`QuotaForNewUser=500000`（=$1，1 USD=500000 quota）；端到端验证需临时关 `EmailVerificationEnabled`+`TurnstileCheckEnabled`，验证完**立即恢复并复查**
+- 兑换码：`POST /api/redemption/ {"name","quota","count"}`，用户 `POST /api/user/topup {"key":code}` 自助兑换；受 `payment_setting.compliance_confirmed` 限制（只能后台确认，接口/DB 禁止代填）
+- **自助在线支付**：`OPENBRIDGER_ONLINE_PAYMENT_ENABLED=true`（compose.release.yml）；接口 `POST /api/user/pay {"amount":10,"payment_method":"alipay"}`（amount 单位是 USD 金额，非 quota）；回调 `/api/user/epay/notify`；v0.1.4 起支付后跳 `/wallet?pay=success`
+  - ⚠️ 当前 epay 网关报「该域名不可发起支付：域名没过白」——订单能建但付不了款，需商户后台把 openbridger.com 加白名单后小额实测
+- **低余额提醒**：内置，消费后余额 < `QuotaRemindThreshold`（已设 250000=$0.5）自动发邮件（含钱包充值链接）；触发走 `PostConsumeQuota(..., sendEmail=true)`，成功不打印日志——验证靠收邮件，不要靠 grep 日志
+- **PayMethods 必须是 `[]map[string]string`**：`min_topup` 要写成字符串 `"10"`；写成数字 10 会每分钟报 `json: cannot unmarshal number into Go value of type string` 且该项不生效。**数组型配置一律用 SQL 写**（`PUT /api/option/` 会把数组存成非法的 `[map[...]]`）
+- 排查配置同步失败：日志 `failed to update option map: ...`，用 `SELECT key,value FROM options WHERE value REGEXP '^-?[0-9]+$'` 找数字值嫌疑项
+
 ## 备份与监控
 - 备份：/srv/openbridger/backup.sh，cron 每天 03:30，mysqldump --single-transaction | gzip + Redis AOF + config 归档（10 项含 nginx/crontab/ufw），日×7 周×4，latest 指针；异地 Mac `~/backups/openbridger/` 每日 09:30 WorkBuddy 自动化拉取
 - 恢复演练：临时 `docker run --rm mysql:8.0` + zcat 灌入验证；生产恢复用 `obctl restore`
