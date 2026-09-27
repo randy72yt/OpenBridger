@@ -282,4 +282,4 @@ rsync -az <docs-site目录>/ ob-prod:/srv/openbridger/docs-site/
 3. **nested heredoc 远程执行**：`ssh 'sh -s' <<EOF` 内层 `$VAR` 会被吃掉 → 脚本一律 scp 上传后执行
 4. **options 表直改有缓存延迟**：改 DB 后等约 1 分钟或走 API 写入（Turnstile 等）
 5. **model_price_policies 为空会导致每小时定价 sync 全败**：恢复数据后确认 42 条策略在（§5.2 抽查已含）
-6. **v4-pro/v4-flash 是峰谷表达式定价**：pricing publish 会覆盖成线性价，批量发布后必须单独 PATCH 回峰谷表达式（见 prod-ops 技能手册）
+6. **v4-pro/v4-flash 是峰谷表达式定价**：pricing publish 会覆盖成线性价，批量发布后必须单独 PATCH 回峰谷表达式（见 openbridger-ops-agent 技能 Part 2 定价章节）
