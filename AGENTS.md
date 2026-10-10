@@ -2,6 +2,8 @@
 
 DO NOT send optional commentary
 
+Terminology: use the original technical term for operations (SSH 登录服务器 / `ssh ob-prod`、checkin、login、rollback 等)，不要自造比喻说法（例如不要用「登机」指登录服务器）。
+
 ## Overview
 
 This is an AI API gateway/proxy built with Go. It aggregates 40+ upstream AI providers (OpenAI, Claude, Gemini, Azure, AWS Bedrock, etc.) behind a unified API, with user management, billing, rate limiting, and an admin dashboard.

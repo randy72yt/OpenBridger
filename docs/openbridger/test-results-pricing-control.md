@@ -212,7 +212,7 @@ TEST_POSTGRES_DSN="host=127.0.0.1 port=5499 user=postgres password=qapass dbname
 ### 7.1 环境
 
 - 隔离实例：独立 sqlite `/tmp/qa-e2e/ob.db`，端口 3200/3201/3202。项目根 `one-api.db` 未被触碰（修改时间仍为 09-08 22:11）。
-- 上游：中转站 `https://api.dddai.dev`（OpenAI 兼容）。该中转站自身即 new-api，错误响应 `type: new_api_error`。
+- 上游：中转站 `https://api.上游 A`（OpenAI 兼容）。该中转站自身即 new-api，错误响应 `type: new_api_error`。
 - 渠道：id=1 `qa-upstream`（有效 key）；id=2 `qa-bad-primary`（key 故意无效，priority=100）。
 - 模型：`deepseek-v4-flash`。
 
@@ -334,7 +334,7 @@ POST /api/ratio_sync/fetch {"channel_ids":[1],"timeout":20}
 
 ## 8. 上游倍率同步与故障切换专项（本轮新增）
 
-环境：隔离 sqlite 实例（端口 3210/3211），项目根 `one-api.db` 未改动。上游渠道 `qa-upstream`（`api.dddai.dev`）。
+环境：隔离 sqlite 实例（端口 3210/3211），项目根 `one-api.db` 未改动。上游渠道 `qa-upstream`（`api.上游 A`）。
 
 ### 8.1 SYNC-001 应用上游倍率后扣费是否修正 — **通过**
 
@@ -400,7 +400,7 @@ POST /api/ratio_sync/fetch {"channel_ids":[1],"timeout":20}
 
 ### 9.1 测量方法
 
-上游 dddai.dev 本身是 new-api 实例，其 `/v1/dashboard/billing/usage`（`controller/billing.go:71 GetUsage`）会返回该 key 的累计消耗：
+上游 A 本身是 new-api 实例，其 `/v1/dashboard/billing/usage`（`controller/billing.go:71 GetUsage`）会返回该 key 的累计消耗：
 
 ```
 total_usage = quota / QuotaPerUnit * 100     =>  quota = total_usage * 5000
@@ -502,7 +502,7 @@ total_usage = quota / QuotaPerUnit * 100     =>  quota = total_usage * 5000
 
 ### 10.1 真实上游成本公式复验
 
-使用本地 `.env` 中的 DDD 上游凭证完成一次受控调用，凭证未输出或写入报告：
+使用本地 `.env` 中的 上游 A 上游凭证完成一次受控调用，凭证未输出或写入报告：
 
 | 项目 | 实测结果 |
 |---|---|

@@ -36,7 +36,7 @@
 | 项 | 值 |
 |---|---|
 | 本地实例 | OpenBridger（new-api 分支），SQLite 隔离库，端口 3211 |
-| 上游 | `https://api.dddai.dev/v1`（其本身也是 new-api 实例） |
+| 上游 | 上游 A 的 OpenAI 兼容地址（其本身也是 new-api 实例；具体域名不入册） |
 | 上游 key 分组 | `auto`（自动分组） |
 | 本地分组倍率 | 1（默认） |
 | 计费口径 | 本地与上游均已同步同一份 `billing_expr` / `model_ratio` |
