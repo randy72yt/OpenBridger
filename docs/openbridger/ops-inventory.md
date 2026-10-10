@@ -1,6 +1,6 @@
 # 生产环境台账
 
-最后更新：2026-09-22
+最后更新：2026-10-10（§3 注册/支付开关按当日生产实测刷新；§5 发布记录补 09-26/27 批次并记录版本核对缺口）
 
 **本文件不记录公网 IP、密钥、密码、Token。** 主机连接信息保存在运维本机的 `~/.ssh/config`（Host 别名 `ob-prod`），应用运行时变量保存在服务器 `/srv/openbridger/.env`（权限 600）。这里只登记非敏感资产与「去哪儿找」的指针，供交接和回滚使用。
 
@@ -36,13 +36,13 @@
 
 数据库与 Redis **不能**绑 `127.0.0.1`——应用容器经 docker0 网关访问宿主，绑 127.0.0.1 会 `connection refused`（2026-09-21 实际踩到）。
 
-## 3. 已完成的安全开关（2026-09-21 生产实测）
+## 3. 已完成的安全开关（2026-09-21 首测；注册/支付两行 2026-10-10 复核）
 
 | 项 | 值 | 验证方式 |
 | --- | --- | --- |
-| 公开注册 | `false` | `/api/status` 的 `register_enabled=false`（写入 `options` 表 `RegisterEnabled`） |
-| 密码注册 | `false` | `password_register_enabled=false`（`PasswordRegisterEnabled`） |
-| 在线支付 | 关闭 | 容器 env `OPENBRIDGER_ONLINE_PAYMENT_ENABLED=false`；所有支付接口挂 `middleware.RequireOnlinePayment()` |
+| 公开注册 | `true`（2026-09-22 运营策略：注册常开；2026-09-27 上线注册送额度 `QuotaForNewUser=500000` 即 $1） | 2026-10-10 实测 `/api/status` `register_enabled=true` |
+| 密码注册 | `true`（邮箱验证 `email_verification=true` + Turnstile 保护） | 2026-10-10 实测 `password_register_enabled=true` |
+| 在线支付 | **已开启**（2026-09-26 用户拍板，`OPENBRIDGER_ONLINE_PAYMENT_ENABLED=true`；epay 支付宝/微信，最低 ¥10） | 订单创建/签名正常；**epay 网关域名白名单未过、实际不可付款**（柠檬支付商户后台待办，见运维总纲 §6 缺口 #3；PAY-001~003 未验收） |
 | Turnstile | **已启用**（`TurnstileCheckEnabled=true`，Site/Secret Key 已入库） | 未带 token 的登录请求返回 `{"message":"Turnstile token 为空"}`；Secret Key 经 CF siteverify 端点确认为有效（`invalid-input-response` 而非 `invalid-input-secret`） |
 | Cookie | `SESSION_COOKIE_SECURE=true`、`SESSION_COOKIE_TRUSTED_URL=https://openbridger.com` | `docker inspect` 已核对 |
 | 可信代理 | `TRUSTED_PROXIES=172.17.0.1` | 同上 |
@@ -50,7 +50,7 @@
 | HSTS | `strict-transport-security: max-age=2592000; includeSubDomains`，`x-content-type-options: nosniff` | 2026-09-21 已开；max-age 先设 1 个月，**Preload 未开**（不可逆） |
 | 管理员双因子 | TOTP `is_enabled=1` + Passkey 已注册（2026-09-21） | `two_fas`、`passkey_credentials` 均有记录；备份码 4 条需离线保管。缺陷与修复见 [控制台指引 15.1](./console-setup.md#151-passkey-注册失败与修复2026-09-21) |
 
-未完成、需运维处理：CF SSL 模式 Full(strict) 与缓存规则待复核；根域 SPF 仍缺失（DKIM 已生效）；Turnstile Secret 曾在对话中明文出现，建议轮换。（MFA/Passkey、SMTP、Turnstile 三项已于 2026-09-21/22 完成）
+未完成、需运维处理（2026-10-10 收敛）：根域 SPF 仍缺失（DKIM 已生效，微软系/企业邮箱可能进垃圾箱，按 Resend 清单补 TXT）；Turnstile Secret 曾两次明文泄露，**放量前必须轮换**（执行计划 B2）；CF SSL 若升级 Full(strict)，`api` 子域需先签含该主机名的证书（现源站证书 CN 不含 api，否则 526）。已完成项：MFA/Passkey（09-21）、SMTP/Turnstile 启用（09-21/22）、MySQL root 轮换（09-27，B1）。
 
 ### Nginx 配置资产（2026-09-22 上线）
 
@@ -98,6 +98,10 @@ cd /srv/openbridger/repo && docker compose --env-file /srv/openbridger/.env -f c
 | --- | --- | --- | --- | --- | --- | --- |
 | 2026-09-21 | `1e93ef211` | `openbridger:1e93ef211` | 生产首次部署：MySQL/Redis/应用容器启动，`/api/status` 200 且容器 healthy | 运维 | 已启动，**尚未开放对外访问**（域名未解析、未初始化管理员） | 无上一个版本；异常时可 `docker compose down` 并用 systemctl 快照回滚 |
 | 2026-09-22 | `63fb5ea55` | `openbridger:63fb5ea55` | 邮件配额保护：发信入口 `common.SendEmail()` 加 Redis 每日上限（默认 80 封/天），防匿名接口耗尽 Resend 配额导致当天邮件静默失效 | 运维 | 已部署并 healthy；回归脚本 17 项全通过。配额拦截的端到端行为待首次发信后确认计数 | `openbridger:1e93ef211` |
+| 2026-09-26 | `59c0971a9`（tag `v0.1.0`） | `openbridger:59c0971a9` | 执行计划 A 阶段：v0.1.0 基线上线；协议 v1.0 写入 `legal` 段；生产回归 20/20 | 运维 | 已部署 healthy | `openbridger:63fb5ea55` |
+| 2026-09-27 | `ab26333c39`…`5609c71f5`（tag `v0.1.4` 在 `9c8b9789b`） | **待核对**（见下注） | 试运营批次：注册送额度 $1、兑换码、支持渠道露出、epay 在线支付开启、低余额提醒、支付完成跳转修复、支付下单合规校验、兑换码日志脱敏；协议升 v1.1；UptimeRobot 外部拨测 | 运维 | 各功能生产可用（运维总纲 §5.5）；**当前生产镜像 sha 与 0.1.5 是否在产待核对** | `openbridger:59c0971a9` |
+
+> **版本核对缺口（2026-10-10 发现）**：生产 `/api/status` 报告版本 `0.1.0`，仓库 VERSION 已是 `0.1.5`。`v0.1.4`（9c8b9789b）的 VERSION 文件仍为 0.1.0，故版本号无法区分 0.1.0–0.1.4；若生产运行的是含 5609c71f5 的镜像，版本应报 0.1.5。下次登机执行 `docker inspect repo-openbridger-1 --format '{{.Config.Image}}'` 核对镜像 sha、补齐本表，并补打 `v0.1.5` tag（R7 出口条件：生产版本 = tag）。
 
 ### 与主版本相关的运行时变量
 

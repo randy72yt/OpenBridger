@@ -15,14 +15,15 @@
 | [上线前测试计划](./prelaunch-test-plan.md) | 三阶段安排：无上游基础流程 → 挂渠道后转接与定价 → 总验收与韧性。含已自动验证项、人工项、阻塞项 |
 | `scripts/prod-acceptance.sh` | 生产验收回归脚本，每次发版后执行，退出码非 0 表示有 FAIL。用法见脚本头部注释 |
 
-## 法律文档草稿（仓库根目录 `legal-drafts/`）
+## 法律文档（仓库根目录 `legal-drafts/`）
 
 | 文件 | 用途 | 当前状态 |
 | --- | --- | --- |
-| `legal-drafts/user-agreement.zh-CN.md` | OpenBridger 用户协议 | 草稿：运营主体已填 OpenBridger、邮箱预设；仍含「待确认」，**不可直接发布** |
-| `legal-drafts/privacy-policy.zh-CN.md` | OpenBridger 隐私政策 | 同上 |
+| `legal-drafts/published/user-agreement.zh-CN.md` | OpenBridger 用户协议 | **已发布 v1.1**（2026-09-27 生效，适配在线充值；v1.0 于 2026-09-26 定稿生效） |
+| `legal-drafts/published/privacy-policy.zh-CN.md` | OpenBridger 隐私政策 | 同上，随协议同步至 v1.1 |
+| `legal-drafts/user-agreement.zh-CN.md` / `privacy-policy.zh-CN.md` | 历史草稿 | 已被 `published/` 取代，仅留档 |
 
-定稿后写入 `legal` 配置段的 `user_agreement` / `privacy_policy` 字段即可生效，无需发版；接口为空说明配置项未填，不是代码缺陷。发布前必须消除全部「待确认」，清单见[上线计划 2026-09-21 章节](./launch-plan.md#部署位置主体与协议草稿2026-09-21)。
+正文已写入生产 `legal` 配置段（`PUT /api/option/` 提交，落库即生效，无需发版）；匿名 `GET /api/user-agreement`、`GET /api/privacy-policy` 返回 200。后续修订流程：改稿 → 审定 → 更新 `published/` 文件与 `legal` 段并升版本号、更新生效日期。
 
 第一个版本的发布前必做项与可延期项已整理在[上线计划的 Release 1 待办总览](./launch-plan.md#release-1-待办总览)。发布放行仍以[生产验收](./production-acceptance.md)中所有适用 P0 用例的实际证据为准。
 
@@ -59,7 +60,7 @@
 
 ### 代码位置
 
-定价修复已随 PR #1 合入 `main`；`codex/fix-pricing-control-qa` 与 `test/openbridger-qa` 已废弃。当前工作分支为 `codex/verify-upstream-credentials`，生产运行在 tag `openbridger:1e93ef211`。合入前请以 `fix-review-pricing-control.md` 第 0.1 节结论为准，遗留项按[上线计划](./launch-plan.md#release-1-待办总览)区分是否阻断首版；`r6UjdF` 为上线必做项。
+定价修复已随 PR #1 合入 `main`，PR #2（上游凭证核验）也已合并；`codex/*` 分支均已废弃，工作直接在 `main`。生产镜像按 `openbridger:<git-short-sha>` 命名，实际部署版本以[生产环境台账 §5 发布记录](./ops-inventory.md)为准（注意：`v0.1.4` tag 的 VERSION 文件仍为 0.1.0，版本号不能区分 0.1.0–0.1.4）。合入前请以 `fix-review-pricing-control.md` 第 0.1 节结论为准，遗留项按[上线计划](./launch-plan.md#release-1-待办总览)区分是否阻断首版；`r6UjdF`（`PRICING_CONTROL_ENABLED=true`）已在生产开启。
 
 ### 复用价值高的两条经验
 
@@ -88,12 +89,13 @@
 
 ## 当前发布目标
 
-发布策略（2026-09-22 确定）：**注册常开**，不走邀请制；**首版不开放在线支付**，试用额度由管理员手工发放。API Base URL：`https://openbridger.com/v1`。
+发布策略：**注册常开**（2026-09-22 确定，不走邀请制），新用户注册送 $1 额度（`QuotaForNewUser=500000`）；**在线支付已开启**（2026-09-26 用户拍板，epay 支付宝/微信，最低 ¥10），但 epay 网关因支付域名未加白名单**当前实际不可付款**（柠檬支付商户后台操作，见[运维总纲](./ops-handbook.md) §6 缺口 #3）；额度发放走兑换码（`OB-Beta-*`）。API Base URL：`https://openbridger.com/v1`。
 
 生产入口：
 
 - 主站与控制台：`https://openbridger.com`
 - API Base URL：`https://openbridger.com/v1`
-- 文档站：`https://docs.openbridger.com`（尚未部署内容，返回 403）
+- 文档站：`https://docs.openbridger.com`（2026-09-22 已部署上线）
+- 服务状态页：https://stats.uptimerobot.com/aHV66DcfpB
 
-域名 `openbridger.com` 在 Cloudflare，**已解析且已签发 HTTPS**。部署位置为阿里云轻量应用服务器（Ubuntu 24.04，2C/1.6Gi）——内存偏紧，镜像在运维本机构建后 `docker save | ssh docker load` 传上去。逐步骤操作见[上线执行手册](./launch-runbook.md)，当前测试重点是[上线前测试计划](./prelaunch-test-plan.md)。
+域名 `openbridger.com` 在 Cloudflare，**已解析且已签发 HTTPS**。部署位置为阿里云轻量应用服务器（Ubuntu 24.04，2C/1.6Gi）——内存偏紧，镜像在运维本机构建后 `docker save | ssh docker load` 传上去。日常运维以[运维总纲](./ops-handbook.md)为入口；当前待办集中在[上线执行计划](./launch-execution-plan.md) 阶段 G（全量验收 + 试运行巡检）与支付白名单。

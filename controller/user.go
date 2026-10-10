@@ -1255,7 +1255,12 @@ func TopUp(c *gin.Context) {
 	if err != nil {
 		// 不向用户暴露兑换失败的细分原因，避免攻击者根据错误类型判断兑换码状态。
 		common.ApiErrorI18n(c, i18n.MsgRedeemFailed)
-		logger.LogError(c, fmt.Sprintf("failed to redeem key %s for user %d: %s", req.Key, id, err.Error()))
+		// 兑换码本身是凭据：整串落日志后，任何能读容器日志或备份的人都能盗用未使用的码。
+		masked := req.Key
+		if len(masked) > 4 {
+			masked = masked[:4] + "****"
+		}
+		logger.LogError(c, fmt.Sprintf("failed to redeem key %s for user %d: %s", masked, id, err.Error()))
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
