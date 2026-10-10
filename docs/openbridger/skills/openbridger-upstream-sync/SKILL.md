@@ -48,7 +48,7 @@ git checkout v<release-tag> -- <path1> <path2> ...   # 注意:用 release tag,�
 ```
 
 - 热区文件若命中(报告会列出):不能整文件 checkout,改为 `git diff <range> -- <file>` 逐块把上游改动合入我们的版本,保住我们的就地修改。
-- **计费阵地(GUARD,报告单独标出)**:`pkg/billingexpr/`、`relay/helper/price.go`、`service/quota.go`/`text_quota.go` 等我们计费路径依赖的上游文件——**billingexpr 引擎是上游自带的,我们的定价控制面是叠加层,上游动这些文件就是在动我们的地基**。命中时:禁止整文件 checkout;逐块 diff 审查上游改动是否移动我们的接线或改变计费语义;PR 描述必须附每个阵地文件的审查结论;闸门必跑 `go test ./pkg/billingexpr/... ./service/... ./relay/...` 与定价控制面用例。
+- **计费阵地(GUARD,报告单独标出)**:我们计费路径依赖的**上游拥有**文件,全清单以脚本 `GUARD_FILES` 为准(16 项:`pkg/billingexpr/`、`model/pricing.go`、`model/option.go`、`relay/helper/price.go`、`service/quota.go`/`text_quota.go`、`controller/pricing.go`/`model_pricing_config.go` 等)——**billingexpr 引擎是上游自带的,我们的定价控制面是叠加层,上游动这些文件就是在动我们的地基**;包括我们从未改过、但控制面与其交互的上游 pricing 家族文件。命中时:禁止整文件 checkout;逐块 diff 审查上游改动是否移动我们的接线或改变计费语义;PR 描述必须附每个阵地文件的审查结论;闸门必跑 `go test ./pkg/billingexpr/... ./service/... ./relay/...` 与定价控制面用例(同包 API 变化由 `go build` 闸门兜底)。
 - 上游的计费/定价「新功能」提交(expression drafts 等)即使看着诱人也一律④桶跳过——防止与自研控制面双体系并行。
 - 同一 PR 只做一个主题(比如「安全修复」与「新适配器」分两个 PR)。
 

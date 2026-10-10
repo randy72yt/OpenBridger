@@ -24,11 +24,16 @@ HOT_FILES=(
   controller/security_account_test.go controller/security_enrollment_test.go
   service/task_billing_test.go router/plugin_router_test.go
 )
-# 计费阵地(GUARD):上游所有权的、我们计费/定价路径依赖的文件与目录。
-# billingexpr 引擎是上游自带(fork 点即存在),我们的定价控制面是叠加层,接线经过这些 seam 文件。
+# 计费阵地(GUARD):上游所有权的、我们计费/定价路径依赖的文件与目录。两类来源:
+#   (a) import billingexpr 的上游 seam 文件(接线所在);
+#   (b) 上游 pricing/billing 家族文件(我们未改,但定价控制面与其交互/依赖其语义,含对账用的 billing.go)。
+# 同包编译级依赖(service/model/common 等)由闸门 go build 兜底,不在此列。
 # 命中即最严口径:禁止整文件 checkout,逐块 diff 人工审查,PR 附结论(见 SKILL.md 阵地规则)。
 GUARD_FILES=(
   pkg/billingexpr
+  model/pricing.go
+  model/option.go
+  relaykit/dto/pricing.go
   relay/helper/price.go
   relay/relay_task.go
   relay/common/relay_info.go
@@ -36,6 +41,9 @@ GUARD_FILES=(
   service/text_quota.go
   service/task_polling.go
   service/log_info_generate.go
+  controller/pricing.go
+  controller/model_pricing_config.go
+  controller/billing.go
   controller/channel-test.go
   model/task.go
 )
