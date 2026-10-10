@@ -17,7 +17,7 @@
 
 1. **支持 SKILL.md 约定的工具**（Claude Code 等）：把 `openbridger-ops-agent/` 目录放到工具的 skills 加载路径，或直接把 SKILL.md 内容粘进 system prompt / 项目说明
 2. **不支持的工具**：把 SKILL.md 全文粘进对话开头即可，内容本身就是完整指令
-3. 前提条件（与工具无关）：能 `ssh ob-prod`（或在 `~/.ssh/config` 配同名 Host 别名指向 47.80.28.213）
+3. 前提条件（与工具无关）：能 `ssh ob-prod`（在 `~/.ssh/config` 配同名 Host 别名，地址不入库）
 
 ## 移植注意
 

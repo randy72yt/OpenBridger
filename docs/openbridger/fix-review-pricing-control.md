@@ -259,7 +259,7 @@ if !ok {
 
 同步逻辑：取上游返回的 `auto_groups` 列表，按**列表顺序**找第一个出现在模型 `enable_groups` 中的分组，用该分组的 `group_ratio` 作为 `UpstreamGroupRatio`。
 
-这条规则我用真实上游（dddai.dev，`/api/pricing` 40 个模型）做了两组判别实验，取调用前后 `GET /v1/dashboard/billing/usage` 差值（quota = total_usage × 5000）：
+这条规则我用真实上游（上游 A，`/api/pricing` 40 个模型）做了两组判别实验，取调用前后 `GET /v1/dashboard/billing/usage` 差值（quota = total_usage × 5000）：
 
 | 模型 | enable_groups 含 | 代码取 | 实测计费 | 结论 |
 |---|---|---|---|---|

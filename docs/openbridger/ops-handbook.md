@@ -1,6 +1,6 @@
 # OpenBridger 运维总纲（Ops Handbook）
 
-版本：v1.0 · 2026-09-27 · 适用部署：单机 ob-prod（47.80.28.213，2C/1.6G，阿里云轻量）  
+版本：v1.0 · 2026-09-27 · 适用部署：单机 ob-prod（地址见运维机 `~/.ssh/config`，2C/1.6G，阿里云轻量）  
 地位：**运维入口文档**。出事先看本文 §3 应急速查表，再按引用文档深入。
 
 ## 0. 体系总览与文档地图
@@ -47,7 +47,7 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 | 盲区           | 影响                   | 补齐方式                                                                                  |
 | ------------ | -------------------- | ------------------------------------------------------------------------------------- |
 | 无外部拨测        | 服务器能自查但 CF/出口断时收不到告警 | ✅ 已解决（2026-09-27）：UptimeRobot 云看板上线，见 §1.1 |
-| 无请求错误率/延迟监控  | 上游 dddai 劣化只能从用户反馈发现 | 应用 logs 表已有用量记录；需要时写 SQL 查近 1h 错误占比                                                   |
+| 无请求错误率/延迟监控  | 上游 A 劣化只能从用户反馈发现 | 应用 logs 表已有用量记录；需要时写 SQL 查近 1h 错误占比                                                   |
 | 无 TLS 证书到期监控 | certbot 自动续签失败时无感知   | UptimeRobot 拨测 HTTPS 自带证书告警                                                           |
 | 内存无告警        | OOM 前无预警             | monitor.py 加一条 free 检查（P2）                                                            |
 
@@ -97,7 +97,7 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 | 模型下架仍可见             | DELETE abilities 行 + 等 60s 缓存                                                      | 同上                                     |
 | 服务器失联（ssh 无 banner） | 阿里云控制台看负载；大概率 OOM → 控制台重启                                                          | 历史实录：docker build 打崩 sshd              |
 | 整机丢失（S1）            | `rebuild-runbook.md` 全流程                                                           | RTO ≤2h，前提是 Mac 异地备份在手                 |
-| 上游 dddai 故障         | 非本站故障，渠道层 503；等上游恢复，可公告用户                                                          | dr-plan L3                             |
+| 上游 A 故障         | 非本站故障，渠道层 503；等上游恢复，可公告用户                                                          | dr-plan L3                             |
 | 密钥泄露（S1）            | 立即轮换：DB options（Turnstile/SMTP）、.env（MySQL/Redis/Session）、用户令牌；全程命令见 openbridger-ops-agent 技能 Part 2 | 轮换后 `obctl alert-test` + `obctl smoke` |
 
 ### 3.4 事故记录模板（S1/S2 必填）
@@ -158,7 +158,7 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 | 项 | 现状 | 怎么改 |
 | --- | --- | --- |
 | 新用户注册送额度 | `QuotaForNewUser=500000`（$1；1 USD = 500000 quota） | 后台或 `PUT /api/option/`，改完注册测试号验证 |
-| 兑换码 | 已开通：`OB-Beta-5USD`（20 张 × $5）、`OB-Beta-20USD`（10 张 × $20）；用户控制台「充值与支付」自助兑换 | 后台批量生成（单次上限 100 张）；发额度 = 发个码，不再改库 |
+| 兑换码 | 已开通：Beta 批次两档（面额与张数明细见后台兑换码管理页，不入册）；用户控制台「充值与支付」自助兑换 | 后台批量生成（单次上限 100 张）；发额度 = 发个码，不再改库 |
 | **自助在线支付充值** | 已开通（`OPENBRIDGER_ONLINE_PAYMENT_ENABLED=true`），支付方式仅保留支付宝/微信（最低 ¥10；$10 → ¥73，按 1 USD=¥7.30）。订单创建、签名、回调地址均正常；**支付完成后跳 `/wallet?pay=success`**（v0.1.4 修复，原为 `/usage-logs`） | ⚠️ **当前不可付款**：epay 网关返回「该域名不可发起支付：域名没过白」，需商户在柠檬支付后台把 `openbridger.com` 加入支付域名白名单 |
 | **低余额自动提醒** | 内置：消费后余额 < `QuotaRemindThreshold=250000`（$0.5）自动发邮件，含钱包充值链接 | 改 `QuotaRemindThreshold`；用户级阈值用 `QuotaWarningThreshold` |
 | 定价页 | `/pricing` 已开放（`HeaderNavModules.pricing.enabled=true`，无需登录）；数据来自 `/api/pricing`（38 个模型，35 个带计费表达式，v4 峰谷表达式已核对保留） | 要下线：把 pricing.enabled 改 false |
@@ -185,7 +185,25 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 
 就地修改面登记：`git diff 6298b0f32 HEAD --name-status` 中的 M 文件即对上游文件的就地修改。2026-10-10 基线：新增（A）115 个文件、就地修改（M）69 个——其中**后端核心就地修改仅约 15 个**（`common/email.go`、`controller/topup.go`/`user.go`/`audit.go`、`model/main.go` 及定价相关、`router/*.go`、`setting/operation_setting`），其余为 web 品牌文案、i18n、构建配置，冲突机械好解。原则：**能放新文件就不改上游文件；新增就地修改保持最小，并在下次盘点时更新本节数字**。
 
-工具化（2026-10-10）：检查器 `scripts/upstream-sync-check.sh`（比对 `releases/latest` 与 `skills/openbridger-upstream-sync/state.md` 基线——无变化 exit 0 跳过，有变化 exit 2 输出报告：区间 release 列表 / 安全关键词命中 / 热区文件命中 / relay 规模）；整合流程封装为技能 `skills/openbridger-upstream-sync/`（自包含，任何 AI 工具可执行）。热区文件清单以脚本内 `HOT_FILES` 数组与本节登记为准，两处同步维护。
+工具化（2026-10-10）：检查器 `scripts/upstream-sync-check.sh`（比对 `releases/latest` 与 `skills/openbridger-upstream-sync/state.md` 基线——无变化 exit 0 跳过，有变化 exit 2 输出报告：区间 release 列表 / 安全关键词命中 / 热区文件命中 / 计费阵地命中 / relay 规模）；整合流程封装为技能 `skills/openbridger-upstream-sync/`（自包含，任何 AI 工具可执行）。热区与阵地清单以脚本内 `HOT_FILES`/`GUARD_FILES` 数组与本节登记为准，同步维护。
+
+计费阵地（GUARD，2026-10-10 增）：**billingexpr 表达式引擎是上游自带**（`pkg/billingexpr/`，fork 点即存在、我们零改动），我们的定价控制面是叠加层，计费接线经过一批**上游拥有**的 seam 文件（`relay/helper/price.go`、`service/quota.go`/`text_quota.go`、`relay/relay_task.go`、`model/task.go` 等，全清单见脚本 `GUARD_FILES`）。阵地命中即最严口径：**禁止整文件 checkout，逐块 diff 人工审查，PR 附结论，闸门必跑 billingexpr 与定价控制面用例**。上游同期也在发展表达式化定价（rc.35–rc.43 已见 `convert legacy prices into expression drafts`、`model_pricing_conversion.go` 等；首查实测 10 个阵地文件全部被上游改动），凡属其计费「新功能」一律④桶跳过；仅当上游实现覆盖毛利+审批流+表达式版本语义、脱离 rc 连发、且存量策略数据迁移成本可接受时，才评估整体迁移。
+
+## 5.7 运营文档迁出 runbook（备而不发，2026-10-10 制定）
+
+背景：`docs/openbridger/`（运维手册、skills、台账）与 `.agents/skills/` 是自写运营知识，**不属于 AGPL 必须公开的软件源码**，放在公开 fork 只是历史顺带。2026-10-10 已完成文档脱敏（服务器 IP→`~/.ssh/config` 指针、上游供应商→「上游 A/B」、供应商域名移除、兑换码批次明细→后台指针）；本 runbook 在触发条件到达时执行整体迁出，平时不动。
+
+**触发条件（任一）**：出现竞争模仿迹象；文档需写入更敏感内容（具体毛利策略数值、供应商合同条款）；公开仓库被频繁 fork/clone 监控。
+
+**步骤**：
+
+1. 新建私有仓库（如 `openbridger-ops`），用 `git filter-repo --path docs/openbridger --path .agents` 从本仓库抽取完整历史导入；
+2. 公开仓库以**普通删除提交**移除同路径——不 rewrite 公开历史（生产镜像按 git sha 命名，rewrite 会作废整个回滚指认体系）；
+3. 修正引用：AGENTS.md/CLAUDE.md 与代码注释中指向 `docs/openbridger/` 的路径；`docs-site/`（对外文档站源码）**保留**在公开仓库；
+4. 迁移本机与服务器上的副本路径；更新 `skills/README.md` 分发说明；
+5. 历史已公开内容（2026-10-10 前的 IP、供应商名等）视为已泄露，依靠「ufw 仅放行 Cloudflare 段」对冲源站直连风险；如需彻底清除历史再立专项评估。
+
+迁出后 AGPL 义务不变：软件源码仍在公开 fork，持续满足网络条款。
 
 ## 6. 已知缺口清单（按优先级）
 

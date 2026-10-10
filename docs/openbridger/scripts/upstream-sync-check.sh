@@ -24,6 +24,21 @@ HOT_FILES=(
   controller/security_account_test.go controller/security_enrollment_test.go
   service/task_billing_test.go router/plugin_router_test.go
 )
+# 计费阵地(GUARD):上游所有权的、我们计费/定价路径依赖的文件与目录。
+# billingexpr 引擎是上游自带(fork 点即存在),我们的定价控制面是叠加层,接线经过这些 seam 文件。
+# 命中即最严口径:禁止整文件 checkout,逐块 diff 人工审查,PR 附结论(见 SKILL.md 阵地规则)。
+GUARD_FILES=(
+  pkg/billingexpr
+  relay/helper/price.go
+  relay/relay_task.go
+  relay/common/relay_info.go
+  service/quota.go
+  service/text_quota.go
+  service/task_polling.go
+  service/log_info_generate.go
+  controller/channel-test.go
+  model/task.go
+)
 SECURITY_RE='security|cve|vulnerab|xss|csrf|inject|bypass|提权|越权|泄露'
 TAG_RE='^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$'
 
@@ -52,10 +67,12 @@ if [ "$latest" = "$baseline_release" ]; then
   exit 0
 fi
 
-# 3) 有变化 → 拉取 tag 并出报告
-git fetch "$UPSTREAM_URL" --tags --quiet 2>/dev/null || fail "git fetch 上游失败"
+# 3) 有变化 → 拉取 tag 并出报告(网络抖动时若本地已有所需对象则降级继续)
+if ! git fetch "$UPSTREAM_URL" --tags --quiet 2>/dev/null; then
+  echo "WARN: git fetch 上游失败(网络?),尝试用本地已有对象出报告" >&2
+fi
 git cat-file -e "${baseline_point}^{commit}" 2>/dev/null || fail "本地缺少基线提交 $baseline_point"
-git cat-file -e "${latest}^{commit}" 2>/dev/null || fail "本地缺少 tag $latest(fetch 后仍无,确认 tag 名)"
+git cat-file -e "${latest}^{commit}" 2>/dev/null || fail "本地缺少 tag $latest(fetch 失败且本地无此对象)"
 range="$baseline_point..$latest"
 
 echo "==== 上游有新 release: $baseline_release → $latest ===="
@@ -79,6 +96,14 @@ done
 if [ "$hit" -eq 0 ]; then echo "  (热区零命中——本次大概率纯附加摘取,冲突面小)"; fi
 stat="$(git diff --stat "$range" -- "${HOT_FILES[@]}" | tail -1 || true)"
 echo "  热区差异量: ${stat:-0 files changed}"
+echo
+echo "-- 计费阵地(GUARD)命中(我们计费路径依赖的上游文件;命中即最严口径,逐块人工审查,禁整文件 checkout):"
+hit=0
+for f in "${GUARD_FILES[@]}"; do
+  n="$(git log --oneline "$range" -- "$f" | wc -l | tr -d ' ')"
+  if [ "$n" -gt 0 ]; then echo "  $f  (${n} commits)"; hit=1; fi
+done
+if [ "$hit" -eq 0 ]; then echo "  (阵地零命中)"; fi
 echo
 echo "-- 摘取候选规模参考:"
 stat="$(git diff --stat "$range" -- relay/channel | tail -1 || true)"

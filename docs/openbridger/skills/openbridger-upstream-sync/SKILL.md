@@ -48,6 +48,8 @@ git checkout v<release-tag> -- <path1> <path2> ...   # 注意:用 release tag,�
 ```
 
 - 热区文件若命中(报告会列出):不能整文件 checkout,改为 `git diff <range> -- <file>` 逐块把上游改动合入我们的版本,保住我们的就地修改。
+- **计费阵地(GUARD,报告单独标出)**:`pkg/billingexpr/`、`relay/helper/price.go`、`service/quota.go`/`text_quota.go` 等我们计费路径依赖的上游文件——**billingexpr 引擎是上游自带的,我们的定价控制面是叠加层,上游动这些文件就是在动我们的地基**。命中时:禁止整文件 checkout;逐块 diff 审查上游改动是否移动我们的接线或改变计费语义;PR 描述必须附每个阵地文件的审查结论;闸门必跑 `go test ./pkg/billingexpr/... ./service/... ./relay/...` 与定价控制面用例。
+- 上游的计费/定价「新功能」提交(expression drafts 等)即使看着诱人也一律④桶跳过——防止与自研控制面双体系并行。
 - 同一 PR 只做一个主题(比如「安全修复」与「新适配器」分两个 PR)。
 
 ### Step 3 验证闸门(不过不上)
@@ -72,7 +74,7 @@ cd web && bun install --frozen-lockfile && bun run build && bun run vitest run &
 - 不 merge、不 rebase 上游分支;只 `git checkout <release-tag> -- <路径>` 或逐块 diff 合并。
 - 不追 upstream/main 的中间提交;只认 release tag。
 - 不给上游提 PR 反哺定价控制面(自有体系,上游未必兼容)。
-- 热区清单(脚本内 `HOT_FILES`)与 ops-handbook §5.6 登记必须一致;我们新增就地修改时两处同步更新。
+- 热区清单(脚本内 `HOT_FILES`)与计费阵地清单(`GUARD_FILES`)同 ops-handbook §5.6 登记必须一致;我们新增就地修改或新增计费接缝时,三处同步更新。
 - AGPL-3.0 不变:代码继续公开,配置/密钥不入库。
 
 ## 给非 WorkBuddy 工具的移植说明
