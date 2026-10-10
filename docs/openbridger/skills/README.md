@@ -1,14 +1,17 @@
 # OpenBridger 运维 Agent 技能（随仓库分发版）
 
-单技能设计，`openbridger-ops-agent/SKILL.md` 一份包含两部分：
+两个技能：
 
-- **Part 1 场景路由**（决策层）：故障应急 / 发版 Release / 备份恢复 / 日常巡检 / 密钥轮换 → 一键命令
-- **Part 2 命令细节手册**（执行层）：服务器布局、构建部署坑、数据库操作、定价管线、备份监控
+1. **`openbridger-ops-agent/SKILL.md`**（生产运维，两部分）：
+   - **Part 1 场景路由**（决策层）：故障应急 / 发版 Release / 备份恢复 / 日常巡检 / 密钥轮换 → 一键命令
+   - **Part 2 命令细节手册**（执行层）：服务器布局、构建部署坑、数据库操作、定价管线、备份监控
+2. **`openbridger-upstream-sync/SKILL.md`**（上游同步）：按 release 粒度检查基座更新 → 取舍规则分桶（安全必摘/适配器按需/重构跳过/计费重叠跳过）→ 验证闸门 → PR 留痕。配套 `state.md`（基线与决策日志）。
 
 配套：
 
-- 总纲文档：`../ops-handbook.md`（监控/应急/Release R0-R8/治理）
+- 总纲文档：`../ops-handbook.md`（监控/应急/Release R0-R8/治理/上游同步 §5.6）
 - 一键 CLI：`../scripts/obctl.sh`（部署在服务器 `/srv/openbridger/obctl`，不依赖任何 AI 工具）
+- 上游检查器：`../scripts/upstream-sync-check.sh`（exit 0 无变化 / exit 2 出整合报告）
 
 ## 在其他 AI 工具中使用
 
@@ -23,9 +26,11 @@
 
 ## 同步纪律
 
-**源头在 `.workbuddy/skills/openbridger-ops-agent/SKILL.md`（WorkBuddy 实际加载的版本）**，本目录是分发副本。改动技能后同步：
+**`openbridger-ops-agent` 的源头在 `.workbuddy/skills/`（WorkBuddy 实际加载的版本）**，本目录是分发副本。改动技能后同步：
 
 ```bash
 cp .workbuddy/skills/openbridger-ops-agent/SKILL.md docs/openbridger/skills/openbridger-ops-agent/SKILL.md
 ```
+
+`openbridger-upstream-sync` 的源头直接在本目录（`state.md` 是运行状态，改动频繁，不建 .workbuddy 副本）。
 

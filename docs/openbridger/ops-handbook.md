@@ -145,7 +145,7 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 | 告警邮件   | 实时        | 收到即 `obctl diag`，按 §3 处置                  |
 | 周检     | 每周        | `obctl diag` + `obctl backup-check`，5 分钟  |
 | 月检     | 每月        | `obctl alert-test`；检查磁盘趋势；抽查一次 dump 可解压   |
-| 上游安全公告 | 每月        | 扫 `QuantumNous/new-api` releases；安全修复按 §5.6 摘取（2026-10-10 复核：落后 197 提交中无 CVE 级修复，暂无欠账） |
+| 上游安全公告 | 每月        | `docs/openbridger/scripts/upstream-sync-check.sh`——exit 0 直接结束；exit 2 按技能 `openbridger-upstream-sync` 整合（安全修复无条件摘）。2026-10-10 首查：落后 9 个 release（rc.35–rc.43），无 CVE 级命中 |
 | 备份恢复演练 | 每季度       | 临时容器灌库（dr-plan §7）                        |
 | 回滚演练   | 每次发版      | deploy/rollback 本身即演练                     |
 | 整机重建演练 | 每半年或重大变更后 | rebuild-runbook 全流程（**尚未做过端到端，建议公测前做一次**） |
@@ -184,6 +184,8 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 操作口径：分支上 `git checkout upstream/main -- <路径>` 搬文件 → 三库矩阵 + 前端构建 + `obctl accept`（须 20/20）→ **PR 留痕**（流程模板：PR #3）。
 
 就地修改面登记：`git diff 6298b0f32 HEAD --name-status` 中的 M 文件即对上游文件的就地修改。2026-10-10 基线：新增（A）115 个文件、就地修改（M）69 个——其中**后端核心就地修改仅约 15 个**（`common/email.go`、`controller/topup.go`/`user.go`/`audit.go`、`model/main.go` 及定价相关、`router/*.go`、`setting/operation_setting`），其余为 web 品牌文案、i18n、构建配置，冲突机械好解。原则：**能放新文件就不改上游文件；新增就地修改保持最小，并在下次盘点时更新本节数字**。
+
+工具化（2026-10-10）：检查器 `scripts/upstream-sync-check.sh`（比对 `releases/latest` 与 `skills/openbridger-upstream-sync/state.md` 基线——无变化 exit 0 跳过，有变化 exit 2 输出报告：区间 release 列表 / 安全关键词命中 / 热区文件命中 / relay 规模）；整合流程封装为技能 `skills/openbridger-upstream-sync/`（自包含，任何 AI 工具可执行）。热区文件清单以脚本内 `HOT_FILES` 数组与本节登记为准，两处同步维护。
 
 ## 6. 已知缺口清单（按优先级）
 
