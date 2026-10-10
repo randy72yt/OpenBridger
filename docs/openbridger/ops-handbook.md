@@ -145,6 +145,7 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 | 告警邮件   | 实时        | 收到即 `obctl diag`，按 §3 处置                  |
 | 周检     | 每周        | `obctl diag` + `obctl backup-check`，5 分钟  |
 | 月检     | 每月        | `obctl alert-test`；检查磁盘趋势；抽查一次 dump 可解压   |
+| 上游安全公告 | 每月        | 扫 `QuantumNous/new-api` releases；安全修复按 §5.6 摘取（2026-10-10 复核：落后 197 提交中无 CVE 级修复，暂无欠账） |
 | 备份恢复演练 | 每季度       | 临时容器灌库（dr-plan §7）                        |
 | 回滚演练   | 每次发版      | deploy/rollback 本身即演练                     |
 | 整机重建演练 | 每半年或重大变更后 | rebuild-runbook 全流程（**尚未做过端到端，建议公测前做一次**） |
@@ -168,6 +169,21 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 **注意**：Email Obfuscation 会把页面里的 mailto 改写成 `/cdn-cgi/l/email-protection#...`，验证时不要 grep 原始邮箱字符串。
 
 **坑：`PayMethods` 的值必须是 `[]map[string]string`**——即**所有字段值都要是字符串**。写成 `{"min_topup":10}`（数字）会导致 `json: cannot unmarshal number into Go value of type string`，配置同步每分钟报一条错且该项不生效。正确写法：`{"min_topup":"10"}`。同理，用 `PUT /api/option/` 写数组型配置会被存成 Go 的 `[map[...]]` 格式（非法 JSON），数组型配置**一律用 SQL 直接写**。
+
+## 5.6 上游同步策略（fork 维护，2026-10-10 定策）
+
+基座 fork 自 `QuantumNous/new-api`（fork 点 `6298b0f32`，2026-09-07；AGPL-3.0，公开仓库即网络条款的合规履行，配置/密钥不入库的纪律不变）。**不追 latest、不做整分支 merge**：上游自身处于 rc 阶段高频发版，「稳健」来自我们自己的验证闸门（三库矩阵 + `obctl accept` 20/20 + 8 秒回滚），不来自上游版本号。落后上游多少提交属预期，按需摘取：
+
+| 上游变更类型 | 动作 |
+| --- | --- |
+| 安全修复（auth / relay / webhook） | 无条件摘，冲突手动解 |
+| 新渠道、新模型适配器（`relay/channel/` 新目录） | 商业需要才摘；纯附加，零冲突 |
+| 上游重构、目录搬家、接口改形 | 主动跳过，除非阻塞了必须摘的修复 |
+| 与定价控制面重叠的计费类新功能 | 跳过（自研替代已在生产运行） |
+
+操作口径：分支上 `git checkout upstream/main -- <路径>` 搬文件 → 三库矩阵 + 前端构建 + `obctl accept`（须 20/20）→ **PR 留痕**（流程模板：PR #3）。
+
+就地修改面登记：`git diff 6298b0f32 HEAD --name-status` 中的 M 文件即对上游文件的就地修改。2026-10-10 基线：新增（A）115 个文件、就地修改（M）69 个——其中**后端核心就地修改仅约 15 个**（`common/email.go`、`controller/topup.go`/`user.go`/`audit.go`、`model/main.go` 及定价相关、`router/*.go`、`setting/operation_setting`），其余为 web 品牌文案、i18n、构建配置，冲突机械好解。原则：**能放新文件就不改上游文件；新增就地修改保持最小，并在下次盘点时更新本节数字**。
 
 ## 6. 已知缺口清单（按优先级）
 

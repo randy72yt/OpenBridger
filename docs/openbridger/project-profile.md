@@ -112,7 +112,7 @@ OpenBridger 是面向大学生、开发者和团队的 AI API 网关，通过统
 | RISK-105 | 异地备份依赖 Mac 每日开机拉取 | 灾难时异地副本滞后 | 服务器本地日×7 + 周×4 | 对象存储双写（约 ¥1/月） |
 | RISK-106 | 根域 SPF 缺失（DKIM 已生效） | 微软系/企业邮箱可能进垃圾箱 | Resend DKIM 对齐 | 按 Resend 清单补 SPF TXT 记录 |
 | RISK-107 | 1.6Gi 小机、无内存告警 | OOM 无预警 | 2G swap；禁止服务器上构建 | monitor.py 加 free 检查（P2） |
-| RISK-108 | 生产版本号与仓库不一致（`/api/status` 报 0.1.0，VERSION 已 0.1.5；v0.1.4 tag 的 VERSION 仍为 0.1.0） | 回滚时版本指认易错 | 镜像按 git sha 命名 | 登机核对生产镜像 sha、补打 v0.1.5 tag、后续发版同步 VERSION |
+| RISK-108 | 生产版本号与仓库不一致（`/api/status` 报 0.1.0，VERSION 已 0.1.5；v0.1.4 tag 的 VERSION 仍为 0.1.0） | 回滚时版本指认易错 | 镜像按 git sha 命名；v0.1.5 tag 已于 2026-10-10 补打推送 | SSH 登录服务器核对生产镜像 sha、后续发版同步 VERSION |
 | RISK-109 | 全量 P0 验收（G1）与试运行巡检（G3）未执行留痕 | 带病放量风险 | 每版发版跑 obctl accept 20/20 | 填署 production-acceptance §12/§13；创建 trial-daily-log |
 
 ## 10. 变更记录

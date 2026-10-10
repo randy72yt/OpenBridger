@@ -101,7 +101,7 @@ cd /srv/openbridger/repo && docker compose --env-file /srv/openbridger/.env -f c
 | 2026-09-26 | `59c0971a9`（tag `v0.1.0`） | `openbridger:59c0971a9` | 执行计划 A 阶段：v0.1.0 基线上线；协议 v1.0 写入 `legal` 段；生产回归 20/20 | 运维 | 已部署 healthy | `openbridger:63fb5ea55` |
 | 2026-09-27 | `ab26333c39`…`5609c71f5`（tag `v0.1.4` 在 `9c8b9789b`） | **待核对**（见下注） | 试运营批次：注册送额度 $1、兑换码、支持渠道露出、epay 在线支付开启、低余额提醒、支付完成跳转修复、支付下单合规校验、兑换码日志脱敏；协议升 v1.1；UptimeRobot 外部拨测 | 运维 | 各功能生产可用（运维总纲 §5.5）；**当前生产镜像 sha 与 0.1.5 是否在产待核对** | `openbridger:59c0971a9` |
 
-> **版本核对缺口（2026-10-10 发现）**：生产 `/api/status` 报告版本 `0.1.0`，仓库 VERSION 已是 `0.1.5`。`v0.1.4`（9c8b9789b）的 VERSION 文件仍为 0.1.0，故版本号无法区分 0.1.0–0.1.4；若生产运行的是含 5609c71f5 的镜像，版本应报 0.1.5。下次登机执行 `docker inspect repo-openbridger-1 --format '{{.Config.Image}}'` 核对镜像 sha、补齐本表，并补打 `v0.1.5` tag（R7 出口条件：生产版本 = tag）。
+> **版本核对缺口（2026-10-10 发现）**：生产 `/api/status` 报告版本 `0.1.0`，仓库 VERSION 已是 `0.1.5`。`v0.1.4`（9c8b9789b）的 VERSION 文件仍为 0.1.0，故版本号无法区分 0.1.0–0.1.4；若生产运行的是含 5609c71f5 的镜像，版本应报 0.1.5。`v0.1.5` tag 已于 2026-10-10 补打并随 PR #3 推送。剩余动作：SSH 登录服务器（`ssh ob-prod`）执行 `docker inspect repo-openbridger-1 --format '{{.Config.Image}}'` 核对镜像 sha、补齐本表（R7 出口条件：生产版本 = tag）。
 
 ### 与主版本相关的运行时变量
 
