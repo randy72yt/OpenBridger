@@ -33,6 +33,8 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 | 应用存活   | monitor.py → `127.0.0.1:3000/api/status` | 5 min   | 非 200 或超时        | 邮件（状态变化时） |
 | 容器存活   | monitor.py → docker ps                   | 5 min   | 3 容器缺一           | 同上        |
 | 磁盘     | monitor.py → df / 与 /var/lib/docker      | 5 min   | ≥85%             | 同上        |
+| **上游可用性** | monitor.py 真实调用拨测（`/v1/chat/completions`；模型见服务器 `/srv/openbridger/probe-model.txt`，默认 gpt-5.6-luna；令牌从 DB 取不落盘；时间戳节流，节流轮继承上次结论） | ≥15 min | 非 200 | 同上，**含恢复通知**（2026-10-11 上线，当日即捕获上游全挂） |
+| 内存     | monitor.py → MemAvailable                | 5 min   | < 200MB          | 同上        |
 | 备份新鲜度  | obctl backup-check（人工/周检）                | 按需      | latest dump >26h | 人工        |
 | 日志体量   | docker json-file 轮转                      | 持续      | 50m×3 自动截断       | —         |
 | 告警链路本身 | obctl alert-test                         | 每月/改配置后 | 测试邮件到达           | 人工        |
@@ -47,9 +49,10 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 | 盲区           | 影响                   | 补齐方式                                                                                  |
 | ------------ | -------------------- | ------------------------------------------------------------------------------------- |
 | 无外部拨测        | 服务器能自查但 CF/出口断时收不到告警 | ✅ 已解决（2026-09-27）：UptimeRobot 云看板上线，见 §1.1 |
-| 无请求错误率/延迟监控  | 上游 A 劣化只能从用户反馈发现 | 应用 logs 表已有用量记录；需要时写 SQL 查近 1h 错误占比                                                   |
+| 上游全挂无感知（本站 /api/status 仍 200） | 上游故障只能靠用户反馈/人工调用发现 | ✅ 已解决（2026-10-11）：monitor.py 真实调用拨测，见 §1.1；上线当日捕获上游全挂事故（incidents/2026-10-11） |
+| 无请求错误率/延迟监控  | 上游局部劣化（部分模型）只能从用户反馈发现 | 应用 logs 表已有用量记录；需要时写 SQL 查近 1h 错误占比（模型级拨测暂不做，避免日志/成本膨胀） |
 | 无 TLS 证书到期监控 | certbot 自动续签失败时无感知   | UptimeRobot 拨测 HTTPS 自带证书告警                                                           |
-| 内存无告警        | OOM 前无预警             | monitor.py 加一条 free 检查（P2）                                                            |
+| 内存无告警        | OOM 前无预警             | ✅ 已解决（2026-10-11）：monitor.py 加 MemAvailable 检查（<200MB） |
 
 ## 2. 数据备份与灾备
 

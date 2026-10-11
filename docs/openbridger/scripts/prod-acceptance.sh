@@ -91,7 +91,7 @@ check B6 "支付接口 /api/user/pay" "401|403" -X POST "$BASE/api/user/pay"
 
 echo
 echo "[C] 认证后闭环（需要 OB_API_KEY，可选 OB_TEST_MODEL 指定一个已上架模型）"
-TEST_MODEL="${OB_TEST_MODEL:-deepseek-v4-flash}"
+TEST_MODEL="${OB_TEST_MODEL:-gpt-5.6-luna}"
 if [ -n "$API_KEY" ]; then
   check C1 "用令牌取模型清单" "200" "$BASE/v1/models" -H "Authorization: Bearer $API_KEY"
   # 渠道已上架时的正向用例：真实模型必须 200（501/503 说明模型未定价或无可用渠道）
