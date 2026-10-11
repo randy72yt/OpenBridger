@@ -99,9 +99,10 @@ cd /srv/openbridger/repo && docker compose --env-file /srv/openbridger/.env -f c
 | 2026-09-21 | `1e93ef211` | `openbridger:1e93ef211` | 生产首次部署：MySQL/Redis/应用容器启动，`/api/status` 200 且容器 healthy | 运维 | 已启动，**尚未开放对外访问**（域名未解析、未初始化管理员） | 无上一个版本；异常时可 `docker compose down` 并用 systemctl 快照回滚 |
 | 2026-09-22 | `63fb5ea55` | `openbridger:63fb5ea55` | 邮件配额保护：发信入口 `common.SendEmail()` 加 Redis 每日上限（默认 80 封/天），防匿名接口耗尽 Resend 配额导致当天邮件静默失效 | 运维 | 已部署并 healthy；回归脚本 17 项全通过。配额拦截的端到端行为待首次发信后确认计数 | `openbridger:1e93ef211` |
 | 2026-09-26 | `59c0971a9`（tag `v0.1.0`） | `openbridger:59c0971a9` | 执行计划 A 阶段：v0.1.0 基线上线；协议 v1.0 写入 `legal` 段；生产回归 20/20 | 运维 | 已部署 healthy | `openbridger:63fb5ea55` |
-| 2026-09-27 | `ab26333c39`…`5609c71f5`（tag `v0.1.4` 在 `9c8b9789b`） | **待核对**（见下注） | 试运营批次：注册送额度 $1、兑换码、支持渠道露出、epay 在线支付开启、低余额提醒、支付完成跳转修复、支付下单合规校验、兑换码日志脱敏；协议升 v1.1；UptimeRobot 外部拨测 | 运维 | 各功能生产可用（运维总纲 §5.5）；**当前生产镜像 sha 与 0.1.5 是否在产待核对** | `openbridger:59c0971a9` |
+| 2026-09-27 | `ab26333c39`…`5609c71f5`（tag `v0.1.4` 在 `9c8b9789b`） | `openbridger:9c8b9789b`（已核对） | 试运营批次：注册送额度 $1、兑换码、支持渠道露出、epay 在线支付开启、低余额提醒、支付完成跳转修复、支付下单合规校验、兑换码日志脱敏；协议升 v1.1；UptimeRobot 外部拨测 | 运维 | 各功能生产可用（运维总纲 §5.5） | `openbridger:59c0971a9` |
+| 2026-10-11 | `426476ddb`（main，含 PR #3/#4/#5） | `openbridger:426476ddb` | v0.1.5 实际部署上产（此前生产停在 0.1.4）；obctl build 单分支克隆坑修复；验收 20/20（OB_TEST_MODEL=gpt-5.6-luna）；5 个上游故障模型按 E4 下架（38→33）；上游 A 同期大范围 503（见 incidents/2026-10-11） | 运维 | SMOKE PASS，`/api/status` version=0.1.5；B3 测试令牌确认早已删除 | `openbridger:9c8b9789b` |
 
-> **版本核对缺口（2026-10-10 发现）**：生产 `/api/status` 报告版本 `0.1.0`，仓库 VERSION 已是 `0.1.5`。`v0.1.4`（9c8b9789b）的 VERSION 文件仍为 0.1.0，故版本号无法区分 0.1.0–0.1.4；若生产运行的是含 5609c71f5 的镜像，版本应报 0.1.5。`v0.1.5` tag 已于 2026-10-10 补打并随 PR #3 推送。剩余动作：SSH 登录服务器（`ssh ob-prod`）执行 `docker inspect repo-openbridger-1 --format '{{.Config.Image}}'` 核对镜像 sha、补齐本表（R7 出口条件：生产版本 = tag）。
+> **版本核对缺口（已闭环）**：2026-10-10 发现生产报 0.1.0 而 VERSION 已 0.1.5；2026-10-11 核对生产实际运行 `openbridger:9c8b9789b`（= v0.1.4，VERSION 文件当时未同步），并于当日部署 `426476ddb`，现生产 `/api/status` 报 **0.1.5**，与仓库 VERSION 一致。遗留教训：v0.1.4 tag 的 VERSION 文件仍为 0.1.0——**发版时 VERSION 与 tag 必须同commit**（R7 已有此要求，0.1.4 执行时漏了）。
 
 ### 与主版本相关的运行时变量
 
