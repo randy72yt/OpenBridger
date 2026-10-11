@@ -48,6 +48,9 @@ GUARD_FILES=(
   model/task.go
 )
 SECURITY_RE='security|cve|vulnerab|xss|csrf|inject|bypass|提权|越权|泄露'
+# release notes 是行文 prose,宽词表会命中分区标题/功能名(如 "Security &"、host-injectable、bypass threshold);
+# notes 扫描只用窄词表:真正的漏洞语言
+SECURITY_NOTES_RE='cve|vulnerab|exploit|advisory|privilege escalation|安全漏洞|漏洞修复|提权|越权'
 TAG_RE='^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$'
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
@@ -85,15 +88,28 @@ range="$baseline_point..$latest"
 
 echo "==== 上游有新 release: $baseline_release → $latest ===="
 echo
+RELEASES="$(git tag -l | grep -E "$TAG_RE" | sort -V \
+           | awk -v b="$baseline_release" -v l="$latest" '$0==b{f=1;next} $0==l{print;exit} f{print}')"
 echo "-- 区间内 release(整合时逐个读 release notes):"
-for t in $(git tag -l | grep -E "$TAG_RE" | sort -V \
-           | awk -v b="$baseline_release" -v l="$latest" '$0==b{f=1;next} $0==l{print;exit} f{print}'); do
+for t in $RELEASES; do
   echo "  $t  $(git log -1 --format=%cd --date=short "$t" 2>/dev/null)"
 done
 echo
-echo "-- 安全相关提交(取舍规则:无条件摘):"
-sec="$(git log --format='  %h %s' "$range" | grep -iE "$SECURITY_RE" || true)"
-if [ -n "$sec" ]; then echo "$sec"; else echo "  (无关键词命中)"; fi
+sec_hit=0
+echo "-- 安全相关提交(取舍规则:无条件摘;test 基建类不计入,防误报):"
+sec="$(git log --format='%h %s' "$range" | grep -iE "$SECURITY_RE" | grep -viE '^[0-9a-f]+ test|_test\.go' || true)"
+if [ -n "$sec" ]; then echo "$sec"; sec_hit=1; else echo "  (无关键词命中)"; fi
+if command -v gh >/dev/null 2>&1; then
+  echo "  release notes 安全标记:"
+  for t in $RELEASES; do
+    body="$(gh api "repos/QuantumNous/new-api/releases/tags/$t" --jq .body 2>/dev/null || true)"
+    m="$(printf '%s' "$body" | grep -iE "$SECURITY_NOTES_RE" | head -1 || true)"
+    if [ -n "$m" ]; then echo "  🔴 $t: $(printf '%s' "$m" | cut -c1-90)"; sec_hit=1; fi
+  done
+  [ "$sec_hit" -eq 0 ] && echo "  (各 release notes 无安全关键词)"
+else
+  echo "  (无 gh,跳过 release notes 扫描——结论仅依据提交信息)"
+fi
 echo
 echo "-- 热区文件命中(我们就地修改过的上游文件,整合需人工合并):"
 hit=0
@@ -119,5 +135,11 @@ echo "  relay/channel(新适配器): ${stat:-无变化}"
 stat="$(git diff --stat "$range" -- relay | tail -1 || true)"
 echo "  relay/ 总量: ${stat:-无变化}"
 echo
-echo "NEXT: 按 docs/openbridger/skills/openbridger-upstream-sync/SKILL.md 流程整合(取舍规则见 ops-handbook §5.6)。"
+if [ "$sec_hit" -eq 1 ]; then
+  echo "结论: 🔴 存在安全相关变更——触发入口①,尽快按 SKILL.md 整合(至少摘安全部分)。"
+  echo "NEXT: 按 docs/openbridger/skills/openbridger-upstream-sync/SKILL.md 流程整合(取舍规则见 ops-handbook §5.6)。"
+else
+  echo "结论: ⚪ 无安全命中——本次可整段跳过,在 state.md 记一行「检查-跳过」即可。"
+  echo "落后不是负债(§5.6 定策:不追 latest)。整合只由四个入口触发:①安全(本行)②需求(要上某新模型/渠道)③事故(疑似上游已修的 bug)④迁移(上游计费实现满足三条件)。"
+fi
 exit 2

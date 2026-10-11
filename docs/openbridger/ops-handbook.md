@@ -183,6 +183,17 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 
 操作口径：分支上 `git checkout upstream/main -- <路径>` 搬文件 → 三库矩阵 + 前端构建 + `obctl accept`（须 20/20）→ **PR 留痕**（流程模板：PR #3）。
 
+**何时整合（2026-10-10 定，消灭开放式判断）**：只有四个入口，**没有「到时间了就整合」**——
+
+| 入口 | 信号 | 谁发现 |
+| --- | --- | --- |
+| ① 安全 | 检查脚本结论 🔴（提交宽词表 + release notes 窄词表，test 基建类过滤防误报） | 月检自动 |
+| ② 需求 | 要上某新模型 / 新渠道 | 用户/运营自然知道 |
+| ③ 事故 | 我们踩到的 bug 疑似上游已修 | incident 处置时反查 |
+| ④ 迁移 | 上游计费实现满足三条件（见下文阵地段） | 年度评估 |
+
+除四个入口外一律不整合；脚本结论 ⚪ = 在 state.md 记一行「检查-跳过」即完事，落后 release 数不是负债、不需要清零。
+
 就地修改面登记：`git diff 6298b0f32 HEAD --name-status` 中的 M 文件即对上游文件的就地修改。2026-10-10 基线：新增（A）115 个文件、就地修改（M）69 个——其中**后端核心就地修改仅约 15 个**（`common/email.go`、`controller/topup.go`/`user.go`/`audit.go`、`model/main.go` 及定价相关、`router/*.go`、`setting/operation_setting`），其余为 web 品牌文案、i18n、构建配置，冲突机械好解。原则：**能放新文件就不改上游文件；新增就地修改保持最小，并在下次盘点时更新本节数字**。
 
 工具化（2026-10-10）：检查器 `scripts/upstream-sync-check.sh`（比对 `releases/latest` 与 `skills/openbridger-upstream-sync/state.md` 基线——无变化 exit 0 跳过，有变化 exit 2 输出报告：区间 release 列表 / 安全关键词命中 / 热区文件命中 / 计费阵地命中 / relay 规模）；整合流程封装为技能 `skills/openbridger-upstream-sync/`（自包含，任何 AI 工具可执行）。热区与阵地清单以脚本内 `HOT_FILES`/`GUARD_FILES` 数组与本节登记为准，同步维护。
