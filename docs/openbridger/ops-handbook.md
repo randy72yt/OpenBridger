@@ -161,7 +161,7 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 | 兑换码 | 已开通：Beta 批次两档（面额与张数明细见后台兑换码管理页，不入册）；用户控制台「充值与支付」自助兑换 | 后台批量生成（单次上限 100 张）；发额度 = 发个码，不再改库 |
 | **自助在线支付充值** | 已开通（`OPENBRIDGER_ONLINE_PAYMENT_ENABLED=true`），支付方式仅保留支付宝/微信（最低 ¥10；$10 → ¥73，按 1 USD=¥7.30）。订单创建、签名、回调地址均正常；**支付完成后跳 `/wallet?pay=success`**（v0.1.4 修复，原为 `/usage-logs`） | ⚠️ **当前不可付款**：epay 网关返回「该域名不可发起支付：域名没过白」，需商户在柠檬支付后台把 `openbridger.com` 加入支付域名白名单 |
 | **低余额自动提醒** | 内置：消费后余额 < `QuotaRemindThreshold=250000`（$0.5）自动发邮件，含钱包充值链接 | 改 `QuotaRemindThreshold`；用户级阈值用 `QuotaWarningThreshold` |
-| 定价页 | `/pricing` 已开放（`HeaderNavModules.pricing.enabled=true`，无需登录）；数据来自 `/api/pricing`（38 个模型，35 个带计费表达式，v4 峰谷表达式已核对保留） | 要下线：把 pricing.enabled 改 false |
+| 定价页 | `/pricing` 已开放（`HeaderNavModules.pricing.enabled=true`，无需登录）；数据来自 `/api/pricing`（**33 个模型**，2026-10-11 按 E4 下架 5 个上游故障模型后；v4 峰谷表达式已核对保留） | 要下线：把 pricing.enabled 改 false |
 | 支付合规确认 | `payment_setting.compliance_*` 已确认（user 1，v1） | 该字段禁止走通用 option 接口，只能在后台确认 |
 | 支持渠道 | 页脚挂 `support@openbridger.com` + 状态页链接；docs 站新增「联系与故障申报」页（中英） | 页脚改 `Footer` option（支持 HTML）；docs 改 `docs-site/src/pages*/guide--support.md` 后 `node scripts/build.mjs` + rsync 到 `/srv/openbridger/docs-site/` |
 | status 子域 | 用 UptimeRobot 默认地址（免费计划不支持自定义域名） | 想要 `status.openbridger.com` 需在 CF 配 Redirect Rule |

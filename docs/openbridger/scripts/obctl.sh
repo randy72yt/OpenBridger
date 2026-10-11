@@ -120,7 +120,11 @@ cmd_build() {
   cd "$REPO" || die "repo 不存在"
   hdr "Build $tag（2C4G 串行补丁，nohup 后台）"
   git fetch --tags --quiet || die "git fetch 失败"
+  # 服务器 repo 为单分支克隆时,refs/remotes 与本地分支都不会随 --tags 更新;
+  # 显式拉取目标 ref 并快进,否则 checkout 到过期提交(2026-10-10 实际踩到:build main 打到 9-26 旧码)
+  git fetch --quiet origin "$tag" || die "git fetch $tag 失败"
   git checkout --quiet "$tag" || die "checkout $tag 失败"
+  git merge --ff-only "origin/$tag" 2>/dev/null || true
   local short; short=$(git rev-parse --short HEAD)
   cp Dockerfile.dev /tmp/Dockerfile.dev.orig
   sed -i "s|^RUN go build|ENV GOFLAGS=-p=1 GOMAXPROCS=1\nRUN go build|" Dockerfile.dev
