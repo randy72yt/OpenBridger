@@ -19,7 +19,9 @@ docs/openbridger/scripts/upstream-sync-check.sh
 ```
 
 - **exit 0**:上游 release 未变 → 回报「无变化」即可结束,顺手把 `state.md` 的 `last_check` 更新为今天。
-- **exit 2**:输出整合报告 → 继续 Step 1。
+- **exit 2**:看报告末尾「结论」行——
+  - **⚪ 无安全命中**:本次跳过。在 `state.md` 决策日志追加「检查-跳过(⚪)」并更新 `last_check`,结束。**不需要用户决策——落后是定策不是负债**。
+  - **🔴 安全命中**:触发入口①,继续 Step 1(时间紧可只摘安全部分)。
 
 ### Step 1 读报告 + release notes
 
