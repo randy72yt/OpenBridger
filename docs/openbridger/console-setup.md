@@ -185,7 +185,7 @@ Please, add and verify your domain on https://resend.com/domains
 | SMTP 通道与凭证 | 服务器用 Python `smtplib.SMTP_SSL("smtp.resend.com", 465)` + `login("resend", API_KEY)` 发信 | `RESULT: SENT OK`，邮件已投递 |
 | 应用代码路径 | 管理员在 `/security` 绑定邮箱，触发应用发验证码 | 待执行 |
 
-**遗留**：根域 SPF 记录未配置（`dig TXT openbridger.com` 无 `v=spf1`）。DKIM 已生效（`resend._domainkey`）。Resend 靠 DKIM 对齐即可通过多数收件方，但微软系/企业邮箱可能扣分进垃圾箱，建议按 Resend 给出的清单补齐 SPF。CF 控制台的「DMARC Management」页面显示 DKIM `No, Fail` 属误报——它只扫常见 selector，不认 `resend._domainkey`，不要被它误导去改 DKIM。
+**遗留已解决（2026-10-13）**：根域 SPF 已存在——`v=spf1 include:_spf.mx.cloudflare.net include:amazonses.com ~all`（amazonses.com 即 Resend 现行发信底层；`_spf.resend.com` 已不存在，旧资料给的该值作废）；DMARC `p=none` 已配。DKIM 此前已生效（`resend._domainkey`）。Resend 靠 DKIM 对齐即可通过多数收件方，但微软系/企业邮箱可能扣分进垃圾箱，建议按 Resend 给出的清单补齐 SPF。CF 控制台的「DMARC Management」页面显示 DKIM `No, Fail` 属误报——它只扫常见 selector，不认 `resend._domainkey`，不要被它误导去改 DKIM。
 
 **兼容性已确认**：`common/email.go:45` 在 `SMTPSSLEnabled=true` 时走 `tls.Dial`，`AutoSMTPAuth` 默认选 PLAIN——Resend 两者都支持。
 

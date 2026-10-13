@@ -50,7 +50,7 @@
 | HSTS | `strict-transport-security: max-age=2592000; includeSubDomains`，`x-content-type-options: nosniff` | 2026-09-21 已开；max-age 先设 1 个月，**Preload 未开**（不可逆） |
 | 管理员双因子 | TOTP `is_enabled=1` + Passkey 已注册（2026-09-21） | `two_fas`、`passkey_credentials` 均有记录；备份码 4 条需离线保管。缺陷与修复见 [控制台指引 15.1](./console-setup.md#151-passkey-注册失败与修复2026-09-21) |
 
-未完成、需运维处理（2026-10-10 收敛）：根域 SPF 仍缺失（DKIM 已生效，微软系/企业邮箱可能进垃圾箱，按 Resend 清单补 TXT）；Turnstile Secret 曾两次明文泄露，**放量前必须轮换**（执行计划 B2）；CF SSL 若升级 Full(strict)，`api` 子域需先签含该主机名的证书（现源站证书 CN 不含 api，否则 526）。已完成项：MFA/Passkey（09-21）、SMTP/Turnstile 启用（09-21/22）、MySQL root 轮换（09-27，B1）。
+未完成、需运维处理（2026-10-13 收敛）：~~根域 SPF 缺失~~（已解决：dig 实测 SPF/DKIM/DMARC 三件套齐，SPF 含 amazonses.com 即 Resend 现行发信底层，_spf.resend.com 已不存在勿用）；Turnstile Secret 曾两次明文泄露，**放量前必须轮换**（执行计划 B2）；CF SSL 若升级 Full(strict)，`api` 子域需先签含该主机名的证书（现源站证书 CN 不含 api，否则 526）。已完成项：MFA/Passkey（09-21）、SMTP/Turnstile 启用（09-21/22）、MySQL root 轮换（09-27，B1）。
 
 ### Nginx 配置资产（2026-09-22 上线）
 

@@ -27,7 +27,7 @@ OpenBridger 是面向大学生、开发者和团队的 AI API 网关，通过统
 | 主数据库 | SQLite/MySQL/PostgreSQL | 生产用本机容器 MySQL 8.0；三库兼容矩阵已验证 |
 | 缓存与限流 | Redis/内存 | 生产用本机容器 Redis 7 + Nginx 边缘限流 + 应用层配额与邮件日限额 |
 | 支付 | epay（柠檬支付） | 已接入并开启（2026-09-26，支付宝/微信，最低 ¥10）；**网关域名白名单未过、实际不可付款** |
-| 邮件与验证 | Resend SMTP、邮箱验证、密码恢复 | 已配置（DKIM 生效、根域 SPF 缺）；Turnstile 已启用 |
+| 邮件与验证 | Resend SMTP、邮箱验证、密码恢复 | 已配置（SPF/DKIM/DMARC 三件套齐（2026-10-13 dig 实测：SPF 已存在 v=spf1 include:_spf.mx.cloudflare.net include:amazonses.com ~all——amazonses 即 Resend 现行发信底层；DKIM、DMARC p=none 均在。注意 Resend 现不再提供 _spf.resend.com，旧文档给的该值已作废））；Turnstile 已启用 |
 
 ## 4. 已确认决定
 
@@ -82,7 +82,7 @@ OpenBridger 是面向大学生、开发者和团队的 AI API 网关，通过统
 | 上游 A | 模型上游（渠道 #1，当前唯一） | 已接入（40 模型同步、真实调用 200 验证、账单对账方法已验证）；无第二渠道 |
 | 上游 B | 模型上游候选 | 未采用（备选） |
 | DNS（Cloudflare） | 主站 / 文档站 / api 子域 | 已配置在线（api 子域 2026-09-27 补齐） |
-| Resend | 注册验证、找回密码、告警邮件 | 已配置（DKIM ✅、根域 SPF ✗）；免费版 100 封/天，本站应用层限 80 |
+| Resend | 注册验证、找回密码、告警邮件 | 已配置（SPF/DKIM/DMARC ✅，2026-10-13 实测）；免费版 100 封/天，本站应用层限 80 |
 | Redis | 缓存、限流 | 本机容器（不异地，已接受，见 dr-plan §8） |
 | epay（柠檬支付） | 在线充值 | 已配置并开启；**支付域名白名单待商户后台操作，当前不可付款** |
 
@@ -110,7 +110,7 @@ OpenBridger 是面向大学生、开发者和团队的 AI API 网关，通过统
 | RISK-103 | ~~无限额测试令牌仍在产~~ | 已解决：2026-10-11 核对 tokens 表，agent-verify 早已删除，仅存 yuntao-main | — | — |
 | RISK-104 | 单上游 A，无故障转移 | 上游故障 = 推理全停（**2026-10-11 实证**：上游内部调度故障全模型 503，见 incidents/2026-10-11） | 页面不宣传可用性承诺；monitor.py 只测本站、对上游全挂无感知 | 第二渠道与切换验证（rftiXH）**优先级上调**；monitor.py 加真实调用拨测（P1） |
 | RISK-105 | 异地备份依赖 Mac 每日开机拉取 | 灾难时异地副本滞后 | 服务器本地日×7 + 周×4 | 对象存储双写（约 ¥1/月） |
-| RISK-106 | 根域 SPF 缺失（DKIM 已生效） | 微软系/企业邮箱可能进垃圾箱 | Resend DKIM 对齐 | 按 Resend 清单补 SPF TXT 记录 |
+| RISK-106 | ~~根域 SPF 缺失~~ | 已解决：2026-10-13 dig 实测 SPF/DKIM/DMARC 均在（SPF 含 amazonses.com=Resend 现行发信层；DMARC p=none） | — | 可选：DMARC 后续从 p=none 收紧 |
 | RISK-107 | 1.6Gi 小机、无内存告警 | OOM 无预警 | 2G swap；禁止服务器上构建 | monitor.py 加 free 检查（P2） |
 | RISK-108 | ~~生产版本号与仓库不一致~~ | 已解决：2026-10-11 核对生产为 v0.1.4 并部署 426476ddb，现生产报 0.1.5 与仓库一致；教训入册（发版时 VERSION 与 tag 同 commit） | — | — |
 | RISK-109 | 全量 P0 验收（G1）与试运行巡检（G3）未执行留痕 | 带病放量风险 | 每版发版跑 obctl accept 20/20 | 填署 production-acceptance §12/§13；创建 trial-daily-log |
