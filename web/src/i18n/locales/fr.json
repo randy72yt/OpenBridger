@@ -1,5 +1,6 @@
 {
   "translation": {
+    "0 keeps manual approval. A positive value publishes increases within that many basis points.": "0 conserve l'approbation manuelle. Une valeur positive publie les hausses dans cette limite de points de base.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
@@ -617,6 +618,7 @@
     "Auto-discover": "Découverte automatique",
     "Auto-discovers endpoints from the provider": "Découvre automatiquement les points de terminaison du fournisseur",
     "Auto-fill when one field exists and another is missing": "Remplissage automatique si un champ existe et l'autre est manquant",
+    "Auto-publish change (BPS)": "Variation de publication automatique (pb)",
     "Auto-refreshing every {{seconds}}s": "Actualisation automatique toutes les {{seconds}} s",
     "Auto-retry status codes": "Codes de statut de nouvelle tentative auto",
     "Automatically disable channel on repeated failures": "Désactiver automatiquement le canal en cas d'échecs répétés",

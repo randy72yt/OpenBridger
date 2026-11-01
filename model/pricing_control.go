@@ -237,6 +237,29 @@ func ListModelPriceProposals(status string) ([]ModelPriceProposal, error) {
 	return proposals, err
 }
 
+func LoadModelPriceProposalForUpdate(tx *gorm.DB, id int64) (ModelPriceProposal, error) {
+	var proposal ModelPriceProposal
+	err := lockForUpdate(tx).Where("id = ?", id).First(&proposal).Error
+	return proposal, err
+}
+
+func LoadModelPricePolicyForUpdate(tx *gorm.DB, id int64) (ModelPricePolicy, error) {
+	var policy ModelPricePolicy
+	err := lockForUpdate(tx).Where("id = ?", id).First(&policy).Error
+	return policy, err
+}
+
+// RejectOtherApprovedPriceProposals retires unpublished approvals for one
+// public model so an older approval cannot be published over a newer price.
+func RejectOtherApprovedPriceProposals(tx *gorm.DB, publicModel string, exceptID int64) error {
+	if tx == nil || strings.TrimSpace(publicModel) == "" {
+		return errors.New("proposal is required")
+	}
+	return tx.Model(&ModelPriceProposal{}).
+		Where("public_model = ? AND status = ? AND id <> ?", publicModel, PricingProposalApproved, exceptID).
+		Updates(map[string]any{"status": PricingProposalRejected, "updated_at": common.GetTimestamp()}).Error
+}
+
 func ReplacePendingModelPriceProposal(proposal *ModelPriceProposal) error {
 	if proposal == nil {
 		return errors.New("proposal is required")

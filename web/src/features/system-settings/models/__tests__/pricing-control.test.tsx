@@ -78,7 +78,31 @@ describe('pricing control policy form', () => {
         minimum_margin_bps: 2000,
         overhead_bps: 500,
         fallback_probability_bps: 1000,
+        auto_publish_change_bps: 0,
         enabled: true,
+      })
+    )
+  })
+
+  it('submits the auto-publish band entered in the form', () => {
+    const onSave = vi.fn()
+    render(<PricingControlPolicyForm saving={false} onSave={onSave} />)
+
+    fireEvent.change(screen.getByLabelText('Public model'), {
+      target: { value: 'gpt-5.4-mini' },
+    })
+    fireEvent.change(screen.getByLabelText('Primary channel'), {
+      target: { value: '11' },
+    })
+    fireEvent.change(screen.getByLabelText('Auto-publish change (BPS)'), {
+      target: { value: '500' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save pricing policy' }))
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        public_model: 'gpt-5.4-mini',
+        auto_publish_change_bps: 500,
       })
     )
   })

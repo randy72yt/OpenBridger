@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -210,14 +211,20 @@ func ValidateAndUpsertPricePolicy(policy *model.ModelPricePolicy) error {
 }
 
 func RecalculatePricingProposals(ctx context.Context) (int, error) {
+	created, _, err := recalculatePricingProposals(ctx)
+	return created, err
+}
+
+func recalculatePricingProposals(ctx context.Context) (int, []int64, error) {
 	policies, err := model.ListModelPricePolicies()
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	created := 0
+	ids := make([]int64, 0)
 	for i := range policies {
 		if ctx != nil && ctx.Err() != nil {
-			return created, ctx.Err()
+			return created, ids, ctx.Err()
 		}
 		policy := policies[i]
 		if !policy.Enabled || policy.PriceLocked {
@@ -228,14 +235,18 @@ func RecalculatePricingProposals(ctx context.Context) (int, error) {
 			if errors.Is(err, ErrPricingOfferMissing) || errors.Is(err, ErrPricingCostInvalid) {
 				continue
 			}
-			return created, err
+			return created, ids, err
 		}
 		if err := model.ReplacePendingModelPriceProposal(proposal); err != nil {
-			return created, err
+			return created, ids, err
 		}
+		if proposal.ID <= 0 {
+			return created, ids, errors.New("pricing proposal id was not assigned")
+		}
+		ids = append(ids, proposal.ID)
 		created++
 	}
-	return created, nil
+	return created, ids, nil
 }
 
 func buildPriceProposal(policy *model.ModelPricePolicy) (*model.ModelPriceProposal, error) {
@@ -410,11 +421,7 @@ func PublishPricingProposal(id int64) error {
 	if proposal.ServiceTier != "default" {
 		return errors.New("only the default service tier can publish a global model price")
 	}
-	expression := fmt.Sprintf("tier(\"base\", p * %s + c * %s)", formatPricingValue(proposal.ProposedInputPrice), formatPricingValue(proposal.ProposedOutputPrice))
-	change := model.ModelPricingChange{
-		ModelName: proposal.PublicModel, ExpectedVersion: proposal.PricingVersion,
-		Pricing: model.PricingValues{"billing_setting.billing_mode": "tiered_expr", "billing_setting.billing_expr": expression},
-	}
+	change := pricingChangeForProposal(&proposal)
 	if err := model.UpdateModelPricing([]model.ModelPricingChange{change}); err != nil {
 		return err
 	}
@@ -469,6 +476,282 @@ func validPriceNumber(value float64) bool {
 func roundPricingValue(value float64) float64 { return math.Round(value*1e8) / 1e8 }
 func formatPricingValue(value float64) string {
 	return strconv.FormatFloat(roundPricingValue(value), 'f', -1, 64)
+}
+
+func pricingChangeForProposal(proposal *model.ModelPriceProposal) model.ModelPricingChange {
+	expression := fmt.Sprintf("tier(\"base\", p * %s + c * %s)", formatPricingValue(proposal.ProposedInputPrice), formatPricingValue(proposal.ProposedOutputPrice))
+	return model.ModelPricingChange{
+		ModelName: proposal.PublicModel, ExpectedVersion: proposal.PricingVersion,
+		Pricing: model.PricingValues{"billing_setting.billing_mode": "tiered_expr", "billing_setting.billing_expr": expression},
+	}
+}
+
+// simpleBaseTierExpr matches the expression PublishPricingProposal writes.
+// Anything with cache, tools, or extra tiers stays on manual review.
+var simpleBaseTierExpr = regexp.MustCompile(`^tier\("base",\s*p\s*\*\s*[0-9]+(?:\.[0-9]+)?\s*\+\s*c\s*\*\s*[0-9]+(?:\.[0-9]+)?\s*\)$`)
+
+var autoPublishBlockedPricingKeys = []string{
+	"AudioCompletionRatio", "AudioRatio", "CacheRatio", "CreateCacheRatio", "ImageRatio",
+}
+
+var errPricingAutoPublishSkip = errors.New("pricing auto-publish skipped")
+
+// PricingAutoPublishStats is attached to a pricing_offer_sync task result.
+type PricingAutoPublishStats struct {
+	Published int                      `json:"published"`
+	Skipped   int                      `json:"skipped"`
+	Skips     []PricingAutoPublishSkip `json:"skips,omitempty"`
+	Error     string                   `json:"error,omitempty"`
+}
+
+type PricingAutoPublishSkip struct {
+	ProposalID  int64  `json:"proposal_id"`
+	PublicModel string `json:"public_model,omitempty"`
+	Reason      string `json:"reason"`
+}
+
+func pricingAutoPublishEnabled() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("PRICING_AUTO_PUBLISH")), "true")
+}
+
+// AutoPublishEligibleProposals publishes pending default-tier proposals that
+// pass the unattended gates. Each proposal commits in its own transaction.
+// Proposals that fail a gate stay pending.
+func AutoPublishEligibleProposals(ctx context.Context, proposalIDs []int64) PricingAutoPublishStats {
+	stats := PricingAutoPublishStats{}
+	if len(proposalIDs) == 0 {
+		return stats
+	}
+	operator, err := pricingAutoPublishOperator()
+	if err != nil {
+		stats.Skipped = len(proposalIDs)
+		stats.Error = err.Error()
+		return stats
+	}
+	for i, id := range proposalIDs {
+		if ctx != nil && ctx.Err() != nil {
+			stats.Error = ctx.Err().Error()
+			stats.Skipped += len(proposalIDs) - i
+			return stats
+		}
+		published, skip, err := autoPublishProposal(id, operator)
+		if err != nil {
+			stats.Error = err.Error()
+			stats.Skipped += len(proposalIDs) - i
+			return stats
+		}
+		if skip.Reason != "" {
+			stats.Skipped++
+			stats.Skips = append(stats.Skips, skip)
+			continue
+		}
+		if published != nil {
+			stats.Published++
+			recordPricingAutoPublishAudit(operator, "pricing.proposal.approve", published.ID)
+			recordPricingAutoPublishAudit(operator, "pricing.proposal.publish", published.ID)
+		}
+	}
+	return stats
+}
+
+func pricingAutoPublishOperator() (*model.User, error) {
+	raw := strings.TrimSpace(os.Getenv("PRICING_AUTO_PUBLISH_OPERATOR_ID"))
+	if raw == "" {
+		return nil, errors.New("PRICING_AUTO_PUBLISH_OPERATOR_ID is required when PRICING_AUTO_PUBLISH=true")
+	}
+	id, err := strconv.Atoi(raw)
+	if err != nil || id <= 0 {
+		return nil, errors.New("PRICING_AUTO_PUBLISH_OPERATOR_ID must be a positive user id")
+	}
+	user, err := model.GetUserById(id, false)
+	if err != nil {
+		return nil, fmt.Errorf("PRICING_AUTO_PUBLISH_OPERATOR_ID: %w", err)
+	}
+	if user.Role != common.RoleRootUser || user.Status != common.UserStatusEnabled {
+		return nil, errors.New("PRICING_AUTO_PUBLISH_OPERATOR_ID must be an enabled root user")
+	}
+	return user, nil
+}
+
+func autoPublishProposal(id int64, operator *model.User) (*model.ModelPriceProposal, PricingAutoPublishSkip, error) {
+	skip := PricingAutoPublishSkip{ProposalID: id}
+	var published *model.ModelPriceProposal
+	err := model.MutateModelPricing(func(tx *gorm.DB, values map[string]map[string]any) error {
+		proposal, err := model.LoadModelPriceProposalForUpdate(tx, id)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				skip.Reason = "not_pending"
+				return errPricingAutoPublishSkip
+			}
+			return err
+		}
+		skip.PublicModel = proposal.PublicModel
+		if proposal.Status != model.PricingProposalPending {
+			skip.Reason = "not_pending"
+			return errPricingAutoPublishSkip
+		}
+		policy, err := model.LoadModelPricePolicyForUpdate(tx, proposal.PolicyID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				skip.Reason = "policy_unavailable"
+				return errPricingAutoPublishSkip
+			}
+			return err
+		}
+		offersOK := pricingOffersCurrent(tx, &policy)
+		reason := autoPublishSkipReason(&policy, &proposal, model.EffectiveModelPricing(values, proposal.PublicModel), offersOK)
+		if reason != "" {
+			skip.Reason = reason
+			return errPricingAutoPublishSkip
+		}
+		if err := model.RejectOtherApprovedPriceProposals(tx, proposal.PublicModel, proposal.ID); err != nil {
+			return err
+		}
+		change := pricingChangeForProposal(&proposal)
+		if err := model.ApplyModelPricingChange(values, change); err != nil {
+			if errors.Is(err, model.ErrModelPricingConflict) {
+				skip.Reason = "stale_version"
+				return errPricingAutoPublishSkip
+			}
+			return err
+		}
+		now := common.GetTimestamp()
+		result := tx.Model(&model.ModelPriceProposal{}).
+			Where("id = ? AND status = ?", proposal.ID, model.PricingProposalPending).
+			Updates(map[string]any{
+				"status":       model.PricingProposalPublished,
+				"approved_by":  operator.Id,
+				"approved_at":  now,
+				"published_at": now,
+				"updated_at":   now,
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrPricingProposalState
+		}
+		published = &proposal
+		return nil
+	})
+	if errors.Is(err, errPricingAutoPublishSkip) {
+		return nil, skip, nil
+	}
+	if err != nil {
+		return nil, PricingAutoPublishSkip{}, err
+	}
+	return published, PricingAutoPublishSkip{}, nil
+}
+
+func pricingOffersCurrent(tx *gorm.DB, policy *model.ModelPricePolicy) bool {
+	now := common.GetTimestamp()
+	if _, err := currentOfferWithDB(tx, policy.PublicModel, policy.PrimaryChannelID, now); err != nil {
+		return false
+	}
+	if policy.BackupChannelID > 0 {
+		if _, err := currentOfferWithDB(tx, policy.PublicModel, policy.BackupChannelID, now); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
+func autoPublishSkipReason(policy *model.ModelPricePolicy, proposal *model.ModelPriceProposal, effective model.PricingValues, offersOK bool) string {
+	if policy == nil || policy.ID == 0 || policy.PublicModel != proposal.PublicModel {
+		return "policy_unavailable"
+	}
+	if !policy.Enabled {
+		return "policy_disabled"
+	}
+	if policy.PriceLocked {
+		return "price_locked"
+	}
+	if proposal.ServiceTier != "default" || policy.ServiceTier != "default" {
+		return "service_tier"
+	}
+	if !offersOK {
+		return "offer_stale"
+	}
+	if policy.AutoPublishChangeBPS <= 0 {
+		return "auto_publish_disabled"
+	}
+	if !pricingShapeAllowsAutoPublish(effective) {
+		return "pricing_shape"
+	}
+	expression, _ := effective["billing_setting.billing_expr"].(string)
+	currentInput, currentOutput, priced := liveTokenPrices(expression)
+	proposedInput := roundPricingValue(proposal.ProposedInputPrice)
+	proposedOutput := roundPricingValue(proposal.ProposedOutputPrice)
+	if priced && proposedInput == currentInput && proposedOutput == currentOutput {
+		return "unchanged"
+	}
+	if priced && (proposedInput < currentInput || proposedOutput < currentOutput) {
+		return "price_cut"
+	}
+	if !priced ||
+		!priceChangeWithinBPS(currentInput, proposedInput, policy.AutoPublishChangeBPS) ||
+		!priceChangeWithinBPS(currentOutput, proposedOutput, policy.AutoPublishChangeBPS) {
+		return "change_band"
+	}
+	if proposal.ExpectedMarginBPS < policy.MinimumMarginBPS {
+		return "margin"
+	}
+	return ""
+}
+
+func pricingShapeAllowsAutoPublish(effective model.PricingValues) bool {
+	for _, key := range autoPublishBlockedPricingKeys {
+		if _, exists := effective[key]; exists {
+			return false
+		}
+	}
+	expression, _ := effective["billing_setting.billing_expr"].(string)
+	expression = strings.TrimSpace(expression)
+	if expression == "" {
+		return true
+	}
+	return simpleBaseTierExpr.MatchString(expression)
+}
+
+func liveTokenPrices(expression string) (float64, float64, bool) {
+	expression = strings.TrimSpace(expression)
+	if expression == "" {
+		return 0, 0, false
+	}
+	input, _, inputErr := billingexpr.RunExpr(expression, billingexpr.TokenParams{P: 1, Len: 1})
+	output, _, outputErr := billingexpr.RunExpr(expression, billingexpr.TokenParams{C: 1})
+	if inputErr != nil || outputErr != nil || !validPriceNumber(input) || !validPriceNumber(output) || input <= 0 || output <= 0 {
+		return 0, 0, false
+	}
+	return roundPricingValue(input), roundPricingValue(output), true
+}
+
+func priceChangeWithinBPS(current, proposed float64, limit int) bool {
+	if current <= 0 || limit <= 0 || !validPriceNumber(current) || !validPriceNumber(proposed) {
+		return false
+	}
+	change := int(math.Round((proposed/current - 1) * 10000))
+	if change < 0 {
+		change = -change
+	}
+	return change <= limit
+}
+
+func recordPricingAutoPublishAudit(operator *model.User, action string, proposalID int64) {
+	params := map[string]interface{}{"id": proposalID, "auto": true}
+	content := action
+	switch action {
+	case "pricing.proposal.approve":
+		content = fmt.Sprintf("Approved pricing proposal %d", proposalID)
+	case "pricing.proposal.publish":
+		content = fmt.Sprintf("Published pricing proposal %d", proposalID)
+	}
+	model.RecordOperationAuditLog(operator.Id, operator.Role, content, "", action, params, &model.AuditAdminInfo{
+		AdminID:       operator.Id,
+		AdminUsername: operator.Username,
+		AdminRole:     operator.Role,
+		AuthMethod:    "system_task",
+	}, nil)
 }
 
 type pricingRecalculateHandler struct{}

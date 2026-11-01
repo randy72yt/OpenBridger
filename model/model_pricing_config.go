@@ -286,22 +286,54 @@ func UpdateModelPricing(changes []ModelPricingChange) error {
 	return mutateModelPricingOptions(func(_ *gorm.DB, values map[string]map[string]any) error {
 		defaults := defaultPricingMaps()
 		for _, change := range changes {
-			if ModelPricingVersion(modelPricingValues(values, change.ModelName)) != change.ExpectedVersion {
-				return fmt.Errorf("%w: %s", ErrModelPricingConflict, change.ModelName)
-			}
 			pricing := change.Pricing
 			if change.Reset {
 				pricing = modelPricingValues(defaults, change.ModelName)
 			}
-			for _, key := range modelPricingOptionKeys {
-				delete(values[key], change.ModelName)
-				if value, exists := pricing[key]; exists {
-					values[key][change.ModelName] = value
-				}
+			if err := writeModelPricingValues(values, change.ModelName, change.ExpectedVersion, pricing); err != nil {
+				return err
 			}
 		}
 		return nil
 	})
+}
+
+// MutateModelPricing serializes selling-price writes. fn may update other rows
+// on the same transaction and edit the pricing maps. Option rows commit only
+// when fn returns nil; the in-memory price cache refreshes after that commit.
+func MutateModelPricing(fn func(tx *gorm.DB, values map[string]map[string]any) error) error {
+	return mutateModelPricingOptions(fn)
+}
+
+// ApplyModelPricingChange stages one model price onto the locked pricing maps.
+// The caller must be inside MutateModelPricing.
+func ApplyModelPricingChange(values map[string]map[string]any, change ModelPricingChange) error {
+	if err := ValidateModelPricing(change.ModelName, change.Pricing); err != nil {
+		return err
+	}
+	return writeModelPricingValues(values, change.ModelName, change.ExpectedVersion, change.Pricing)
+}
+
+// EffectiveModelPricing resolves configured prices plus built-in expressions
+// and alias defaults for one model. values is the locked option map.
+func EffectiveModelPricing(values map[string]map[string]any, name string) PricingValues {
+	return effectiveModelPricing(values, name)
+}
+
+func writeModelPricingValues(values map[string]map[string]any, name, expectedVersion string, pricing PricingValues) error {
+	if name == "" || expectedVersion == "" || ModelPricingVersion(modelPricingValues(values, name)) != expectedVersion {
+		if name == "" {
+			return ErrModelPricingConflict
+		}
+		return fmt.Errorf("%w: %s", ErrModelPricingConflict, name)
+	}
+	for _, key := range modelPricingOptionKeys {
+		delete(values[key], name)
+		if value, exists := pricing[key]; exists {
+			values[key][name] = value
+		}
+	}
+	return nil
 }
 
 // UpdateModelPricingOptions keeps legacy single-option callers on the same

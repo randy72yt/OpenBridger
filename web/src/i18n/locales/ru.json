@@ -1,5 +1,6 @@
 {
   "translation": {
+    "0 keeps manual approval. A positive value publishes increases within that many basis points.": "0 оставляет ручное утверждение. Положительное значение публикует повышения в пределах указанного числа базисных пунктов.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
@@ -617,6 +618,7 @@
     "Auto-discover": "Автообнаружение",
     "Auto-discovers endpoints from the provider": "Автоматически обнаруживает конечные точки от провайдера",
     "Auto-fill when one field exists and another is missing": "Автозаполнение, когда одно поле есть, а другое отсутствует",
+    "Auto-publish change (BPS)": "Порог автопубликации (б.п.)",
     "Auto-refreshing every {{seconds}}s": "Автообновление каждые {{seconds}} с",
     "Auto-retry status codes": "Коды авто-повтора",
     "Automatically disable channel on repeated failures": "Автоматически отключать канал при повторных неудачах",

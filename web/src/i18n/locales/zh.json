@@ -1,5 +1,6 @@
 {
   "translation": {
+    "0 keeps manual approval. A positive value publishes increases within that many basis points.": "0 表示仍需人工审批。大于 0 时，涨幅在该基点以内会自动发布。",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
@@ -617,6 +618,7 @@
     "Auto-discover": "自动发现",
     "Auto-discovers endpoints from the provider": "自动从提供商发现端点",
     "Auto-fill when one field exists and another is missing": "在一个字段有值、另一个缺失时自动补齐",
+    "Auto-publish change (BPS)": "自动发布涨幅（基点）",
     "Auto-refreshing every {{seconds}}s": "每 {{seconds}} 秒自动刷新",
     "Auto-retry status codes": "自动重试状态码",
     "Automatically disable channel on repeated failures": "重复失败时自动禁用渠道",
