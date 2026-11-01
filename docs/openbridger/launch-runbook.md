@@ -277,8 +277,18 @@ curl -s http://127.0.0.1:3000/api/status | head -c 300
 
 ### S24 设置毛利与人工审批
 
-设置目标毛利与最低价 → 生成定价方案 → **人工审核后发布**（任务不会自动发布售价）。
+设置目标毛利与最低价 → 生成定价方案 → **人工审核后发布**。
+`PRICING_CONTROL_ENABLED=true` 只负责定时同步和生成待审方案，不会改售价。
 通过标准：方案可生成、可审核、可发布；发布后前台售价与方案一致；BILL-003、BILL-004 通过。
+
+可选自动发布（默认关闭）。要让主节点在每轮 `pricing_offer_sync` 成功导入并重算后直接写售价：
+
+1. 主节点设置 `PRICING_AUTO_PUBLISH=true`。不要用 `PRICING_CONTROL_ENABLED` 代替它。
+2. 设置 `PRICING_AUTO_PUBLISH_OPERATOR_ID` 为一名启用中的 root 用户 ID。批准和发布审计记在该用户下。
+3. 在「动态定价控制」里把要自动发布的模型策略设为 `default` 档，并把「自动发布涨幅（基点）」设为大于 0（最大 5000，即 50%）。0 仍走人工审批。
+4. 重启主进程。同步间隔是 `PRICING_OFFER_SYNC_INTERVAL_MINUTES`（默认 60，最少 15）。
+
+下列方案会留在待审列表，不会自动发布：建议价低于现售价；输入或输出涨幅超过带宽；预期毛利低于 `minimum_margin_bps`；还没有可比较的现售价；表达式不是空也不是 `tier("base", p * … + c * …)`，或带有缓存/音频/图像倍率；策略锁定、禁用、非 default 档或报价已过期。建议价与现售价相同时不改写。`pricing_recalculate` 和页面上的「同步上游价格」都不会自动发布。任务结果在 `system_tasks.result.auto_publish`（`published` / `skipped`）。操作者无效或写库失败时该轮任务为 failed，导入统计仍留在 result 里。
 
 ---
 

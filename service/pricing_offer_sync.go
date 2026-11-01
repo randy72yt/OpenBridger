@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	"github.com/QuantumNous/new-api/setting/billing_setting"
@@ -32,6 +33,7 @@ type PricingOfferSyncResult struct {
 	Imported         int                             `json:"imported"`
 	Skipped          int                             `json:"skipped"`
 	CreatedProposals int                             `json:"created_proposals,omitempty"`
+	AutoPublish      *PricingAutoPublishStats        `json:"auto_publish,omitempty"`
 	Channels         []PricingOfferSyncChannelResult `json:"channels"`
 }
 
@@ -257,14 +259,40 @@ func (pricingOfferSyncHandler) Run(ctx context.Context, task *model.SystemTask, 
 		failSystemTask(task, runnerID, err)
 		return
 	}
-	result.CreatedProposals, err = RecalculatePricingProposals(ctx)
-	if err != nil {
+	if err := completePricingOfferSync(ctx, &result); err != nil {
+		if result.AutoPublish != nil {
+			logger.LogWarn(ctx, fmt.Sprintf("pricing auto-publish failed: %s", err.Error()))
+			if finishErr := model.FinishSystemTask(task.TaskID, runnerID, model.SystemTaskStatusFailed, result, err.Error()); finishErr != nil {
+				logSystemTaskLockError(ctx, task, finishErr)
+			}
+			return
+		}
 		failSystemTask(task, runnerID, err)
 		return
 	}
 	if err := model.FinishSystemTask(task.TaskID, runnerID, model.SystemTaskStatusSucceeded, result, ""); err != nil {
 		logSystemTaskLockError(ctx, task, err)
 	}
+}
+
+// completePricingOfferSync recalculates proposals after a successful import.
+// Selling prices change only when PRICING_AUTO_PUBLISH=true. The separate
+// pricing_recalculate task stays proposal-only.
+func completePricingOfferSync(ctx context.Context, result *PricingOfferSyncResult) error {
+	created, ids, err := recalculatePricingProposals(ctx)
+	if err != nil {
+		return err
+	}
+	result.CreatedProposals = created
+	if !pricingAutoPublishEnabled() {
+		return nil
+	}
+	stats := AutoPublishEligibleProposals(ctx, ids)
+	result.AutoPublish = &stats
+	if stats.Error != "" {
+		return errors.New(stats.Error)
+	}
+	return nil
 }
 
 func init() { RegisterSystemTaskHandler(pricingOfferSyncHandler{}) }

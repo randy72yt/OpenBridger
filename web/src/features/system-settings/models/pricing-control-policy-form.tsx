@@ -120,6 +120,26 @@ export function PricingControlPolicyForm(props: PricingControlPolicyFormProps) {
           />
         </div>
       ))}
+      <div className='space-y-2 md:col-span-2'>
+        <Label htmlFor='pricing-auto-publish-change'>
+          {t('Auto-publish change (BPS)')}
+        </Label>
+        <Input
+          id='pricing-auto-publish-change'
+          type='number'
+          min={0}
+          max={5000}
+          value={policy.auto_publish_change_bps}
+          onChange={(event) =>
+            setNumber('auto_publish_change_bps', event.target.value)
+          }
+        />
+        <p className='text-muted-foreground text-xs'>
+          {t(
+            '0 keeps manual approval. A positive value publishes increases within that many basis points.'
+          )}
+        </p>
+      </div>
       <div className='flex items-center gap-3 md:col-span-2'>
         <Switch
           id='pricing-policy-enabled'

@@ -1,5 +1,6 @@
 {
   "translation": {
+    "0 keeps manual approval. A positive value publishes increases within that many basis points.": "0 のときは手動承認のままです。正の値にすると、そのベーシスポイント以内の値上げを自動公開します。",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
@@ -617,6 +618,7 @@
     "Auto-discover": "自動検出",
     "Auto-discovers endpoints from the provider": "プロバイダーからエンドポイントを自動検出します",
     "Auto-fill when one field exists and another is missing": "一方のフィールドがあり他方が欠けている場合に自動補完",
+    "Auto-publish change (BPS)": "自動公開の変動幅（BPS）",
     "Auto-refreshing every {{seconds}}s": "{{seconds}} 秒ごとに自動更新",
     "Auto-retry status codes": "自動リトライするステータスコード",
     "Automatically disable channel on repeated failures": "繰り返しの失敗でチャネルを自動的に無効にする",
