@@ -89,7 +89,7 @@
 
 ## 当前发布目标
 
-发布策略：**注册常开**（2026-09-22 确定，不走邀请制），新用户注册送 $1 额度（`QuotaForNewUser=500000`）；**在线支付已开启**（2026-09-26 用户拍板，epay 支付宝/微信，最低 ¥10），但 epay 网关因支付域名未加白名单**当前实际不可付款**（柠檬支付商户后台操作，见[运维总纲](./ops-handbook.md) §6 缺口 #3）；额度发放走兑换码（Beta 批次，明细见后台）。API Base URL：`https://openbridger.com/v1`。
+发布策略：**注册常开**（2026-09-22 确定，不走邀请制），新用户注册送 $1 额度（`QuotaForNewUser=500000`）；**在线支付已开启**（2026-09-26 用户拍板，epay 支付宝/微信，最低 ¥10）。epay 支付域名白名单已批准（2026-11-02 确认），在线支付不再受白名单阻断（见[运维总纲](./ops-handbook.md) §6 缺口 #3）；额度发放走兑换码（Beta 批次，明细见后台）。API Base URL：`https://openbridger.com/v1`。
 
 生产入口：
 
@@ -98,4 +98,4 @@
 - 文档站：`https://docs.openbridger.com`（2026-09-22 已部署上线）
 - 服务状态页：https://stats.uptimerobot.com/aHV66DcfpB
 
-域名 `openbridger.com` 在 Cloudflare，**已解析且已签发 HTTPS**。部署位置为阿里云轻量应用服务器（Ubuntu 24.04，2C/1.6Gi）——内存偏紧，镜像在运维本机构建后 `docker save | ssh docker load` 传上去。日常运维以[运维总纲](./ops-handbook.md)为入口；当前待办集中在[上线执行计划](./launch-execution-plan.md) 阶段 G（全量验收 + 试运行巡检）与支付白名单。
+域名 `openbridger.com` 在 Cloudflare，**已解析且已签发 HTTPS**。部署位置为阿里云轻量应用服务器（Ubuntu 24.04，2C/1.6Gi）——内存偏紧，镜像在运维本机构建后 `docker save | ssh docker load` 传上去。日常运维以[运维总纲](./ops-handbook.md)为入口；当前待办集中在[上线执行计划](./launch-execution-plan.md) 阶段 G（全量验收 + 试运行巡检）。epay 支付域名白名单已批准（2026-11-02 确认），在线支付不再受白名单阻断。
