@@ -36,13 +36,13 @@
 
 数据库与 Redis **不能**绑 `127.0.0.1`——应用容器经 docker0 网关访问宿主，绑 127.0.0.1 会 `connection refused`（2026-09-21 实际踩到）。
 
-## 3. 已完成的安全开关（2026-09-21 首测；注册/支付两行 2026-10-10 复核）
+## 3. 已完成的安全开关（2026-09-21 首测；注册/支付两行 2026-10-10 复核；支付白名单 2026-11-02 确认）
 
 | 项 | 值 | 验证方式 |
 | --- | --- | --- |
 | 公开注册 | `true`（2026-09-22 运营策略：注册常开；2026-09-27 上线注册送额度 `QuotaForNewUser=500000` 即 $1） | 2026-10-10 实测 `/api/status` `register_enabled=true` |
 | 密码注册 | `true`（邮箱验证 `email_verification=true` + Turnstile 保护） | 2026-10-10 实测 `password_register_enabled=true` |
-| 在线支付 | **已开启**（2026-09-26 用户拍板，`OPENBRIDGER_ONLINE_PAYMENT_ENABLED=true`；epay 支付宝/微信，最低 ¥10） | 订单创建/签名正常；**epay 网关域名白名单未过、实际不可付款**（柠檬支付商户后台待办，见运维总纲 §6 缺口 #3；PAY-001~003 未验收） |
+| 在线支付 | **已开启**（2026-09-26 用户拍板，`OPENBRIDGER_ONLINE_PAYMENT_ENABLED=true`；epay 支付宝/微信，最低 ¥10） | 订单创建/签名正常；**epay 支付域名白名单已批准（2026-11-02 确认），在线支付不再受白名单阻断**（运维总纲 §6 缺口 #3 已关闭；PAY-001~003 正式签署仍见生产验收表） |
 | Turnstile | **已启用**（`TurnstileCheckEnabled=true`，Site/Secret Key 已入库） | 未带 token 的登录请求返回 `{"message":"Turnstile token 为空"}`；Secret Key 经 CF siteverify 端点确认为有效（`invalid-input-response` 而非 `invalid-input-secret`） |
 | Cookie | `SESSION_COOKIE_SECURE=true`、`SESSION_COOKIE_TRUSTED_URL=https://openbridger.com` | `docker inspect` 已核对 |
 | 可信代理 | `TRUSTED_PROXIES=172.17.0.1` | 同上 |

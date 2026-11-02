@@ -1,6 +1,6 @@
 # OpenBridger 项目档案
 
-最后更新：2026-10-10（上次 2026-09-20。本次按当日生产实测与 git 记录全面刷新：生产已上线运行三周，§3/§6/§7/§8/§9 的「待准备/待确认」状态均已过期）
+最后更新：2026-11-02（epay 支付域名白名单状态。上次全面刷新 2026-10-10：按当日生产实测与 git 记录刷新，生产已上线运行三周，§3/§6/§7/§8/§9 的「待准备/待确认」状态均已过期）
 
 ## 1. 产品定位
 
@@ -26,7 +26,7 @@ OpenBridger 是面向大学生、开发者和团队的 AI API 网关，通过统
 | 动态定价控制 | `model/`、`service/`、`controller/` 与管理端 | 已上产开启（`PRICING_CONTROL_ENABLED=true`；42 条策略；定价页 38 模型、35 个带计费表达式） |
 | 主数据库 | SQLite/MySQL/PostgreSQL | 生产用本机容器 MySQL 8.0；三库兼容矩阵已验证 |
 | 缓存与限流 | Redis/内存 | 生产用本机容器 Redis 7 + Nginx 边缘限流 + 应用层配额与邮件日限额 |
-| 支付 | epay（柠檬支付） | 已接入并开启（2026-09-26，支付宝/微信，最低 ¥10）；**网关域名白名单未过、实际不可付款** |
+| 支付 | epay（柠檬支付） | 已接入并开启（2026-09-26，支付宝/微信，最低 ¥10）；**epay 支付域名白名单已批准（2026-11-02 确认），在线支付不再受白名单阻断** |
 | 邮件与验证 | Resend SMTP、邮箱验证、密码恢复 | 已配置（SPF/DKIM/DMARC 三件套齐（2026-10-13 dig 实测：SPF 已存在 v=spf1 include:_spf.mx.cloudflare.net include:amazonses.com ~all——amazonses 即 Resend 现行发信底层；DKIM、DMARC p=none 均在。注意 Resend 现不再提供 _spf.resend.com，旧文档给的该值已作废））；Turnstile 已启用 |
 
 ## 4. 已确认决定
@@ -84,7 +84,7 @@ OpenBridger 是面向大学生、开发者和团队的 AI API 网关，通过统
 | DNS（Cloudflare） | 主站 / 文档站 / api 子域 | 已配置在线（api 子域 2026-09-27 补齐） |
 | Resend | 注册验证、找回密码、告警邮件 | 已配置（SPF/DKIM/DMARC ✅，2026-10-13 实测）；免费版 100 封/天，本站应用层限 80 |
 | Redis | 缓存、限流 | 本机容器（不异地，已接受，见 dr-plan §8） |
-| epay（柠檬支付） | 在线充值 | 已配置并开启；**支付域名白名单待商户后台操作，当前不可付款** |
+| epay（柠檬支付） | 在线充值 | 已配置并开启；**epay 支付域名白名单已批准（2026-11-02 确认），在线支付不再受白名单阻断** |
 
 ## 8. 生产秘密登记
 
@@ -105,7 +105,7 @@ OpenBridger 是面向大学生、开发者和团队的 AI API 网关，通过统
 
 | 编号 | 风险 | 影响 | 当前控制 | 后续动作 |
 | --- | --- | --- | --- | --- |
-| RISK-101 | epay 支付域名未加白名单，充值闭环不可用 | 营收阻断 | 兑换码可应急发额度 | 商户后台加白 → ¥10 实测回调到账 → PAY-001~003 |
+| RISK-101 | ~~epay 支付域名未加白名单，充值闭环不可用~~ | 已解决：2026-11-02 用户确认 epay 支付域名白名单已批准，在线支付不再受白名单阻断 | — | — |
 | RISK-102 | Turnstile Secret 两次泄露未轮换 | 人机验证可被绕过 | 待轮换 | B2：放量前轮换并复测注册 |
 | RISK-103 | ~~无限额测试令牌仍在产~~ | 已解决：2026-10-11 核对 tokens 表，agent-verify 早已删除，仅存 yuntao-main | — | — |
 | RISK-104 | 单上游 A，无故障转移 | 上游故障 = 推理全停（**2026-10-11 实证**：上游内部调度故障全模型 503，见 incidents/2026-10-11） | 页面不宣传可用性承诺；monitor.py 只测本站、对上游全挂无感知 | 第二渠道与切换验证（rftiXH）**优先级上调**；monitor.py 加真实调用拨测（P1） |
@@ -122,5 +122,6 @@ OpenBridger 是面向大学生、开发者和团队的 AI API 网关，通过统
 | 2026-09-09 | 建立项目档案、生产验收和上线计划 | `docs/openbridger/` | 文档结构检查 |
 | 2026-09-20 | 确认 Release 1 邀请制文本模型试运行（后被取代），补定价同步可观测性及旧报价倍率回归 | `docs/openbridger/`、动态定价界面与三库矩阵 | 本地前端检查与 SQLite/MySQL/PostgreSQL 通过 |
 | 2026-10-10 | 按生产实测刷新档案：DEC-001~007 全部落定；依赖/秘密/风险表重写；记录支付白名单阻塞与版本核对缺口 | 本文件；`ops-inventory.md` §3/§5；`launch-execution-plan.md` 状态刷新；`README.md`；`launch-runbook.md` §2 | `/api/status` 实测 + git tag/VERSION 核对 |
+| 2026-11-02 | 按用户确认更新 epay 支付域名白名单状态：白名单已批准，在线支付不再受白名单阻断（RISK-101、运维总纲 §6 缺口 #3 关闭） | 本文件；`ops-handbook.md`；`ops-inventory.md`；`README.md`；`launch-execution-plan.md`；`launch-runbook.md`；`prelaunch-test-plan.md`；`production-acceptance.md`；`skills/openbridger-ops-agent/SKILL.md` | 用户于 2026-11-02 确认生产白名单已通过 |
 
 后续每次上线准备工作完成后在此追加一行，并在生产验收文档记录对应证据。
