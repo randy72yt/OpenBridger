@@ -29,6 +29,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Select,
   SelectContent,
@@ -114,6 +115,7 @@ export function SubscriptionPlansCard({
 
   const [purchaseOpen, setPurchaseOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<PlanRecord | null>(null)
+  const [periodKey, setPeriodKey] = useState('')
 
   const enableStripe = !!topupInfo?.enable_stripe_topup
   const enableCreem = !!topupInfo?.enable_creem_topup
@@ -219,6 +221,66 @@ export function SubscriptionPlansCard({
     return map
   }, [plans])
 
+  // Group plans by billing period (e.g. monthly vs semi-annual) so each
+  // cycle is shown on its own tab, mirroring the plan list layout.
+  const periodGroups = useMemo(() => {
+    const map = new Map<string, PlanRecord[]>()
+    for (const p of plans) {
+      const plan = p?.plan
+      if (!plan) continue
+      const unit = plan.duration_unit || 'month'
+      const value = Number(plan.duration_value || 1)
+      const key = `${unit}:${value}`
+      const list = map.get(key) || []
+      list.push(p)
+      map.set(key, list)
+    }
+    const monthlyPlans = map.get('month:1') || []
+    const groups = Array.from(map.entries())
+      .sort(([a], [b]) =>
+        a === 'month:1' ? -1 : b === 'month:1' ? 1 : a.localeCompare(b)
+      )
+      .map(([key, groupPlans]) => {
+        const [unit, valueStr] = key.split(':')
+        const value = Number(valueStr)
+        let label = `${value} ${unit}`
+        if (unit === 'month') {
+          if (value === 1) label = t('Monthly')
+          else if (value === 3) label = t('Quarterly')
+          else if (value === 6) label = t('Semi-Annually')
+          else if (value === 12) label = t('Yearly')
+        } else if (unit === 'year' && value === 1) {
+          label = t('Yearly')
+        }
+        // Savings vs paying monthly: match tiers by identical total quota.
+        let discountPercent: number | null = null
+        if (unit === 'month' && value > 1 && monthlyPlans.length > 0) {
+          for (const p of groupPlans) {
+            const match = monthlyPlans.find(
+              (m) =>
+                Number(m.plan.total_amount || 0) ===
+                Number(p.plan.total_amount || 0)
+            )
+            if (!match) continue
+            const full = Number(match.plan.price_amount || 0) * value
+            const price = Number(p.plan.price_amount || 0)
+            if (full > 0 && price > 0 && price < full) {
+              const pct = Math.round((1 - price / full) * 100)
+              if (discountPercent === null || pct > discountPercent) {
+                discountPercent = pct
+              }
+            }
+          }
+        }
+        return { key, label, discountPercent, groupPlans }
+      })
+    return groups
+  }, [plans, t])
+
+  const activePeriodKey = periodGroups.some((g) => g.key === periodKey)
+    ? periodKey
+    : (periodGroups[0]?.key || '')
+
   const getRemainingDays = (sub: UserSubscriptionRecord) => {
     const endTime = sub?.subscription?.end_time || 0
     if (!endTime) return 0
@@ -232,6 +294,113 @@ export function SubscriptionPlansCard({
     if (total <= 0) return 0
     return Math.round((used / total) * 100)
   }
+
+  const renderPlansGrid = (gridPlans: PlanRecord[]) => (
+    <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4 2xl:gap-4'>
+      {gridPlans.map((p, index) => {
+        const plan = p?.plan
+        if (!plan) return null
+        const totalAmount = Number(plan.total_amount || 0)
+        const isCNYPlan = (plan.currency || 'USD').toUpperCase() === 'CNY'
+        const price = `${isCNYPlan ? '¥' : '$'}${Number(
+          plan.price_amount || 0
+        ).toFixed(2)}`
+        const isPopular = index === 1 && gridPlans.length > 1
+        const limit = Number(plan.max_purchase_per_user || 0)
+        const count = planPurchaseCountMap.get(plan.id) || 0
+        const reached = limit > 0 && count >= limit
+
+        const benefits = [
+          `${t('Validity Period')}: ${formatDuration(plan, t)}`,
+          formatResetPeriod(plan, t) !== t('No Reset')
+            ? `${t('Quota Reset')}: ${formatResetPeriod(plan, t)}`
+            : null,
+          totalAmount > 0
+            ? `${t('Total Quota')}: ${formatQuota(totalAmount)}`
+            : `${t('Total Quota')}: ${t('Unlimited')}`,
+          limit > 0 ? `${t('Purchase Limit')}: ${limit}` : null,
+          plan.upgrade_group
+            ? `${t('Upgrade Group')}: ${plan.upgrade_group}`
+            : null,
+        ].filter(Boolean) as string[]
+
+        return (
+          <Card
+            key={plan.id}
+            data-card-hover='false'
+            className={cn(isPopular && 'border-primary/70 shadow-sm')}
+          >
+            <CardContent className='flex h-full flex-col p-3.5 sm:p-4'>
+              <div className='mb-2 flex items-start justify-between gap-3'>
+                <div className='min-w-0'>
+                  <h4 className='truncate font-semibold'>
+                    {plan.title || t('Subscription Plans')}
+                  </h4>
+                  {plan.subtitle && (
+                    <p className='text-muted-foreground truncate text-xs'>
+                      {plan.subtitle}
+                    </p>
+                  )}
+                </div>
+                {isPopular && (
+                  <StatusBadge
+                    variant='info'
+                    copyable={false}
+                    className='shrink-0'
+                  >
+                    <Sparkles className='h-3 w-3' />
+                    {t('Recommended')}
+                  </StatusBadge>
+                )}
+              </div>
+
+              <div className='py-2'>
+                <span className='text-primary text-2xl font-bold'>{price}</span>
+              </div>
+
+              <div className='flex-1 space-y-1.5 pb-3'>
+                {benefits.map((label) => (
+                  <div
+                    key={label}
+                    className='text-muted-foreground flex items-center gap-2 text-xs'
+                  >
+                    <Check className='text-primary h-3 w-3 shrink-0' />
+                    <span>{label}</span>
+                  </div>
+                ))}
+              </div>
+
+              <Separator className='mb-3' />
+
+              {reached ? (
+                <Tooltip>
+                  <TooltipTrigger render={<div />}>
+                    <Button variant='outline' className='w-full' disabled>
+                      {t('Limit Reached')}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {t('Purchase limit reached')} ({count}/{limit})
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <Button
+                  variant='outline'
+                  className='w-full'
+                  onClick={() => {
+                    setSelectedPlan(p)
+                    setPurchaseOpen(true)
+                  }}
+                >
+                  {t('Subscribe Now')}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })}
+    </div>
+  )
 
   if (loading) {
     return (
@@ -519,114 +688,31 @@ export function SubscriptionPlansCard({
           )}
         </div>
 
-        {/* Available plans grid */}
+        {/* Available plans grid, grouped by billing period */}
         {plans.length > 0 ? (
-          <div className='grid grid-cols-1 gap-3 2xl:grid-cols-2 2xl:gap-4'>
-            {plans.map((p, index) => {
-              const plan = p?.plan
-              if (!plan) return null
-              const totalAmount = Number(plan.total_amount || 0)
-              const isCNYPlan =
-                (plan.currency || 'USD').toUpperCase() === 'CNY'
-              const price = `${isCNYPlan ? '¥' : '$'}${Number(
-                plan.price_amount || 0
-              ).toFixed(2)}`
-              const isPopular = index === 0 && plans.length > 1
-              const limit = Number(plan.max_purchase_per_user || 0)
-              const count = planPurchaseCountMap.get(plan.id) || 0
-              const reached = limit > 0 && count >= limit
-
-              const benefits = [
-                `${t('Validity Period')}: ${formatDuration(plan, t)}`,
-                formatResetPeriod(plan, t) !== t('No Reset')
-                  ? `${t('Quota Reset')}: ${formatResetPeriod(plan, t)}`
-                  : null,
-                totalAmount > 0
-                  ? `${t('Total Quota')}: ${formatQuota(totalAmount)}`
-                  : `${t('Total Quota')}: ${t('Unlimited')}`,
-                limit > 0 ? `${t('Purchase Limit')}: ${limit}` : null,
-                plan.upgrade_group
-                  ? `${t('Upgrade Group')}: ${plan.upgrade_group}`
-                  : null,
-              ].filter(Boolean) as string[]
-
-              return (
-                <Card
-                  key={plan.id}
-                  data-card-hover='false'
-                  className={cn(isPopular && 'border-primary/70 shadow-sm')}
-                >
-                  <CardContent className='flex h-full flex-col p-3.5 sm:p-4'>
-                    <div className='mb-2 flex items-start justify-between gap-3'>
-                      <div className='min-w-0'>
-                        <h4 className='truncate font-semibold'>
-                          {plan.title || t('Subscription Plans')}
-                        </h4>
-                        {plan.subtitle && (
-                          <p className='text-muted-foreground truncate text-xs'>
-                            {plan.subtitle}
-                          </p>
-                        )}
-                      </div>
-                      {isPopular && (
-                        <StatusBadge
-                          variant='info'
-                          copyable={false}
-                          className='shrink-0'
-                        >
-                          <Sparkles className='h-3 w-3' />
-                          {t('Recommended')}
-                        </StatusBadge>
+          <div className='space-y-4'>
+            {periodGroups.length > 1 && (
+              <Tabs value={activePeriodKey} onValueChange={setPeriodKey}>
+                <TabsList>
+                  {periodGroups.map((g) => (
+                    <TabsTrigger key={g.key} value={g.key}>
+                      {g.label}
+                      {g.discountPercent !== null && (
+                        <span className='text-xs font-semibold text-red-500'>
+                          -{g.discountPercent}%
+                        </span>
                       )}
-                    </div>
-
-                    <div className='py-2'>
-                      <span className='text-primary text-2xl font-bold'>
-                        {price}
-                      </span>
-                    </div>
-
-                    <div className='flex-1 space-y-1.5 pb-3'>
-                      {benefits.map((label) => (
-                        <div
-                          key={label}
-                          className='text-muted-foreground flex items-center gap-2 text-xs'
-                        >
-                          <Check className='text-primary h-3 w-3 shrink-0' />
-                          <span>{label}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <Separator className='mb-3' />
-
-                    {reached ? (
-                      <Tooltip>
-                        <TooltipTrigger render={<div />}>
-                          <Button variant='outline' className='w-full' disabled>
-                            {t('Limit Reached')}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {t('Purchase limit reached')} ({count}/{limit})
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : (
-                      <Button
-                        variant='outline'
-                        className='w-full'
-                        onClick={() => {
-                          setSelectedPlan(p)
-                          setPurchaseOpen(true)
-                        }}
-                      >
-                        {t('Subscribe Now')}
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              )
-            })}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+                {periodGroups.map((g) => (
+                  <TabsContent key={g.key} value={g.key} className='mt-3'>
+                    {renderPlansGrid(g.groupPlans)}
+                  </TabsContent>
+                ))}
+              </Tabs>
+            )}
+            {periodGroups.length <= 1 && renderPlansGrid(plans)}
           </div>
         ) : (
           <p className='text-muted-foreground py-4 text-center text-sm'>

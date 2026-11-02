@@ -2335,7 +2335,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Related Projects",
     "footer.defaultCopyright": "All rights reserved.",
-    "footer.new\u0061pi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
+    "footer.newapi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment",
     "For developers and teams": "For developers and teams",
     "For private deployments, format: https://fastgpt.run/api/openapi": "For private deployments, format: https://fastgpt.run/api/openapi",
@@ -3804,7 +3804,7 @@
     "Peak": "Peak",
     "Peak throughput": "Peak throughput",
     "Penalises repetition of frequent tokens": "Penalises repetition of frequent tokens",
-    "pending": "pending",
+    "pending": "Pending",
     "Pending": "Pending",
     "per": "per",
     "Per 1K tokens": "Per 1K tokens",
@@ -4078,13 +4078,9 @@
     "No pricing proposals yet. Recalculate after importing upstream costs.": "No pricing proposals yet. Recalculate after importing upstream costs.",
     "Primary": "Primary",
     "Backup": "Backup",
-    "Expired": "Expired",
     "Valid": "Valid",
-    "Input": "Input",
-    "Output": "Output",
     "Worst": "Worst",
     "Stale": "Stale",
-    "pending": "Pending",
     "approved": "Approved",
     "published": "Published",
     "rejected": "Rejected",
@@ -6125,5 +6121,9 @@
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
     "Zoom": "Zoom"
-  }
+  },
+  "Monthly": "Monthly",
+  "Quarterly": "Quarterly",
+  "Semi-Annually": "Semi-Annually",
+  "Yearly": "Yearly"
 }
