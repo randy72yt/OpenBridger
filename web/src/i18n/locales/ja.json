@@ -6090,5 +6090,10 @@
   "Monthly": "月額",
   "Quarterly": "3ヶ月",
   "Semi-Annually": "半年",
-  "Yearly": "年額"
+  "Yearly": "年額",
+  "Rate Details": "料金明細",
+  "per month": "/月",
+  "Monthly quota": "月間枠",
+  "≈ {{price}} / month": "≈ {{price}} /月",
+  "Subscription quota covers all models on this site at the same per-token rates as wallet balance. See the pricing page for model-specific rates.": "サブスクリプション枠は全モデルで利用でき、トークン単位の課費はウォレット残高と同一です。モデル別料金は価格ページをご覧ください。"
 }

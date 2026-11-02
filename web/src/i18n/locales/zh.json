@@ -6125,5 +6125,10 @@
   "Monthly": "月付",
   "Quarterly": "季付",
   "Semi-Annually": "半年付",
-  "Yearly": "年付"
+  "Yearly": "年付",
+  "Rate Details": "费率明细",
+  "per month": "/月",
+  "Monthly quota": "每月额度",
+  "≈ {{price}} / month": "≈ {{price}} /月",
+  "Subscription quota covers all models on this site at the same per-token rates as wallet balance. See the pricing page for model-specific rates.": "套餐额度可用于全站所有模型，按 token 计费，费率与钱包余额一致；各模型具体费率请查看「定价」页。"
 }

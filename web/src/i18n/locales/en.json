@@ -6125,5 +6125,10 @@
   "Monthly": "Monthly",
   "Quarterly": "Quarterly",
   "Semi-Annually": "Semi-Annually",
-  "Yearly": "Yearly"
+  "Yearly": "Yearly",
+  "Rate Details": "Rate Details",
+  "per month": "per month",
+  "Monthly quota": "Monthly quota",
+  "≈ {{price}} / month": "≈ {{price}} / month",
+  "Subscription quota covers all models on this site at the same per-token rates as wallet balance. See the pricing page for model-specific rates.": "Subscription quota covers all models on this site at the same per-token rates as wallet balance. See the pricing page for model-specific rates."
 }

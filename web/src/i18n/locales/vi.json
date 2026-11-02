@@ -6090,5 +6090,10 @@
   "Monthly": "Hàng tháng",
   "Quarterly": "Hàng quý",
   "Semi-Annually": "6 tháng",
-  "Yearly": "Hàng năm"
+  "Yearly": "Hàng năm",
+  "Rate Details": "Chi tiết tỷ giá",
+  "per month": "/tháng",
+  "Monthly quota": "Hạn mức tháng",
+  "≈ {{price}} / month": "≈ {{price}} /tháng",
+  "Subscription quota covers all models on this site at the same per-token rates as wallet balance. See the pricing page for model-specific rates.": "Hạn mức gói dùng được cho mọi mô hình trên trang, tính phí theo token giống như số dư ví; xem trang giá cho mức giá từng mô hình."
 }

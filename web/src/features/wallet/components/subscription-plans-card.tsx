@@ -57,8 +57,10 @@ import type {
   PlanRecord,
   UserSubscriptionRecord,
 } from '@/features/subscriptions/types'
+import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { useSystemConfig } from '@/hooks/use-system-config'
 
 import type { PaymentMethod, TopupInfo } from '../types'
 
@@ -73,6 +75,30 @@ function getEpayMethods(payMethods: PaymentMethod[] = []): PaymentMethod[] {
   return payMethods.filter(
     (m) => m?.type && m.type !== 'stripe' && m.type !== 'creem'
   )
+}
+
+type RateCell = {
+  label: string
+  price: number
+  currency: string | undefined
+  months: number
+}
+
+type RateRow = {
+  title: string
+  total: number
+  cells: RateCell[]
+}
+
+// Convert a plan price from its settlement currency to system-USD so it can
+// be rendered in whatever display currency the site is configured for.
+function planAmountToDisplayUSD(
+  amount: number,
+  planCurrency: string | undefined,
+  usdExchangeRate: number
+): number {
+  const rate = usdExchangeRate > 0 ? usdExchangeRate : 1
+  return (planCurrency || 'USD').toUpperCase() === 'CNY' ? amount / rate : amount
 }
 
 function getBillingPreferenceLabel(
@@ -100,6 +126,11 @@ export function SubscriptionPlansCard({
   onPurchaseSuccess,
 }: SubscriptionPlansCardProps) {
   const { t } = useTranslation()
+  const { currency } = useSystemConfig()
+  const usdExchangeRate =
+    currency?.usdExchangeRate && currency.usdExchangeRate > 0
+      ? currency.usdExchangeRate
+      : 1
 
   const [plans, setPlans] = useState<PlanRecord[]>([])
   const [activeSubscriptions, setActiveSubscriptions] = useState<
@@ -281,6 +312,46 @@ export function SubscriptionPlansCard({
     ? periodKey
     : (periodGroups[0]?.key || '')
 
+  // Rows for the rate details table: one per tier (matched across billing
+  // periods by identical total quota), with each period's price.
+  const rateRows = useMemo(() => {
+    if (periodGroups.length === 0) return []
+    const monthlyGroup = periodGroups.find((g) => g.key === 'month:1')
+    const monthly = monthlyGroup?.groupPlans || []
+    const others = periodGroups.filter((g) => g.key !== 'month:1')
+    const base = monthly.length > 0 ? monthly : periodGroups[0].groupPlans
+    const rows = base.map((m) => {
+      const plan = m?.plan
+      if (!plan) return null
+      const total = Number(plan.total_amount || 0)
+      const cells = [
+        {
+          label: monthlyGroup ? monthlyGroup.label : periodGroups[0].label,
+          price: Number(plan.price_amount || 0),
+          currency: plan.currency,
+          months: 1,
+        },
+      ]
+      for (const g of others) {
+        const match = g.groupPlans.find(
+          (p) => Number(p.plan.total_amount || 0) === total
+        )
+        if (!match) continue
+        const [unit, valueStr] = g.key.split(':')
+        const months =
+          Number(valueStr || 1) * (unit === 'year' ? 12 : 1)
+        cells.push({
+          label: g.label,
+          price: Number(match.plan.price_amount || 0),
+          currency: match.plan.currency,
+          months,
+        })
+      }
+      return { title: plan.title || '', total, cells }
+    })
+    return rows.filter((r): r is RateRow => !!r && r.total > 0)
+  }, [periodGroups])
+
   const getRemainingDays = (sub: UserSubscriptionRecord) => {
     const endTime = sub?.subscription?.end_time || 0
     if (!endTime) return 0
@@ -301,10 +372,16 @@ export function SubscriptionPlansCard({
         const plan = p?.plan
         if (!plan) return null
         const totalAmount = Number(plan.total_amount || 0)
-        const isCNYPlan = (plan.currency || 'USD').toUpperCase() === 'CNY'
-        const price = `${isCNYPlan ? '¥' : '$'}${Number(
-          plan.price_amount || 0
-        ).toFixed(2)}`
+        const displayPrice = formatBillingCurrencyFromUSD(
+          planAmountToDisplayUSD(
+            Number(plan.price_amount || 0),
+            plan.currency,
+            usdExchangeRate
+          )
+        )
+        const isMonthly =
+          (plan.duration_unit || 'month') === 'month' &&
+          Number(plan.duration_value || 1) === 1
         const isPopular = index === 1 && gridPlans.length > 1
         const limit = Number(plan.max_purchase_per_user || 0)
         const count = planPurchaseCountMap.get(plan.id) || 0
@@ -316,7 +393,7 @@ export function SubscriptionPlansCard({
             ? `${t('Quota Reset')}: ${formatResetPeriod(plan, t)}`
             : null,
           totalAmount > 0
-            ? `${t('Total Quota')}: ${formatQuota(totalAmount)}`
+            ? `${t('Monthly quota')}: ${formatQuota(totalAmount)}`
             : `${t('Total Quota')}: ${t('Unlimited')}`,
           limit > 0 ? `${t('Purchase Limit')}: ${limit}` : null,
           plan.upgrade_group
@@ -330,14 +407,14 @@ export function SubscriptionPlansCard({
             data-card-hover='false'
             className={cn(isPopular && 'border-primary/70 shadow-sm')}
           >
-            <CardContent className='flex h-full flex-col p-3.5 sm:p-4'>
+            <CardContent className='flex h-full flex-col p-4 sm:p-5'>
               <div className='mb-2 flex items-start justify-between gap-3'>
                 <div className='min-w-0'>
                   <h4 className='truncate font-semibold'>
                     {plan.title || t('Subscription Plans')}
                   </h4>
                   {plan.subtitle && (
-                    <p className='text-muted-foreground truncate text-xs'>
+                    <p className='text-muted-foreground line-clamp-2 text-xs leading-relaxed'>
                       {plan.subtitle}
                     </p>
                   )}
@@ -354,15 +431,22 @@ export function SubscriptionPlansCard({
                 )}
               </div>
 
-              <div className='py-2'>
-                <span className='text-primary text-2xl font-bold'>{price}</span>
+              <div className='flex items-baseline gap-1 py-2'>
+                <span className='text-primary text-2xl font-bold'>
+                  {displayPrice}
+                </span>
+                {isMonthly && (
+                  <span className='text-muted-foreground text-xs'>
+                    {t('per month')}
+                  </span>
+                )}
               </div>
 
               <div className='flex-1 space-y-1.5 pb-3'>
                 {benefits.map((label) => (
                   <div
                     key={label}
-                    className='text-muted-foreground flex items-center gap-2 text-xs'
+                    className='text-muted-foreground flex items-center gap-2 text-xs leading-relaxed'
                   >
                     <Check className='text-primary h-3 w-3 shrink-0' />
                     <span>{label}</span>
@@ -713,6 +797,73 @@ export function SubscriptionPlansCard({
               </Tabs>
             )}
             {periodGroups.length <= 1 && renderPlansGrid(plans)}
+
+            {/* Rate details */}
+            <div className='rounded-xl border bg-muted/40 p-3 sm:p-4'>
+              <p className='text-sm font-medium'>{t('Rate Details')}</p>
+              <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
+                {t(
+                  'Subscription quota covers all models on this site at the same per-token rates as wallet balance. See the pricing page for model-specific rates.'
+                )}
+              </p>
+              {rateRows.length > 0 && (
+                <div className='mt-3 overflow-x-auto'>
+                  <table className='w-full text-left text-xs'>
+                    <thead className='text-muted-foreground'>
+                      <tr className='border-b'>
+                        <th className='py-1.5 pr-3 font-medium'>
+                          {t('Plan Name')}
+                        </th>
+                        <th className='py-1.5 pr-3 font-medium'>
+                          {t('Monthly quota')}
+                        </th>
+                        {rateRows[0].cells.map((c) => (
+                          <th key={c.label} className='py-1.5 pr-3 font-medium'>
+                            {c.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rateRows.map((row) => (
+                        <tr key={row.title} className='border-b last:border-0'>
+                          <td className='py-1.5 pr-3 font-medium'>
+                            {row.title}
+                          </td>
+                          <td className='py-1.5 pr-3'>
+                            {formatQuota(row.total)}
+                          </td>
+                          {row.cells.map((c) => (
+                            <td key={c.label} className='py-1.5 pr-3'>
+                              {formatBillingCurrencyFromUSD(
+                                planAmountToDisplayUSD(
+                                  c.price,
+                                  c.currency,
+                                  usdExchangeRate
+                                )
+                              )}
+                              {c.months > 1 && (
+                                <span className='text-muted-foreground ml-1'>
+                                  {t('≈ {{price}} / month', {
+                                    price: formatBillingCurrencyFromUSD(
+                                      planAmountToDisplayUSD(
+                                        c.price / c.months,
+                                        c.currency,
+                                        usdExchangeRate
+                                      )
+                                    ),
+                                  })}
+                                </span>
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <p className='text-muted-foreground py-4 text-center text-sm'>
