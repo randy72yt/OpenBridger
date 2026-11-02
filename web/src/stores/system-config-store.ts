@@ -32,6 +32,8 @@ export interface CurrencyConfig {
   quotaPerUnit: number
   /** Exchange rate from USD to the configured local currency */
   usdExchangeRate: number
+  /** Local currency price paid for 1 USD of recharge credit (recharge unit price) */
+  priceRatio: number
   /** Custom currency symbol configured by the admin (used when type === CUSTOM) */
   customCurrencySymbol: string
   /** Exchange rate from USD to the custom currency (used when type === CUSTOM) */
@@ -52,6 +54,7 @@ export const DEFAULT_CURRENCY_CONFIG: CurrencyConfig = {
   quotaDisplayType: 'USD',
   quotaPerUnit: 500000,
   usdExchangeRate: 1,
+  priceRatio: 1,
   customCurrencySymbol: '¤',
   customCurrencyExchangeRate: 1,
 }

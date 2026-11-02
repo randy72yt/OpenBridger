@@ -318,19 +318,51 @@ export function SubscriptionsMutateDrawer({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>{t('Plan Price')}</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type='number'
-                          step='0.01'
-                          min={0}
-                          onChange={(e) =>
-                            field.onChange(
-                              Number.parseFloat(e.target.value) || 0
-                            )
-                          }
+                      <div className='flex gap-2'>
+                        <FormField
+                          control={form.control}
+                          name='currency'
+                          render={({ currencyField }) => (
+                            <FormItem className='w-[110px] shrink-0'>
+                              <FormControl>
+                                <Select
+                                  items={[
+                                    { value: 'CNY', label: '¥ CNY' },
+                                    { value: 'USD', label: '$ USD' },
+                                  ]}
+                                  value={currencyField.value || 'USD'}
+                                  onValueChange={(v) =>
+                                    currencyField.onChange(v ?? 'USD')
+                                  }
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent alignItemWithTrigger={false}>
+                                    <SelectGroup>
+                                      <SelectItem value='CNY'>¥ CNY</SelectItem>
+                                      <SelectItem value='USD'>$ USD</SelectItem>
+                                    </SelectGroup>
+                                  </SelectContent>
+                                </Select>
+                              </FormControl>
+                            </FormItem>
+                          )}
                         />
-                      </FormControl>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            type='number'
+                            step='0.01'
+                            min={0}
+                            onChange={(e) =>
+                              field.onChange(
+                                Number.parseFloat(e.target.value) || 0
+                              )
+                            }
+                          />
+                        </FormControl>
+                      </div>
                       <FormDescription>
                         {t(
                           'Amount the user pays to purchase this plan; the actual currency depends on the payment gateway.'

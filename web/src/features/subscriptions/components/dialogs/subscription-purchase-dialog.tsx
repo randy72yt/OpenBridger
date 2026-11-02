@@ -87,14 +87,24 @@ export function SubscriptionPurchaseDialog(props: Props) {
     props.enableOnlineTopUp && (props.epayMethods || []).length > 0
   const hasAnyPayment = hasStripe || hasCreem || hasWaffoPancake || hasEpay
   const totalAmount = Number(plan.total_amount || 0)
-  const price = Number(plan.price_amount || 0).toFixed(2)
+  const isCNYPlan = (plan.currency || 'USD').toUpperCase() === 'CNY'
+  const currencySymbol = isCNYPlan ? '¥' : '$'
+  const price = `${currencySymbol}${Number(plan.price_amount || 0).toFixed(2)}`
   const quotaPerUnit =
     currency?.quotaPerUnit && currency.quotaPerUnit > 0
       ? currency.quotaPerUnit
       : DEFAULT_CURRENCY_CONFIG.quotaPerUnit
+  // CNY plans are priced in RMB; convert to system-USD via the recharge unit
+  // price so balance redemption matches the cash recharge value.
+  const priceRatio =
+    isCNYPlan && currency?.priceRatio && currency.priceRatio > 0
+      ? currency.priceRatio
+      : 1
   const balanceCost = Math.max(
     0,
-    Math.ceil(Number(plan.price_amount || 0) * quotaPerUnit)
+    Math.ceil(
+      (Number(plan.price_amount || 0) / priceRatio) * quotaPerUnit
+    )
   )
   const userQuota = Math.max(0, Number(props.userQuota || 0))
   const allowBalancePay = plan.allow_balance_pay !== false
@@ -306,7 +316,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
           <Separator />
           <div className='flex items-center justify-between'>
             <span className='text-sm font-medium'>{t('Amount Due')}</span>
-            <span className='text-primary text-lg font-bold'>${price}</span>
+            <span className='text-primary text-lg font-bold'>{price}</span>
           </div>
         </div>
 

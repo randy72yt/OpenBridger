@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -198,4 +200,36 @@ func TestAdminResetPlanSubscriptionsNoMatchSucceeds(t *testing.T) {
 	assert.Zero(t, result.ResetCount)
 	assert.Zero(t, result.UserCount)
 	assert.Empty(t, result.AffectedUserIds)
+}
+
+func TestCalcSubscriptionBalanceQuotaConvertsPlanCurrency(t *testing.T) {
+	truncateTables(t)
+	originalPrice := operation_setting.Price
+	originalQuotaPerUnit := common.QuotaPerUnit
+	t.Cleanup(func() {
+		operation_setting.Price = originalPrice
+		common.QuotaPerUnit = originalQuotaPerUnit
+	})
+	operation_setting.Price = 7.3
+	common.QuotaPerUnit = 500000
+
+	// USD plans convert 1:1 with quota-per-unit.
+	quota, err := calcSubscriptionBalanceQuota(&SubscriptionPlan{PriceAmount: 10, Currency: "USD"})
+	require.NoError(t, err)
+	assert.Equal(t, 5000000, quota)
+
+	// CNY plans convert via the recharge unit price: ¥19 / 7.3 ≈ $2.60.
+	quota, err = calcSubscriptionBalanceQuota(&SubscriptionPlan{PriceAmount: 19, Currency: "CNY"})
+	require.NoError(t, err)
+	assert.Equal(t, 1301370, quota)
+
+	// Unknown/empty currencies normalize to USD.
+	assert.Equal(t, "USD", NormalizePlanCurrency(""))
+	assert.Equal(t, "CNY", NormalizePlanCurrency("rmb"))
+	assert.Equal(t, "USD", NormalizePlanCurrency("EUR"))
+
+	// Zero-price plans cost nothing.
+	quota, err = calcSubscriptionBalanceQuota(&SubscriptionPlan{PriceAmount: 0, Currency: "CNY"})
+	require.NoError(t, err)
+	assert.Equal(t, 0, quota)
 }

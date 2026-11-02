@@ -10,6 +10,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/pkg/cachex"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/samber/hot"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
@@ -201,7 +202,20 @@ func (p *SubscriptionPlan) BeforeUpdate(tx *gorm.DB) error {
 	return nil
 }
 
+// NormalizePlanCurrency validates the plan currency. Only USD and CNY are
+// supported: USD plans price in system-USD units, CNY plans price in RMB and
+// are settled via RMB gateways (epay) or converted for balance purchase.
+func NormalizePlanCurrency(currency string) string {
+	switch strings.ToUpper(strings.TrimSpace(currency)) {
+	case "CNY", "RMB":
+		return "CNY"
+	default:
+		return "USD"
+	}
+}
+
 func (p *SubscriptionPlan) NormalizeDefaults() {
+	p.Currency = NormalizePlanCurrency(p.Currency)
 	if p.AllowBalancePay == nil {
 		p.AllowBalancePay = common.GetPointer(true)
 	}
@@ -739,14 +753,28 @@ func AdminBindSubscription(userId int, planId int, sourceNote string) (string, e
 	return "", nil
 }
 
-func calcSubscriptionBalanceQuota(priceAmount float64) (int, error) {
-	if priceAmount <= 0 {
+func calcSubscriptionBalanceQuota(plan *SubscriptionPlan) (int, error) {
+	if plan == nil || plan.PriceAmount <= 0 {
 		return 0, nil
 	}
 	if common.QuotaPerUnit <= 0 {
 		return 0, errors.New("额度单位配置错误")
 	}
-	quota := decimal.NewFromFloat(priceAmount).
+	priceUSD := plan.PriceAmount
+	if NormalizePlanCurrency(plan.Currency) == "CNY" {
+		// CNY plans are priced in RMB; convert to system-USD via the recharge
+		// unit price (Price = local currency paid per 1 USD of credit), so a
+		// balance purchase costs the same as recharging the equivalent amount.
+		rate := operation_setting.Price
+		if rate <= 0 {
+			rate = operation_setting.USDExchangeRate
+		}
+		if rate <= 0 {
+			return 0, errors.New("充值汇率配置错误")
+		}
+		priceUSD = plan.PriceAmount / rate
+	}
+	quota := decimal.NewFromFloat(priceUSD).
 		Mul(decimal.NewFromFloat(common.QuotaPerUnit)).
 		Ceil()
 	return common.WalletQuotaFromDecimalStrict(quota)
@@ -777,7 +805,7 @@ func PurchaseSubscriptionWithBalance(userId int, planId int) error {
 			return errors.New("该套餐不允许使用余额兑换")
 		}
 
-		requiredQuota, err := calcSubscriptionBalanceQuota(plan.PriceAmount)
+		requiredQuota, err := calcSubscriptionBalanceQuota(plan)
 		if err != nil {
 			return err
 		}
