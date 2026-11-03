@@ -367,7 +367,7 @@ export function SubscriptionPlansCard({
   }
 
   const renderPlansGrid = (gridPlans: PlanRecord[]) => (
-    <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4 2xl:gap-4'>
+    <div className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
       {gridPlans.map((p, index) => {
         const plan = p?.plan
         if (!plan) return null
