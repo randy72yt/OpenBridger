@@ -514,6 +514,82 @@ func pricingAutoPublishEnabled() bool {
 	return strings.EqualFold(strings.TrimSpace(os.Getenv("PRICING_AUTO_PUBLISH")), "true")
 }
 
+// pricingAutoPublishVerifySamples returns how many recent cost snapshots must
+// agree with the live offer before an unattended publish is allowed. Values
+// below 2 disable the multi-sample verification entirely (legacy behavior).
+func pricingAutoPublishVerifySamples() int {
+	samples := common.GetEnvOrDefault("PRICING_AUTO_PUBLISH_VERIFY_SAMPLES", 3)
+	if samples < 0 {
+		return 0
+	}
+	return samples
+}
+
+// pricingAutoPublishVerifyToleranceBPS is the allowed cost deviation between
+// the live offer and each verified snapshot, in basis points.
+func pricingAutoPublishVerifyToleranceBPS() int {
+	tolerance := common.GetEnvOrDefault("PRICING_AUTO_PUBLISH_VERIFY_TOLERANCE_BPS", 500)
+	if tolerance < 0 {
+		return 0
+	}
+	return tolerance
+}
+
+// pricingCostVerifyState reports whether multi-sample cost verification is
+// active and whether the policy's channels passed it.
+type pricingCostVerifyState struct {
+	Required bool
+	Passed   bool
+}
+
+func verifyPricingCosts(tx *gorm.DB, policy *model.ModelPricePolicy) pricingCostVerifyState {
+	state := pricingCostVerifyState{}
+	samples := pricingAutoPublishVerifySamples()
+	if samples < 2 {
+		return state
+	}
+	state.Required = true
+	tolerance := pricingAutoPublishVerifyToleranceBPS()
+	now := common.GetTimestamp()
+	channelIDs := []int{policy.PrimaryChannelID}
+	if policy.BackupChannelID > 0 && policy.BackupChannelID != policy.PrimaryChannelID {
+		channelIDs = append(channelIDs, policy.BackupChannelID)
+	}
+	for _, channelID := range channelIDs {
+		offer, err := currentOfferWithDB(tx, policy.PublicModel, channelID, now)
+		if err != nil {
+			return state
+		}
+		snapshots, err := model.RecentUpstreamCostSnapshots(tx, channelID, policy.PublicModel, samples)
+		if err != nil || len(snapshots) < samples {
+			return state
+		}
+		for _, snapshot := range snapshots {
+			if !costsWithinTolerance(offer.InputCost, snapshot.InputCost, tolerance) ||
+				!costsWithinTolerance(offer.OutputCost, snapshot.OutputCost, tolerance) {
+				return state
+			}
+		}
+	}
+	state.Passed = true
+	return state
+}
+
+func costsWithinTolerance(current, sampled float64, toleranceBPS int) bool {
+	if math.Abs(sampled) <= 1e-12 {
+		return math.Abs(current-sampled) <= 1e-12
+	}
+	return math.Abs(current-sampled) <= math.Abs(sampled)*float64(toleranceBPS)/10000
+}
+
+// pricingCoversStressCost is the absolute floor for unattended pricing: the
+// proposed prices must cover the worst-case (stress) procurement cost even
+// when the policy's minimum margin is zero.
+func pricingCoversStressCost(proposal *model.ModelPriceProposal) bool {
+	return roundPricingValue(proposal.ProposedInputPrice) >= roundPricingValue(proposal.StressInputCost) &&
+		roundPricingValue(proposal.ProposedOutputPrice) >= roundPricingValue(proposal.StressOutputCost)
+}
+
 // AutoPublishEligibleProposals publishes pending default-tier proposals that
 // pass the unattended gates. Each proposal commits in its own transaction.
 // Proposals that fail a gate stay pending.
@@ -599,7 +675,8 @@ func autoPublishProposal(id int64, operator *model.User) (*model.ModelPricePropo
 			return err
 		}
 		offersOK := pricingOffersCurrent(tx, &policy)
-		reason := autoPublishSkipReason(&policy, &proposal, model.EffectiveModelPricing(values, proposal.PublicModel), offersOK)
+		costVerify := verifyPricingCosts(tx, &policy)
+		reason := autoPublishSkipReason(&policy, &proposal, model.EffectiveModelPricing(values, proposal.PublicModel), offersOK, costVerify)
 		if reason != "" {
 			skip.Reason = reason
 			return errPricingAutoPublishSkip
@@ -656,7 +733,7 @@ func pricingOffersCurrent(tx *gorm.DB, policy *model.ModelPricePolicy) bool {
 	return true
 }
 
-func autoPublishSkipReason(policy *model.ModelPricePolicy, proposal *model.ModelPriceProposal, effective model.PricingValues, offersOK bool) string {
+func autoPublishSkipReason(policy *model.ModelPricePolicy, proposal *model.ModelPriceProposal, effective model.PricingValues, offersOK bool, costVerify pricingCostVerifyState) string {
 	if policy == nil || policy.ID == 0 || policy.PublicModel != proposal.PublicModel {
 		return "policy_unavailable"
 	}
@@ -685,7 +762,9 @@ func autoPublishSkipReason(policy *model.ModelPricePolicy, proposal *model.Model
 	if priced && proposedInput == currentInput && proposedOutput == currentOutput {
 		return "unchanged"
 	}
-	if priced && (proposedInput < currentInput || proposedOutput < currentOutput) {
+	// A price cut is only unattended-safe when the cost drop is confirmed by
+	// multiple consistent samples; otherwise it stays on manual review.
+	if priced && (proposedInput < currentInput || proposedOutput < currentOutput) && !(costVerify.Required && costVerify.Passed) {
 		return "price_cut"
 	}
 	if !priced ||
@@ -695,6 +774,12 @@ func autoPublishSkipReason(policy *model.ModelPricePolicy, proposal *model.Model
 	}
 	if proposal.ExpectedMarginBPS < policy.MinimumMarginBPS {
 		return "margin"
+	}
+	if !pricingCoversStressCost(proposal) {
+		return "below_cost"
+	}
+	if costVerify.Required && !costVerify.Passed {
+		return "cost_unverified"
 	}
 	return ""
 }

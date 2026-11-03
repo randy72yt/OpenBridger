@@ -55,6 +55,20 @@ type UpstreamCostSnapshot struct {
 	CollectedAt        int64    `json:"collected_at" gorm:"bigint;index"`
 }
 
+// RecentUpstreamCostSnapshots returns the newest snapshots for one model on
+// one channel (newest first), used to verify cost stability across syncs.
+func RecentUpstreamCostSnapshots(db *gorm.DB, channelID int, publicModel string, limit int) ([]UpstreamCostSnapshot, error) {
+	if db == nil || limit <= 0 {
+		return nil, nil
+	}
+	var snapshots []UpstreamCostSnapshot
+	err := db.Where("channel_id = ? AND public_model = ?", channelID, publicModel).
+		Order("collected_at desc, id desc").
+		Limit(limit).
+		Find(&snapshots).Error
+	return snapshots, err
+}
+
 type ModelPricePolicy struct {
 	ID                     int64  `json:"id" gorm:"primaryKey"`
 	PublicModel            string `json:"public_model" gorm:"type:varchar(191);uniqueIndex:idx_price_policy,priority:1"`

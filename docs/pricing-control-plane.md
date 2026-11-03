@@ -209,4 +209,6 @@ FetchHealth(ctx, channel)    -> 可选的余额和渠道状态
 
 DDD、CodeGo 的自动采集适配器仍需根据它们实际提供的价格接口、账号折扣、充值汇率和模型名称映射实现。适配器完成前不把其公开零售价直接当成 OpenBridger 采购成本，避免产生错误毛利。日志库成功率聚合和模型自动隐藏仍保留在后续阶段。
 
-售价默认仍由管理员批准后发布。主节点另设 `PRICING_AUTO_PUBLISH=true` 且 `PRICING_AUTO_PUBLISH_OPERATOR_ID` 为启用中的 root 用户时，只有 `pricing_offer_sync` 会在成功导入并重算后自动发布。模型策略的 `auto_publish_change_bps` 为 0 时保持人工审批；大于 0 时，仅当 default 档、报价有效、涨幅不超过该带宽、不低于现售价、预期毛利不低于 `minimum_margin_bps`，且现行表达式为空或已是 `tier("base", p * … + c * …)` 且没有缓存/音频/图像倍率时才写入售价。降价、超带宽、复杂表达式和首次没有现售价的模型继续留在待审列表。`pricing_recalculate` 不发布售价。
+售价默认仍由管理员批准后发布。主节点另设 `PRICING_AUTO_PUBLISH=true` 且 `PRICING_AUTO_PUBLISH_OPERATOR_ID` 为启用中的 root 用户时，只有 `pricing_offer_sync` 会在成功导入并重算后自动发布。模型策略的 `auto_publish_change_bps` 为 0 时保持人工审批；大于 0 时，仅当 default 档、报价有效、涨跌幅不超过该带宽、预期毛利不低于 `minimum_margin_bps`、建议售价不低于压力成本（`below_cost` 硬底线，即使最低毛利设为 0 也不会低于成本发布）、且现行表达式为空或已是 `tier("base", p * … + c * …)` 且没有缓存/音频/图像倍率时才写入售价。
+
+自动发布前还会做成本多次校验（`PRICING_AUTO_PUBLISH_VERIFY_SAMPLES`，默认 3，设 1 关闭）：主、备渠道的当前报价必须与最近 N 次同步采样的成本快照一致（容差 `PRICING_AUTO_PUBLISH_VERIFY_TOLERANCE_BPS`，默认 5%），否则跳过（`cost_unverified`），避免单次上游读数异常驱动无人值守调价。成本经多次采样确认一致的降价可以自动发布；未启用或未通过校验的降价、超带宽、复杂表达式和首次没有现售价的模型继续留在待审列表。`pricing_recalculate` 不发布售价。

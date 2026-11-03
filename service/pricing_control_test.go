@@ -297,12 +297,71 @@ func TestPricingAutoPublishGates(t *testing.T) {
 		requirePendingModel(t, name)
 	})
 
-	t.Run("a price cut stays manual", func(t *testing.T) {
+	t.Run("a price cut without cost verification stays manual", func(t *testing.T) {
 		truncate(t)
 		seedAutoPublishRoot(t, 46, common.UserStatusEnabled)
+		t.Setenv("PRICING_AUTO_PUBLISH_VERIFY_SAMPLES", "1")
 		const name = "auto-cut"
 		setSimpleSellPrice(t, name, 2, 10)
 		assert.Equal(t, "price_cut", autoPublishReason(t, prepareAndRecalculate(t, name, 5000)))
+		requirePendingModel(t, name)
+	})
+
+	t.Run("a verified price cut above cost publishes", func(t *testing.T) {
+		truncate(t)
+		seedAutoPublishRoot(t, 49, common.UserStatusEnabled)
+		const name = "auto-cut-verified"
+		setSimpleSellPrice(t, name, 2, 10)
+		ids := prepareAndRecalculate(t, name, 5000)
+		stats := AutoPublishEligibleProposals(context.Background(), ids)
+		require.Empty(t, stats.Error)
+		assert.Equal(t, 1, stats.Published)
+		var published model.ModelPriceProposal
+		require.NoError(t, model.DB.Where("public_model = ?", name).Order("id desc").First(&published).Error)
+		assert.Equal(t, model.PricingProposalPublished, published.Status)
+		pricing, err := model.GetModelPricingSnapshot([]string{name})
+		require.NoError(t, err)
+		assert.Equal(t, fmt.Sprintf("tier(\"base\", p * %s + c * %s)", formatPricingValue(published.ProposedInputPrice), formatPricingValue(published.ProposedOutputPrice)), pricing.Entries[0].Configured["billing_setting.billing_expr"])
+	})
+
+	t.Run("an unverified cost sample stays manual", func(t *testing.T) {
+		truncate(t)
+		seedAutoPublishRoot(t, 50, common.UserStatusEnabled)
+		const name = "auto-unverified"
+		setSimpleSellPrice(t, name, 1.5, 7.5)
+		// Only one import recorded, so the 3-sample default cannot verify.
+		qaSeedOffers(t, qaOffer(1, name, 1, 5))
+		policy := qaPolicy(name, "default", 1, 0, 3500, 2000, 0, 0)
+		policy.AutoPublishChangeBPS = 500
+		require.NoError(t, ValidateAndUpsertPricePolicy(policy))
+		_, ids, err := recalculatePricingProposals(context.Background())
+		require.NoError(t, err)
+		require.NotEmpty(t, ids)
+		assert.Equal(t, "cost_unverified", autoPublishReason(t, ids))
+		requirePendingModel(t, name)
+	})
+
+	t.Run("a price below stress cost stays manual", func(t *testing.T) {
+		truncate(t)
+		seedAutoPublishRoot(t, 51, common.UserStatusEnabled)
+		const name = "auto-below-cost"
+		setSimpleSellPrice(t, name, 1.5, 7.5)
+		// The 10% fallback to channel 2 lifts the stress cost above the
+		// proposed price while the expected cost, margin, and 50% change band
+		// all stay healthy, so only the absolute floor can catch it.
+		for i := 0; i < 3; i++ {
+			qaSeedOffers(t,
+				qaOffer(1, name, 1, 5),
+				qaOffer(2, name, 4, 20),
+			)
+		}
+		policy := qaPolicy(name, "default", 1, 2, 3500, 2000, 0, 1000)
+		policy.AutoPublishChangeBPS = 5000
+		require.NoError(t, ValidateAndUpsertPricePolicy(policy))
+		_, ids, err := recalculatePricingProposals(context.Background())
+		require.NoError(t, err)
+		require.NotEmpty(t, ids)
+		assert.Equal(t, "below_cost", autoPublishReason(t, ids))
 		requirePendingModel(t, name)
 	})
 
@@ -424,7 +483,10 @@ func TestPricingAutoPublishGates(t *testing.T) {
 
 func prepareAutoPolicy(t *testing.T, name string, band int) {
 	t.Helper()
-	qaSeedOffers(t, qaOffer(1, name, 1, 5))
+	// Three consistent imports so multi-sample cost verification passes.
+	for i := 0; i < 3; i++ {
+		qaSeedOffers(t, qaOffer(1, name, 1, 5))
+	}
 	policy := qaPolicy(name, "default", 1, 0, 3500, 2000, 0, 0)
 	policy.AutoPublishChangeBPS = band
 	require.NoError(t, ValidateAndUpsertPricePolicy(policy))
