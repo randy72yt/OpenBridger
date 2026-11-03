@@ -6,8 +6,10 @@ name: Release image to GHCR
 # server only needs `obctl pull <short-sha>` + `obctl deploy <short-sha>`.
 
 on:
-  push:
-    branches: [main]
+  # Manual/tags only — the user asked to keep CI trigger count minimal. The
+  # primary release path is building on the ops Mac and piping the image to
+  # the server (docker save | ssh docker load); this workflow is the backup
+  # when the Mac is unavailable.
   workflow_dispatch:
     inputs:
       ref:
@@ -15,6 +17,9 @@ on:
         required: false
         default: main
         type: string
+  push:
+    tags:
+      - 'v*'
 
 env:
   IMAGE: ghcr.io/randy72yt/openbridger
