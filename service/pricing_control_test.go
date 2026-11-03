@@ -373,6 +373,10 @@ func TestPricingAutoPublishGates(t *testing.T) {
 		proposal := qaBuild(t, qaPolicy(name, "default", 1, 0, 3500, 2000, 0, 0))
 		setSimpleSellPrice(t, name, proposal.ProposedInputPrice, proposal.ProposedOutputPrice)
 		assert.Equal(t, "unchanged", autoPublishReason(t, prepareAndRecalculate(t, name, 500)))
+		var retired model.ModelPriceProposal
+		require.NoError(t, model.DB.Where("public_model = ?", name).Order("id desc").First(&retired).Error)
+		assert.Equal(t, model.PricingProposalRejected, retired.Status)
+		assert.Contains(t, retired.Reason, "unchanged")
 		pricing, err := model.GetModelPricingSnapshot([]string{name})
 		require.NoError(t, err)
 		assert.Equal(t, fmt.Sprintf("tier(\"base\", p * %s + c * %s)", formatPricingValue(proposal.ProposedInputPrice), formatPricingValue(proposal.ProposedOutputPrice)), pricing.Entries[0].Configured["billing_setting.billing_expr"])

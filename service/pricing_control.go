@@ -712,6 +712,21 @@ func autoPublishProposal(id int64, operator *model.User) (*model.ModelPricePropo
 		return nil
 	})
 	if errors.Is(err, errPricingAutoPublishSkip) {
+		// MutateModelPricing rolls back on skip, so retire no-op proposals
+		// outside that transaction. A proposal equal to the live price needs
+		// no human decision and must not linger on the review list.
+		if skip.Reason == "unchanged" {
+			result := model.DB.Model(&model.ModelPriceProposal{}).
+				Where("id = ? AND status = ?", skip.ProposalID, model.PricingProposalPending).
+				Updates(map[string]any{
+					"status":     model.PricingProposalRejected,
+					"reason":     "unchanged: proposed price equals live price",
+					"updated_at": common.GetTimestamp(),
+				})
+			if result.Error != nil {
+				return nil, PricingAutoPublishSkip{}, result.Error
+			}
+		}
 		return nil, skip, nil
 	}
 	if err != nil {
