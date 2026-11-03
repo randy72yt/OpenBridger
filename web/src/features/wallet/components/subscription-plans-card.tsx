@@ -392,9 +392,7 @@ export function SubscriptionPlansCard({
           formatResetPeriod(plan, t) !== t('No Reset')
             ? `${t('Quota Reset')}: ${formatResetPeriod(plan, t)}`
             : null,
-          totalAmount > 0
-            ? `${t('Monthly quota')}: ${formatQuota(totalAmount)}`
-            : `${t('Total Quota')}: ${t('Unlimited')}`,
+          totalAmount <= 0 ? `${t('Total Quota')}: ${t('Unlimited')}` : null,
           limit > 0 ? `${t('Purchase Limit')}: ${limit}` : null,
           plan.upgrade_group
             ? `${t('Upgrade Group')}: ${plan.upgrade_group}`

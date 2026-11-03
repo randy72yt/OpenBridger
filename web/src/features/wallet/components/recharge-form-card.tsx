@@ -260,7 +260,10 @@ export function RechargeFormCard({
                         preset.value,
                         priceRatio,
                         discount,
-                        usdExchangeRate
+                        // In local-currency input mode the headline number must
+                        // match what the customer pays (1:1), not the display
+                        // exchange rate, which may differ from Price.
+                        isCNYInput ? chargeRate : usdExchangeRate
                       )
                       return (
                         <Button
