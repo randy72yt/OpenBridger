@@ -35,6 +35,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { formatNumber } from '@/lib/format'
+import { formatLocalCurrencyAmount } from '@/lib/currency'
+import { useSystemConfig } from '@/hooks/use-system-config'
 import { cn } from '@/lib/utils'
 
 import {
@@ -113,20 +115,35 @@ export function RechargeFormCard({
   enableWaffoPancakeTopup,
 }: RechargeFormCardProps) {
   const { t } = useTranslation()
-  const [localAmount, setLocalAmount] = useState(topupAmount.toString())
+  const { currency } = useSystemConfig()
+  // In CNY display mode the customer types RMB and we convert to the
+  // USD-denominated credit amount the backend expects (amount × Price).
+  const isCNYInput = currency?.quotaDisplayType === 'CNY'
+  const chargeRate = priceRatio > 0 ? priceRatio : 1
+  const toDisplayAmount = (usd: number) =>
+    isCNYInput ? usd * chargeRate : usd
+  const fromDisplayAmount = (display: number) =>
+    isCNYInput ? Math.round(display / chargeRate) : Math.round(display)
+  const [localAmount, setLocalAmount] = useState(
+    toDisplayAmount(topupAmount).toString()
+  )
 
   useEffect(() => {
     // Empty string must survive, otherwise the field can never be cleared
     setLocalAmount((prev) =>
-      prev === '' && topupAmount === 0 ? prev : topupAmount.toString()
+      prev === '' && topupAmount === 0
+        ? prev
+        : toDisplayAmount(topupAmount).toString()
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topupAmount])
 
   const handleAmountChange = (value: string) => {
     setLocalAmount(value)
-    const numValue = Number.parseInt(value) || 0
+    const numValue =
+      (isCNYInput ? Number.parseFloat(value) : Number.parseInt(value)) || 0
     if (numValue >= 0) {
-      onTopupAmountChange(numValue)
+      onTopupAmountChange(fromDisplayAmount(numValue))
     }
   }
 
@@ -141,6 +158,8 @@ export function RechargeFormCard({
   const hasWaffoPaymentMethods =
     Array.isArray(waffoPayMethods) && waffoPayMethods.length > 0
   const minTopup = getMinTopupAmount(topupInfo)
+  const formatPay = (amount: number) =>
+    isCNYInput ? formatLocalCurrencyAmount(amount) : formatCurrency(amount)
   const redemptionEnabled = topupInfo?.enable_redemption !== false
 
   if (loading) {
@@ -266,11 +285,11 @@ export function RechargeFormCard({
                             )}
                           </div>
                           <div className='text-muted-foreground mt-1.5 w-full text-xs sm:mt-2'>
-                            Pay {formatCurrency(actualPrice)}
+                            Pay {formatPay(actualPrice)}
                             {hasDiscount && savedAmount > 0 && (
                               <span className='text-green-600'>
                                 {' '}
-                                • Save {formatCurrency(savedAmount)}
+                                • Save {formatPay(savedAmount)}
                               </span>
                             )}
                           </div>
@@ -289,15 +308,22 @@ export function RechargeFormCard({
                   {t('Custom Amount')}
                 </Label>
                 <div className='grid grid-cols-[minmax(0,1fr)_minmax(110px,0.55fr)] gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
-                  <Input
-                    id='topup-amount'
-                    type='number'
-                    value={localAmount}
-                    onChange={(e) => handleAmountChange(e.target.value)}
-                    min={minTopup}
-                    placeholder={`Minimum ${minTopup}`}
-                    className='h-9 text-base sm:h-10 sm:text-lg'
-                  />
+                  <div className='relative'>
+                    <Input
+                      id='topup-amount'
+                      type='number'
+                      value={localAmount}
+                      onChange={(e) => handleAmountChange(e.target.value)}
+                      min={toDisplayAmount(minTopup)}
+                      placeholder={`${t('Minimum')} ${formatPay(toDisplayAmount(minTopup))}`}
+                      className='h-9 pr-8 text-base sm:h-10 sm:text-lg'
+                    />
+                    {isCNYInput && (
+                      <span className='text-muted-foreground pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm'>
+                        ¥
+                      </span>
+                    )}
+                  </div>
                   <div className='bg-muted/30 flex min-h-9 items-center justify-between gap-2 rounded-md border px-3 lg:min-w-52'>
                     <span className='text-muted-foreground truncate text-xs'>
                       {t('Amount to pay:')}
@@ -306,7 +332,7 @@ export function RechargeFormCard({
                       <Skeleton className='h-5 w-16' />
                     ) : (
                       <span className='text-sm font-semibold'>
-                        {formatCurrency(paymentAmount)}
+                        {formatPay(paymentAmount)}
                       </span>
                     )}
                   </div>

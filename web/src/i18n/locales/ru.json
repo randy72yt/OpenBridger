@@ -6095,5 +6095,6 @@
   "per month": "/мес",
   "Monthly quota": "Квота на месяц",
   "≈ {{price}} / month": "≈ {{price}} /мес",
-  "Subscription quota covers all models on this site at the same per-token rates as wallet balance. See the pricing page for model-specific rates.": "Квота подписки действует на все модели сайта, тарификация по токенам такая же, как для баланса кошелька. Тарифы по моделям — на странице цен."
+  "Subscription quota covers all models on this site at the same per-token rates as wallet balance. See the pricing page for model-specific rates.": "Квота подписки действует на все модели сайта, тарификация по токенам такая же, как для баланса кошелька. Тарифы по моделям — на странице цен.",
+  "Minimum": "Минимум"
 }
