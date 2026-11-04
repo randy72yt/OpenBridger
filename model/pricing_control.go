@@ -17,6 +17,16 @@ const (
 	PricingProposalRejected  = "rejected"
 )
 
+const (
+	// PricePolicyScopeGlobal marks the default policy row. It supplies margin
+	// and overhead defaults only; it never generates proposals by itself.
+	PricePolicyScopeGlobal = "global"
+	PricePolicyScopeModel  = "model"
+	// GlobalPricePolicyModel is the public_model value of the global row. The
+	// (public_model, service_tier) unique index guarantees a single row.
+	GlobalPricePolicyModel = "*"
+)
+
 // UpstreamModelOffer is the latest normalized procurement cost for one model
 // on one channel. Prices use the same per-million billing unit as the public
 // billing expression; the original currency and source remain auditable.
@@ -29,6 +39,9 @@ type UpstreamModelOffer struct {
 	OutputCost         float64  `json:"output_cost" gorm:"type:decimal(20,8);not null"`
 	CacheReadCost      float64  `json:"cache_read_cost" gorm:"type:decimal(20,8);not null"`
 	UpstreamGroupRatio *float64 `json:"upstream_group_ratio" gorm:"type:decimal(20,8)"`
+	// UpstreamGroup records which upstream group produced UpstreamGroupRatio,
+	// so a cost can be traced back to the settlement group it came from.
+	UpstreamGroup      string   `json:"upstream_group" gorm:"type:varchar(64);not null;default:''"`
 	Currency           string   `json:"currency" gorm:"type:varchar(16);not null"`
 	SourceType         string   `json:"source_type" gorm:"type:varchar(32);not null"`
 	SourceURL          string   `json:"source_url" gorm:"type:varchar(512);not null"`
@@ -50,6 +63,7 @@ type UpstreamCostSnapshot struct {
 	OutputCost         float64  `json:"output_cost" gorm:"type:decimal(20,8);not null"`
 	CacheReadCost      float64  `json:"cache_read_cost" gorm:"type:decimal(20,8);not null"`
 	UpstreamGroupRatio *float64 `json:"upstream_group_ratio" gorm:"type:decimal(20,8)"`
+	UpstreamGroup      string   `json:"upstream_group" gorm:"type:varchar(64);not null;default:''"`
 	Currency           string   `json:"currency" gorm:"type:varchar(16);not null"`
 	SourceVersion      string   `json:"source_version" gorm:"type:varchar(128);not null"`
 	CollectedAt        int64    `json:"collected_at" gorm:"bigint;index"`
@@ -73,6 +87,8 @@ type ModelPricePolicy struct {
 	ID                     int64  `json:"id" gorm:"primaryKey"`
 	PublicModel            string `json:"public_model" gorm:"type:varchar(191);uniqueIndex:idx_price_policy,priority:1"`
 	ServiceTier            string `json:"service_tier" gorm:"type:varchar(32);uniqueIndex:idx_price_policy,priority:2"`
+	// Scope is "global" for the single default row and "model" otherwise (D4).
+	Scope                  string `json:"scope" gorm:"type:varchar(16);not null;default:'model'"`
 	PrimaryChannelID       int    `json:"primary_channel_id" gorm:"index"`
 	BackupChannelID        int    `json:"backup_channel_id" gorm:"index"`
 	TargetMarginBPS        int    `json:"target_margin_bps"`
@@ -84,6 +100,52 @@ type ModelPricePolicy struct {
 	Enabled                bool   `json:"enabled"`
 	CreatedAt              int64  `json:"created_at" gorm:"bigint"`
 	UpdatedAt              int64  `json:"updated_at" gorm:"bigint"`
+}
+
+// IsGlobal reports whether this row is the default policy. Older rows have an
+// empty scope and are therefore treated as model-scoped.
+func (policy *ModelPricePolicy) IsGlobal() bool {
+	return policy != nil && (policy.Scope == PricePolicyScopeGlobal || policy.PublicModel == GlobalPricePolicyModel)
+}
+
+// ApplyGlobalDefaults fills unset (zero) knobs from the global policy. A model
+// row keeps every value it explicitly set, so overriding one model never leaks
+// into the others (D4).
+func (policy *ModelPricePolicy) ApplyGlobalDefaults(global *ModelPricePolicy) {
+	if policy == nil || global == nil || global.ID == 0 || !global.Enabled || policy.IsGlobal() {
+		return
+	}
+	if policy.TargetMarginBPS <= 0 {
+		policy.TargetMarginBPS = global.TargetMarginBPS
+	}
+	if policy.MinimumMarginBPS <= 0 {
+		policy.MinimumMarginBPS = global.MinimumMarginBPS
+	}
+	if policy.OverheadBPS <= 0 {
+		policy.OverheadBPS = global.OverheadBPS
+	}
+	if policy.FallbackProbabilityBPS <= 0 {
+		policy.FallbackProbabilityBPS = global.FallbackProbabilityBPS
+	}
+	if policy.AutoPublishChangeBPS <= 0 {
+		policy.AutoPublishChangeBPS = global.AutoPublishChangeBPS
+	}
+}
+
+// PricingSyncRun is the durable record of one upstream price collection. The
+// console reads the latest row so a refresh no longer loses the sync summary.
+type PricingSyncRun struct {
+	ID               int64  `json:"id" gorm:"primaryKey"`
+	Trigger          string `json:"trigger" gorm:"type:varchar(32);index"`
+	Status           string `json:"status" gorm:"type:varchar(32);index"`
+	Imported         int    `json:"imported"`
+	Kept             int    `json:"kept"`
+	Skipped          int    `json:"skipped"`
+	CreatedProposals int    `json:"created_proposals"`
+	Channels         string `json:"channels" gorm:"type:text"`
+	ErrorMessage     string `json:"error,omitempty" gorm:"type:text"`
+	StartedAt        int64  `json:"started_at" gorm:"bigint;index"`
+	FinishedAt       int64  `json:"finished_at" gorm:"bigint"`
 }
 
 type ModelPriceProposal struct {
@@ -146,27 +208,65 @@ func UpsertUpstreamModelOffer(offer *UpstreamModelOffer) error {
 		return err
 	}
 	return DB.Transaction(func(tx *gorm.DB) error {
-		return upsertUpstreamModelOffer(tx, offer)
+		_, err := upsertUpstreamModelOffer(tx, offer)
+		return err
 	})
 }
 
+// PricingOfferImportStats reports how many offers were written and how many
+// were rejected because a higher-priority, still-valid source already owns the
+// same (channel, upstream model, public model) row.
+type PricingOfferImportStats struct {
+	Applied int `json:"applied"`
+	Kept    int `json:"kept"`
+}
+
+// pricingOfferSourcePriority orders cost sources: automated upstream
+// collection always wins over a manual import (decision D3).
+func pricingOfferSourcePriority(sourceType string) int {
+	switch strings.ToLower(strings.TrimSpace(sourceType)) {
+	case "new-api-pricing":
+		return 100
+	case "manual":
+		return 50
+	default:
+		return 10
+	}
+}
+
 func ImportUpstreamModelOffers(offers []UpstreamModelOffer) error {
+	_, err := ImportUpstreamModelOffersWithStats(offers)
+	return err
+}
+
+func ImportUpstreamModelOffersWithStats(offers []UpstreamModelOffer) (PricingOfferImportStats, error) {
+	stats := PricingOfferImportStats{}
 	if len(offers) == 0 {
-		return errors.New("offers are required")
+		return stats, errors.New("offers are required")
 	}
 	for i := range offers {
 		if err := validateUpstreamModelOfferWrite(&offers[i]); err != nil {
-			return err
+			return stats, err
 		}
 	}
-	return DB.Transaction(func(tx *gorm.DB) error {
+	err := DB.Transaction(func(tx *gorm.DB) error {
 		for i := range offers {
-			if err := upsertUpstreamModelOffer(tx, &offers[i]); err != nil {
+			applied, err := upsertUpstreamModelOffer(tx, &offers[i])
+			if err != nil {
 				return err
+			}
+			if applied {
+				stats.Applied++
+			} else {
+				stats.Kept++
 			}
 		}
 		return nil
 	})
+	if err != nil {
+		return PricingOfferImportStats{}, err
+	}
+	return stats, nil
 }
 
 func validateUpstreamModelOfferWrite(offer *UpstreamModelOffer) error {
@@ -190,28 +290,47 @@ func validateUpstreamModelOfferWrite(offer *UpstreamModelOffer) error {
 	return nil
 }
 
-func upsertUpstreamModelOffer(tx *gorm.DB, offer *UpstreamModelOffer) error {
-	offer.UpdatedAt = common.GetTimestamp()
+// upsertUpstreamModelOffer writes one offer and appends a cost snapshot.
+// It returns false without writing when an unexpired row from a
+// higher-priority source already owns the same key (D3: automated collection
+// wins over manual import).
+func upsertUpstreamModelOffer(tx *gorm.DB, offer *UpstreamModelOffer) (bool, error) {
+	now := common.GetTimestamp()
+	var existing UpstreamModelOffer
+	err := tx.Where("channel_id = ? AND upstream_model = ? AND public_model = ?", offer.ChannelID, offer.UpstreamModel, offer.PublicModel).
+		First(&existing).Error
+	if err == nil {
+		if existing.Enabled && existing.ExpiresAt > now &&
+			pricingOfferSourcePriority(existing.SourceType) > pricingOfferSourcePriority(offer.SourceType) {
+			return false, nil
+		}
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, err
+	}
+	offer.UpdatedAt = now
 	if err := tx.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "channel_id"}, {Name: "upstream_model"}, {Name: "public_model"}},
 		DoUpdates: clause.AssignmentColumns([]string{
-			"input_cost", "output_cost", "cache_read_cost", "upstream_group_ratio", "currency", "source_type",
+			"input_cost", "output_cost", "cache_read_cost", "upstream_group_ratio", "upstream_group", "currency", "source_type",
 			"source_url", "source_version", "success_rate_bps", "collected_at", "expires_at", "enabled", "updated_at",
 		}),
 	}).Create(offer).Error; err != nil {
-		return err
+		return false, err
 	}
 	var current UpstreamModelOffer
 	if err := tx.Where("channel_id = ? AND upstream_model = ? AND public_model = ?", offer.ChannelID, offer.UpstreamModel, offer.PublicModel).First(&current).Error; err != nil {
-		return err
+		return false, err
 	}
 	offer.ID = current.ID
-	return tx.Create(&UpstreamCostSnapshot{
+	if err := tx.Create(&UpstreamCostSnapshot{
 		OfferID: current.ID, ChannelID: offer.ChannelID, PublicModel: offer.PublicModel,
 		InputCost: offer.InputCost, OutputCost: offer.OutputCost, CacheReadCost: offer.CacheReadCost,
-		UpstreamGroupRatio: offer.UpstreamGroupRatio,
+		UpstreamGroupRatio: offer.UpstreamGroupRatio, UpstreamGroup: offer.UpstreamGroup,
 		Currency:           offer.Currency, SourceVersion: offer.SourceVersion, CollectedAt: offer.CollectedAt,
-	}).Error
+	}).Error; err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func ListUpstreamModelOffers(publicModel string) ([]UpstreamModelOffer, error) {
@@ -224,15 +343,105 @@ func ListUpstreamModelOffers(publicModel string) ([]UpstreamModelOffer, error) {
 	return offers, err
 }
 
+// UpstreamModelOfferQuery filters the cost inventory. Empty IncludeExpired
+// keeps only offers that are enabled and not past their expiry, which is what
+// the console shows by default.
+type UpstreamModelOfferQuery struct {
+	PublicModel    string
+	Keyword        string
+	SourceType     string
+	ChannelID      int
+	IncludeExpired bool
+	Limit          int
+	Offset         int
+}
+
+type UpstreamModelOfferPage struct {
+	Items  []UpstreamModelOffer `json:"items"`
+	Total  int64                `json:"total"`
+	Limit  int                  `json:"limit"`
+	Offset int                  `json:"offset"`
+}
+
+const (
+	DefaultPricingOfferPageSize = 50
+	MaxPricingOfferPageSize     = 200
+)
+
+func normalizePricingPageSize(limit int) int {
+	if limit <= 0 {
+		return DefaultPricingOfferPageSize
+	}
+	if limit > MaxPricingOfferPageSize {
+		return MaxPricingOfferPageSize
+	}
+	return limit
+}
+
+func ListUpstreamModelOffersPage(query UpstreamModelOfferQuery) (UpstreamModelOfferPage, error) {
+	page := UpstreamModelOfferPage{Limit: normalizePricingPageSize(query.Limit)}
+	if query.Offset < 0 {
+		query.Offset = 0
+	}
+	page.Offset = query.Offset
+	db := DB.Model(&UpstreamModelOffer{})
+	if query.PublicModel != "" {
+		db = db.Where("public_model = ?", query.PublicModel)
+	}
+	if keyword := strings.TrimSpace(query.Keyword); keyword != "" {
+		like := "%" + keyword + "%"
+		db = db.Where("public_model LIKE ? OR upstream_model LIKE ?", like, like)
+	}
+	if query.SourceType != "" {
+		db = db.Where("source_type = ?", query.SourceType)
+	}
+	if query.ChannelID > 0 {
+		db = db.Where("channel_id = ?", query.ChannelID)
+	}
+	if !query.IncludeExpired {
+		db = db.Where("enabled = ? AND expires_at > ?", true, common.GetTimestamp())
+	}
+	if err := db.Count(&page.Total).Error; err != nil {
+		return page, err
+	}
+	if err := db.Order("public_model, channel_id").
+		Limit(page.Limit).Offset(page.Offset).
+		Find(&page.Items).Error; err != nil {
+		return page, err
+	}
+	return page, nil
+}
+
 func UpsertModelPricePolicy(policy *ModelPricePolicy) error {
 	if policy == nil {
 		return errors.New("policy is required")
 	}
+	if policy.Scope == "" {
+		if policy.IsGlobal() {
+			policy.Scope = PricePolicyScopeGlobal
+		} else {
+			policy.Scope = PricePolicyScopeModel
+		}
+	}
 	policy.UpdatedAt = common.GetTimestamp()
 	return DB.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "public_model"}, {Name: "service_tier"}},
-		DoUpdates: clause.AssignmentColumns([]string{"primary_channel_id", "backup_channel_id", "target_margin_bps", "minimum_margin_bps", "overhead_bps", "fallback_probability_bps", "auto_publish_change_bps", "price_locked", "enabled", "updated_at"}),
+		DoUpdates: clause.AssignmentColumns([]string{"scope", "primary_channel_id", "backup_channel_id", "target_margin_bps", "minimum_margin_bps", "overhead_bps", "fallback_probability_bps", "auto_publish_change_bps", "price_locked", "enabled", "updated_at"}),
 	}).Create(policy).Error
+}
+
+// GlobalPricePolicy returns the enabled default policy, or nil when none exists.
+func GlobalPricePolicy() (*ModelPricePolicy, error) {
+	var policies []ModelPricePolicy
+	if err := DB.Where("public_model = ? OR scope = ?", GlobalPricePolicyModel, PricePolicyScopeGlobal).Find(&policies).Error; err != nil {
+		return nil, err
+	}
+	for i := range policies {
+		if policies[i].Enabled {
+			return &policies[i], nil
+		}
+	}
+	return nil, nil
 }
 
 func ListModelPricePolicies() ([]ModelPricePolicy, error) {
@@ -241,14 +450,44 @@ func ListModelPricePolicies() ([]ModelPricePolicy, error) {
 	return policies, err
 }
 
+// ListModelPriceProposals is the unbounded internal listing. Console reads go
+// through ListModelPriceProposalsPage so a growing table cannot truncate
+// silently.
 func ListModelPriceProposals(status string) ([]ModelPriceProposal, error) {
 	var proposals []ModelPriceProposal
-	query := DB.Order("id desc").Limit(500)
+	query := DB.Order("id desc")
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
 	err := query.Find(&proposals).Error
 	return proposals, err
+}
+
+// ListModelPriceProposalsPage returns one page of proposals plus the total
+// count for the same filter. A non-positive limit falls back to the default
+// page size, so callers no longer rely on a silent hard cap.
+func ListModelPriceProposalsPage(status string, limit, offset int) ([]ModelPriceProposal, int64, error) {
+	pageSize := normalizePricingPageSize(limit)
+	if offset < 0 {
+		offset = 0
+	}
+	countQuery := DB.Model(&ModelPriceProposal{})
+	if status != "" {
+		countQuery = countQuery.Where("status = ?", status)
+	}
+	var total int64
+	if err := countQuery.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var proposals []ModelPriceProposal
+	query := DB.Order("id desc").Limit(pageSize).Offset(offset)
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if err := query.Find(&proposals).Error; err != nil {
+		return nil, 0, err
+	}
+	return proposals, total, nil
 }
 
 func LoadModelPriceProposalForUpdate(tx *gorm.DB, id int64) (ModelPriceProposal, error) {
@@ -287,4 +526,68 @@ func ReplacePendingModelPriceProposal(proposal *ModelPriceProposal) error {
 		}
 		return tx.Create(proposal).Error
 	})
+}
+
+// PruneUpstreamCostSnapshots deletes snapshots collected before the cutoff.
+// Snapshots stay append-only because auto-publish verification reads the most
+// recent samples, so growth is bounded by time instead of de-duplication.
+func PruneUpstreamCostSnapshots(cutoff int64) (int64, error) {
+	if cutoff <= 0 {
+		return 0, errors.New("snapshot cutoff is required")
+	}
+	result := DB.Where("collected_at < ?", cutoff).Delete(&UpstreamCostSnapshot{})
+	return result.RowsAffected, result.Error
+}
+
+// PruneExpiredUpstreamModelOffers deletes offers that expired before the
+// cutoff, so retired channels stop leaving dead rows in the inventory.
+func PruneExpiredUpstreamModelOffers(cutoff int64) (int64, error) {
+	if cutoff <= 0 {
+		return 0, errors.New("offer cutoff is required")
+	}
+	result := DB.Where("expires_at < ?", cutoff).Delete(&UpstreamModelOffer{})
+	return result.RowsAffected, result.Error
+}
+
+func RecordPricingSyncRun(run *PricingSyncRun) error {
+	if run == nil {
+		return errors.New("sync run is required")
+	}
+	if run.StartedAt <= 0 {
+		run.StartedAt = common.GetTimestamp()
+	}
+	if run.FinishedAt <= 0 {
+		run.FinishedAt = common.GetTimestamp()
+	}
+	return DB.Create(run).Error
+}
+
+func LatestPricingSyncRun() (*PricingSyncRun, error) {
+	var run PricingSyncRun
+	err := DB.Order("id desc").First(&run).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &run, nil
+}
+
+func ListPricingSyncRuns(limit int) ([]PricingSyncRun, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	var runs []PricingSyncRun
+	err := DB.Order("id desc").Limit(limit).Find(&runs).Error
+	return runs, err
+}
+
+// PrunePricingSyncRuns keeps the audit trail bounded.
+func PrunePricingSyncRuns(cutoff int64) (int64, error) {
+	if cutoff <= 0 {
+		return 0, errors.New("sync run cutoff is required")
+	}
+	result := DB.Where("started_at < ?", cutoff).Delete(&PricingSyncRun{})
+	return result.RowsAffected, result.Error
 }

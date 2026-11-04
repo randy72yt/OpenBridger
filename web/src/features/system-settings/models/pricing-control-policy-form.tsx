@@ -26,9 +26,10 @@ import { Switch } from '@/components/ui/switch'
 
 import type { ModelPricePolicy } from './pricing-control-types'
 
-const initialPolicy: ModelPricePolicy = {
-  public_model: '',
+const globalDefaults: ModelPricePolicy = {
+  public_model: '*',
   service_tier: 'default',
+  scope: 'global',
   primary_channel_id: 0,
   backup_channel_id: 0,
   target_margin_bps: 3500,
@@ -40,87 +41,122 @@ const initialPolicy: ModelPricePolicy = {
   enabled: true,
 }
 
+const modelDefaults: ModelPricePolicy = {
+  public_model: '',
+  service_tier: 'default',
+  scope: 'model',
+  primary_channel_id: 1,
+  backup_channel_id: 0,
+  target_margin_bps: 0,
+  minimum_margin_bps: 0,
+  overhead_bps: 0,
+  fallback_probability_bps: 0,
+  auto_publish_change_bps: 0,
+  price_locked: false,
+  enabled: true,
+}
+
 type PricingControlPolicyFormProps = {
+  scope: 'global' | 'model'
+  initial?: ModelPricePolicy | null
   saving: boolean
   onSave: (policy: ModelPricePolicy) => void
+  onCancel?: () => void
 }
 
 export function PricingControlPolicyForm(props: PricingControlPolicyFormProps) {
   const { t } = useTranslation()
-  const [policy, setPolicy] = useState<ModelPricePolicy>(initialPolicy)
+  const defaults = props.scope === 'global' ? globalDefaults : modelDefaults
+  const [policy, setPolicy] = useState<ModelPricePolicy>({
+    ...defaults,
+    ...props.initial,
+    scope: props.scope,
+  })
   const setNumber = (key: keyof ModelPricePolicy, value: string) => {
     setPolicy((current) => ({ ...current, [key]: Number(value) }))
   }
 
+  const knobs: [keyof ModelPricePolicy, string][] = [
+    ['target_margin_bps', 'Target margin (BPS)'],
+    ['minimum_margin_bps', 'Minimum margin (BPS)'],
+    ['overhead_bps', 'Operating overhead (BPS)'],
+    ['fallback_probability_bps', 'Fallback probability (BPS)'],
+  ]
+
   return (
     <form
-      className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'
+      className='space-y-4'
       onSubmit={(event) => {
         event.preventDefault()
-        props.onSave(policy)
+        props.onSave({ ...policy, scope: props.scope })
       }}
     >
-      <div className='space-y-2 md:col-span-2'>
-        <Label htmlFor='pricing-public-model'>{t('Public model')}</Label>
-        <Input
-          id='pricing-public-model'
-          value={policy.public_model}
-          onChange={(event) =>
-            setPolicy((current) => ({
-              ...current,
-              public_model: event.target.value,
-            }))
-          }
-          placeholder='gpt-5.4'
-          required
-        />
-      </div>
-      <div className='space-y-2'>
-        <Label htmlFor='pricing-primary-channel'>{t('Primary channel')}</Label>
-        <Input
-          id='pricing-primary-channel'
-          type='number'
-          min={1}
-          value={policy.primary_channel_id}
-          onChange={(event) =>
-            setNumber('primary_channel_id', event.target.value)
-          }
-          required
-        />
-      </div>
-      <div className='space-y-2'>
-        <Label htmlFor='pricing-backup-channel'>{t('Backup channel')}</Label>
-        <Input
-          id='pricing-backup-channel'
-          type='number'
-          min={0}
-          value={policy.backup_channel_id}
-          onChange={(event) =>
-            setNumber('backup_channel_id', event.target.value)
-          }
-        />
-      </div>
-      {[
-        ['target_margin_bps', 'Target margin (BPS)'],
-        ['minimum_margin_bps', 'Minimum margin (BPS)'],
-        ['overhead_bps', 'Operating overhead (BPS)'],
-        ['fallback_probability_bps', 'Fallback probability (BPS)'],
-      ].map(([key, label]) => (
-        <div className='space-y-2' key={key}>
-          <Label htmlFor={`pricing-${key}`}>{t(label)}</Label>
-          <Input
-            id={`pricing-${key}`}
-            type='number'
-            min={0}
-            max={10000}
-            value={Number(policy[key as keyof ModelPricePolicy])}
-            onChange={(event) =>
-              setNumber(key as keyof ModelPricePolicy, event.target.value)
-            }
-          />
+      {props.scope === 'model' && (
+        <div className='grid gap-4 md:grid-cols-3'>
+          <div className='space-y-2'>
+            <Label htmlFor='pricing-public-model'>{t('Public model')}</Label>
+            <Input
+              id='pricing-public-model'
+              value={policy.public_model}
+              onChange={(event) =>
+                setPolicy((current) => ({
+                  ...current,
+                  public_model: event.target.value,
+                }))
+              }
+              placeholder='gpt-5.4'
+              required
+            />
+          </div>
+          <div className='space-y-2'>
+            <Label htmlFor='pricing-primary-channel'>
+              {t('Primary channel')}
+            </Label>
+            <Input
+              id='pricing-primary-channel'
+              type='number'
+              min={1}
+              value={policy.primary_channel_id}
+              onChange={(event) =>
+                setNumber('primary_channel_id', event.target.value)
+              }
+              required
+            />
+          </div>
+          <div className='space-y-2'>
+            <Label htmlFor='pricing-backup-channel'>
+              {t('Backup channel')}
+            </Label>
+            <Input
+              id='pricing-backup-channel'
+              type='number'
+              min={0}
+              value={policy.backup_channel_id}
+              onChange={(event) =>
+                setNumber('backup_channel_id', event.target.value)
+              }
+            />
+          </div>
         </div>
-      ))}
-      <div className='space-y-2 md:col-span-2'>
+      )}
+
+      <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
+        {knobs.map(([key, label]) => (
+          <div className='space-y-2' key={key}>
+            <Label htmlFor={`pricing-${String(key)}`}>{t(label)}</Label>
+            <Input
+              id={`pricing-${String(key)}`}
+              type='number'
+              min={0}
+              max={10000}
+              value={Number(policy[key] ?? 0)}
+              onChange={(event) => setNumber(key, event.target.value)}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className='space-y-2 md:max-w-md'>
         <Label htmlFor='pricing-auto-publish-change'>
           {t('Auto-publish change (BPS)')}
         </Label>
@@ -140,20 +176,38 @@ export function PricingControlPolicyForm(props: PricingControlPolicyFormProps) {
           )}
         </p>
       </div>
-      <div className='flex items-center gap-3 md:col-span-2'>
-        <Switch
-          id='pricing-policy-enabled'
-          checked={policy.enabled}
-          onCheckedChange={(enabled) =>
-            setPolicy((current) => ({ ...current, enabled }))
-          }
-        />
-        <Label htmlFor='pricing-policy-enabled'>{t('Enable policy')}</Label>
-      </div>
-      <div className='flex justify-end md:col-span-2'>
-        <Button type='submit' disabled={props.saving}>
-          {t('Save pricing policy')}
-        </Button>
+
+      {props.scope === 'model' && (
+        <p className='text-muted-foreground text-xs'>
+          {t(
+            'Leave a knob at 0 to inherit the global policy. Only this model is affected.'
+          )}
+        </p>
+      )}
+
+      <div className='flex flex-wrap items-center justify-between gap-3'>
+        <div className='flex items-center gap-3'>
+          <Switch
+            id={`pricing-policy-enabled-${props.scope}`}
+            checked={policy.enabled}
+            onCheckedChange={(enabled) =>
+              setPolicy((current) => ({ ...current, enabled }))
+            }
+          />
+          <Label htmlFor={`pricing-policy-enabled-${props.scope}`}>
+            {t('Enable policy')}
+          </Label>
+        </div>
+        <div className='flex items-center gap-2'>
+          {props.onCancel && (
+            <Button type='button' variant='ghost' onClick={props.onCancel}>
+              {t('Cancel')}
+            </Button>
+          )}
+          <Button type='submit' disabled={props.saving}>
+            {t('Save pricing policy')}
+          </Button>
+        </div>
       </div>
     </form>
   )

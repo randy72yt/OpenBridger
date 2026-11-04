@@ -369,6 +369,7 @@ func migrateDB() error {
 		&UpstreamCostSnapshot{},
 		&ModelPricePolicy{},
 		&ModelPriceProposal{},
+		&PricingSyncRun{},
 		&CasbinRule{},
 		&AuthzRole{},
 	)

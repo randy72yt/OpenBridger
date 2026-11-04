@@ -392,7 +392,10 @@ export function parseTaskResult() { return {}; }
 				var created model.Model
 				require.NoError(t, db.Where("model_name = ?", "matrix-new").First(&created).Error)
 				assert.Equal(t, 1, created.SyncOfficial)
-				assert.Zero(t, created.Status)
+				// Catalog sync must not create hidden records: visibility is
+				// owned by the channel/ability side, not by a bulk metadata
+				// import (P0-5).
+				assert.Equal(t, 1, created.Status)
 				afterPricing, err := model.GetModelPricingSnapshot([]string{"matrix-priced"})
 				require.NoError(t, err)
 				assert.Equal(t, beforePricing.Entries, afterPricing.Entries)

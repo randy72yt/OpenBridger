@@ -25,18 +25,28 @@ export type UpstreamModelOffer = {
   output_cost: number
   cache_read_cost: number
   upstream_group_ratio?: number | null
+  upstream_group?: string
   currency: string
   source_type: string
   source_version: string
+  source_url?: string
   collected_at: number
   expires_at: number
   enabled: boolean
+}
+
+export type PricingOfferPage = {
+  items: UpstreamModelOffer[]
+  total: number
+  limit: number
+  offset: number
 }
 
 export type ModelPricePolicy = {
   id?: number
   public_model: string
   service_tier: string
+  scope?: 'global' | 'model'
   primary_channel_id: number
   backup_channel_id: number
   target_margin_bps: number
@@ -83,6 +93,12 @@ export type PricingRisk = {
   public_model: string
   service_tier: string
   code: string
+  channel_id?: number
+  channel_role?: 'primary' | 'backup'
+  last_collected_at?: number
+  expires_at?: number
+  upstream_group?: string
+  suggested_action?: 'resync_offers' | 'import_manual_offer' | string
 }
 
 export type PricingApiResponse<T> = {
@@ -91,13 +107,47 @@ export type PricingApiResponse<T> = {
   data: T
 }
 
-export type PricingOfferSyncResult = {
+export type PricingProposalPage = {
+  items: ModelPriceProposal[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export type PricingSyncRun = {
+  id: number
+  trigger: 'manual' | 'scheduled' | string
+  status: 'succeeded' | 'partial' | 'failed' | string
   imported: number
+  kept: number
   skipped: number
   created_proposals: number
+  channels: string
+  error?: string
+  started_at: number
+  finished_at: number
+}
+
+export type PricingSyncRunsResponse = {
+  items: PricingSyncRun[]
+  latest: PricingSyncRun | null
+}
+
+export type PricingOfferSyncResult = {
+  imported: number
+  kept?: number
+  skipped: number
+  created_proposals: number
+  trigger?: string
+  auto_publish?: {
+    published: number
+    skipped: number
+    error?: string
+  }
   channels: {
     channel_id: number
     imported: number
+    kept?: number
     skipped: number
     warnings?: string[]
     error?: string

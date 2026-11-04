@@ -34,11 +34,16 @@ import type { ModelPriceProposal } from './pricing-control-types'
 
 type PricingProposalReviewProps = {
   proposals: ModelPriceProposal[]
+  total: number
+  limit: number
+  offset: number
+  loading: boolean
   recalculating: boolean
   updating: boolean
   onRecalculate: () => void
   onAction: (id: number, action: 'approve' | 'reject') => void
   onPublish: (proposal: ModelPriceProposal) => void
+  onPageChange: (offset: number) => void
 }
 
 function formatPrice(value: number | null) {
@@ -236,6 +241,35 @@ export function PricingProposalReview(props: PricingProposalReviewProps) {
             })}
           </TableBody>
         </Table>
+      </div>
+      <div className='mt-4 flex flex-wrap items-center justify-between gap-3'>
+        <p className='text-muted-foreground text-sm'>
+          {t('Showing {{from}}-{{to}} of {{total}}', {
+            from: props.total === 0 ? 0 : props.offset + 1,
+            to: Math.min(props.offset + props.limit, props.total),
+            total: props.total,
+          })}
+        </p>
+        <div className='flex items-center gap-2'>
+          <Button
+            size='sm'
+            variant='outline'
+            disabled={props.offset <= 0}
+            onClick={() =>
+              props.onPageChange(Math.max(0, props.offset - props.limit))
+            }
+          >
+            {t('Previous')}
+          </Button>
+          <Button
+            size='sm'
+            variant='outline'
+            disabled={props.offset + props.limit >= props.total}
+            onClick={() => props.onPageChange(props.offset + props.limit)}
+          >
+            {t('Next')}
+          </Button>
+        </div>
       </div>
     </SettingsCard>
   )

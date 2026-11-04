@@ -23,6 +23,7 @@ const (
 	SystemTaskTypeAsyncTaskPoll      = "async_task_poll"
 	SystemTaskTypePricingRecalculate = "pricing_recalculate"
 	SystemTaskTypePricingOfferSync   = "pricing_offer_sync"
+	SystemTaskTypePricingRetention   = "pricing_retention"
 )
 
 var ErrSystemTaskLockLost = errors.New("system task lock lost")

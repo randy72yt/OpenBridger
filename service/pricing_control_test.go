@@ -206,7 +206,7 @@ func TestPricingAutoPublishGates(t *testing.T) {
 		setSimpleSellPrice(t, name, 1.5, 7.5)
 		prepareAutoPolicy(t, name, 500)
 		result := PricingOfferSyncResult{}
-		require.NoError(t, completePricingOfferSync(context.Background(), &result))
+		require.NoError(t, CompletePricingOfferSync(context.Background(), &result))
 		assert.Nil(t, result.AutoPublish)
 		assert.Equal(t, 1, result.CreatedProposals)
 		requirePendingModel(t, name)
@@ -234,7 +234,7 @@ func TestPricingAutoPublishGates(t *testing.T) {
 		setSimpleSellPrice(t, name, 1.5, 7.5)
 		prepareAutoPolicy(t, name, 500)
 		result := PricingOfferSyncResult{}
-		require.NoError(t, completePricingOfferSync(context.Background(), &result))
+		require.NoError(t, CompletePricingOfferSync(context.Background(), &result))
 		require.NotNil(t, result.AutoPublish)
 		assert.Empty(t, result.AutoPublish.Error)
 		assert.Equal(t, 1, result.AutoPublish.Published)

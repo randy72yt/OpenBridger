@@ -39,6 +39,29 @@ var ErrMetadataSyncConflict = errors.New("metadata changed; preview again before
 
 var MetadataSyncFields = []string{"description", "icon", "tags", "vendor", "endpoints", "name_rule", "status"}
 
+// MetadataSyncCreateFields is the default field set for models created by a
+// catalog sync. Visibility (status) and matching (name_rule) are excluded on
+// purpose: a bulk sync must never hide a model that is already being sold, and
+// a prefix/contains rule can match many live models at once. Both fields can
+// still be written when the operator ticks them explicitly.
+var MetadataSyncCreateFields = []string{"description", "icon", "tags", "vendor", "endpoints"}
+
+func metadataFieldSelection(update MetadataSyncUpdate) []string {
+	if !update.Create {
+		return update.Fields
+	}
+	selected := make([]string, 0, len(MetadataSyncCreateFields)+len(update.Fields))
+	seen := make(map[string]bool, len(MetadataSyncCreateFields)+len(update.Fields))
+	for _, field := range append(append([]string{}, MetadataSyncCreateFields...), update.Fields...) {
+		if seen[field] {
+			continue
+		}
+		seen[field] = true
+		selected = append(selected, field)
+	}
+	return selected
+}
+
 type MetadataValues struct {
 	Description string `json:"description"`
 	Icon        string `json:"icon"`
@@ -209,10 +232,7 @@ func ApplyMetadataSync(updates []MetadataSyncUpdate, upstreamVendors map[string]
 		}
 		for _, update := range updates {
 			fields := make(map[string]any)
-			selected := update.Fields
-			if update.Create {
-				selected = MetadataSyncFields
-			}
+			selected := metadataFieldSelection(update)
 			for _, field := range selected {
 				switch field {
 				case "description":

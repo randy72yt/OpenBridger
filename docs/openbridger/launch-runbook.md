@@ -183,6 +183,24 @@ docker images | grep openbridger
 
 `TRUSTED_PROXIES` 填**容器看到的反向代理地址**：Nginx 在宿主时通常是 docker 网桥网关，用 `ip addr show docker0` 确认（常见 `172.17.0.1`），不要填 `none` 也不要填 `0.0.0.0/0`。
 
+**定价与同步开关必须显式写入 `.env`**（`compose.release.yml` 已改为 `${VAR:-默认值}`，默认值仅作兜底，不要在 compose 里写死）：
+
+| 变量 | 推荐值（每天两次同步 + 人工审批） | 说明 |
+|---|---|---|
+| `PRICING_CONTROL_ENABLED` | `true` | 总开关，false 时两个定价任务都不调度 |
+| `PRICING_AUTO_PUBLISH` | **`false`** | 先关；人工审批跑通一轮后再评估 |
+| `PRICING_AUTO_PUBLISH_OPERATOR_ID` | `1` | 必须是**启用中的 root**，否则整轮同步 failed |
+| `PRICING_OFFER_SYNC_INTERVAL_MINUTES` | `720` | 12 小时一次 |
+| `PRICING_OFFER_TTL_MINUTES` | **`840`** | 必须 > 同步间隔，否则两轮之间报价过期、清单空、风险全红 |
+| `PRICING_RECALCULATE_INTERVAL_MINUTES` | `720` | 与同步同频 |
+| `PRICING_GROUP_RATIO_POLICY` | `key_group`（不确定时用 `max`） | 一个模型可服务多个上游分组时取哪个倍率 |
+| `CHANNEL_UPSTREAM_MODEL_UPDATE_TASK_ENABLED` | `true` | 上游模型检测任务 |
+| `CHANNEL_UPSTREAM_MODEL_UPDATE_TASK_INTERVAL_MINUTES` | `720` | 每天两次 |
+| `PRICING_SNAPSHOT_RETENTION_DAYS` | `30` | 成本快照保留天数 |
+| `OPENBRIDGER_ONLINE_PAYMENT_ENABLED` | `false` | 首版不开在线支付 |
+
+写完后用 `docker compose -f compose.release.yml config` 确认展开值与 `.env` 一致。
+
 ### S14 启动并做健康检查
 
 ```bash
@@ -250,8 +268,11 @@ curl -s http://127.0.0.1:3000/api/status | head -c 300
 
 ### S20 建立上游渠道
 
-渠道 Base 填 `https://<上游域名>/v1`——**不要再拼一层 `/v1`**（`.env` 中的 `OPENBRIDGER_UPSTREAM_BASE` 已含 `/v1`，重复拼接会 `404 Invalid URL`，此前被误判为 403）。
-通过标准：渠道测试连通成功。
+渠道 Base 填**域名层** `https://<上游域名>`（不带 `/v1`、不带尾斜杠）。Claude 走 `base + /v1/messages`，OpenAI 兼容走 `base + /v1/chat/completions`；Base 再带 `/v1` 会拼成 `/v1/v1/...` 直接 404。
+
+定价采集不受影响：动态定价会把 path 整个替换成渠道设置里的定价端点（默认 `/api/pricing`），只用 scheme + host。
+
+通过标准：渠道测试连通成功；Claude 与 OpenAI 兼容各实测一次非流式调用。
 
 ### S21 上架首批模型并逐个实测
 
@@ -262,13 +283,17 @@ curl -s http://127.0.0.1:3000/api/status | head -c 300
 
 ### S22 开启动态定价同步
 
-`PRICING_CONTROL_ENABLED=true`（发布 Compose 已开启）。确认：
+前提链条是硬的：**渠道（含 Models 白名单、model_mapping、启用 key）→ 定价策略（至少 1 条启用且带 primary_channel_id）→ 同步上游价格**。没有策略时点同步会直接报 `no pricing channels configured`；「拉取模型」只写渠道白名单，不产生任何成本数据。
 
-- 定时同步任务确实执行；
-- 同步结果展示 warnings，被跳过的模型运营可见（事项 rhU308）；
-- 本地倍率与上游 `group_ratio` 一致——倍率几天内会漂移（deepseek 6.8→1、glm 6→0.9），手工填值必然失真（事项 r6UjdF）。
+`PRICING_CONTROL_ENABLED=true`（Compose 默认已开，`.env` 需显式写）。确认：
 
-通过标准：连续两次同步后倍率与上游一致；报价不过期（有效期 2 小时）。
+- 定时 `pricing_offer_sync` 任务确实执行，`system_tasks.result` 里有 imported / kept / skipped / warnings；
+- 页面「最近一次同步」来自 `pricing_sync_runs`，刷新不丢；被跳过的模型运营可见（事项 rhU308）；
+- **倍率不要再手工填**：随 `/api/pricing` 采集 `group_ratio`，存在 `model_group_ratio`（模型 × 组）时优先取模型级；一个模型可服务多个组时由 `PRICING_GROUP_RATIO_POLICY` 决定（`key_group` / `max` / `min`）。倍率几天内会漂移（deepseek 6.8→1、glm 6→0.9），手工填值必然失真（事项 r6UjdF）。
+
+通过标准：连续两次同步后清单「实际采购成本 = 基础单价 × 分组倍率」与上游账单口径一致；报价在 `PRICING_OFFER_TTL_MINUTES` 内不过期。
+
+**报价有效期必须大于同步间隔**：设 `INTERVAL=720` 就必须把 `TTL` 设到 840 以上。否则每天有 20 小时报价处于过期状态——清单为空、每条策略都进「需要处理」、方案一条也生成不出来。启动和首轮同步会在日志里给出这条 warning。
 
 ### S23 与上游账单对账
 
@@ -277,18 +302,41 @@ curl -s http://127.0.0.1:3000/api/status | head -c 300
 
 ### S24 设置毛利与人工审批
 
-设置目标毛利与最低价 → 生成定价方案 → **人工审核后发布**。
-`PRICING_CONTROL_ENABLED=true` 只负责定时同步和生成待审方案，不会改售价。
-通过标准：方案可生成、可审核、可发布；发布后前台售价与方案一致；BILL-003、BILL-004 通过。
+先在「动态定价控制 → 定价策略」里配好**全局策略**（常驻展开），只有需要单独定价的模型才加「模型级覆盖」；覆盖项留 0 表示继承全局，且只影响该模型。
 
-可选自动发布（默认关闭）。要让主节点在每轮 `pricing_offer_sync` 成功导入并重算后直接写售价：
+然后：生成定价方案 → **人工审核后发布**。`PRICING_CONTROL_ENABLED=true` 只负责定时同步和生成待审方案，不会改售价。
 
-1. 主节点设置 `PRICING_AUTO_PUBLISH=true`。不要用 `PRICING_CONTROL_ENABLED` 代替它。
+**售价只有一个写入方**：动态定价的「批准 → 发布」。启用动态定价后，管理员「模型 → 同步价格」的批量保存会被后端拒绝（返回 403），只保留差异预览；单模型确需人工改价，必须带 `override.enabled=true` 加理由，并记审计。
+
+通过标准：方案可生成、可审核、可发布；发布后前台售价与方案一致；发布后再点「同步价格」售价不变；BILL-003、BILL-004 通过。
+
+可选自动发布（**默认关闭**，compose 与 `.env` 都是 false）。要让主节点在每轮 `pricing_offer_sync` 成功导入并重算后直接写售价：
+
+1. 设置 `PRICING_AUTO_PUBLISH=true`。不要用 `PRICING_CONTROL_ENABLED` 代替它。
 2. 设置 `PRICING_AUTO_PUBLISH_OPERATOR_ID` 为一名启用中的 root 用户 ID。批准和发布审计记在该用户下。
 3. 在「动态定价控制」里把要自动发布的模型策略设为 `default` 档，并把「自动发布涨幅（基点）」设为大于 0（最大 5000，即 50%）。0 仍走人工审批。
 4. 重启主进程。同步间隔是 `PRICING_OFFER_SYNC_INTERVAL_MINUTES`（默认 60，最少 15）。
 
-下列方案会留在待审列表，不会自动发布：建议价低于现售价；输入或输出涨幅超过带宽；预期毛利低于 `minimum_margin_bps`；还没有可比较的现售价；表达式不是空也不是 `tier("base", p * … + c * …)`，或带有缓存/音频/图像倍率；策略锁定、禁用、非 default 档或报价已过期。建议价与现售价相同时不改写。`pricing_recalculate` 和页面上的「同步上游价格」都不会自动发布。任务结果在 `system_tasks.result.auto_publish`（`published` / `skipped`）。操作者无效或写库失败时该轮任务为 failed，导入统计仍留在 result 里。
+下列方案会留在待审列表，不会自动发布：建议价低于现售价；输入或输出涨幅超过带宽；预期毛利低于 `minimum_margin_bps`；还没有可比较的现售价；表达式不是空也不是 `tier("base", p * … + c * …)`，或带有缓存/音频/图像倍率；策略锁定、禁用、非 default 档或报价已过期。建议价与现售价相同时不改写。`pricing_recalculate` 不会自动发布。
+
+**手动「同步上游价格」与定时任务走同一条流水线**（同一函数、同一结果），是否自动发布只看 `PRICING_AUTO_PUBLISH`。任务结果在 `system_tasks.result.auto_publish`（`published` / `skipped`），页面同步摘要也会显示本轮发布/跳过数。操作者无效或写库失败时该轮任务为 failed，导入统计仍留在 result 里。
+
+#### 每日自动流水线（每天 1–2 次，产物是待审方案）
+
+按 S13 的推荐值配置后，主节点每 12 小时自动执行：
+
+```
+model_update      → 检测上游 /v1/models（只检测，不自动上架）
+pricing_offer_sync → 采集 50 个模型的价格 + 分组倍率（事务写入）
+                    → 自动重算，生成/更新 pending 方案
+pricing_retention  → 每天清理 30 天前的成本快照、7 天前过期的报价
+人工               → 上班后看「待审核方案」→ 批准 → 发布（唯一写售价的路径）
+```
+
+时序不固定钟点，按上一轮完成时间顺延。`pricing_offer_sync` 成功后已经自带重算，`pricing_recalculate` 只是兜底，两者同频即可。
+单渠道失败不影响其它渠道；整轮失败不写报价，旧报价仍在 TTL 内。**连续两轮失败**才会让报价过期、风险列表变红——这也是 TTL 取 14h 而不是 24h 的原因：要留出可见的告警窗口。
+
+`model_update` 与 `pricing_offer_sync` 没有强制先后：模型检测只影响渠道白名单，不参与成本计算，所以不需要串成一个任务。
 
 ---
 

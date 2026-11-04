@@ -54,9 +54,11 @@ const proposal: ModelPriceProposal = {
 }
 
 describe('pricing control policy form', () => {
-  it('submits the selected model, channels, and default margin safeguards', () => {
+  it('submits the selected model, channels, and inherited knobs', () => {
     const onSave = vi.fn()
-    render(<PricingControlPolicyForm saving={false} onSave={onSave} />)
+    render(
+      <PricingControlPolicyForm scope='model' saving={false} onSave={onSave} />
+    )
 
     fireEvent.change(screen.getByLabelText('Public model'), {
       target: { value: 'gpt-5.4-mini' },
@@ -71,13 +73,15 @@ describe('pricing control policy form', () => {
 
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
+        scope: 'model',
         public_model: 'gpt-5.4-mini',
         primary_channel_id: 11,
         backup_channel_id: 12,
-        target_margin_bps: 3500,
-        minimum_margin_bps: 2000,
-        overhead_bps: 500,
-        fallback_probability_bps: 1000,
+        // 0 means "inherit the global policy" for a model override.
+        target_margin_bps: 0,
+        minimum_margin_bps: 0,
+        overhead_bps: 0,
+        fallback_probability_bps: 0,
         auto_publish_change_bps: 0,
         enabled: true,
       })
@@ -86,7 +90,9 @@ describe('pricing control policy form', () => {
 
   it('submits the auto-publish band entered in the form', () => {
     const onSave = vi.fn()
-    render(<PricingControlPolicyForm saving={false} onSave={onSave} />)
+    render(
+      <PricingControlPolicyForm scope='model' saving={false} onSave={onSave} />
+    )
 
     fireEvent.change(screen.getByLabelText('Public model'), {
       target: { value: 'gpt-5.4-mini' },
@@ -106,6 +112,28 @@ describe('pricing control policy form', () => {
       })
     )
   })
+
+  it('submits the global policy without channels', () => {
+    const onSave = vi.fn()
+    render(
+      <PricingControlPolicyForm scope='global' saving={false} onSave={onSave} />
+    )
+
+    expect(screen.queryByLabelText('Public model')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Save pricing policy' }))
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: 'global',
+        public_model: '*',
+        primary_channel_id: 0,
+        backup_channel_id: 0,
+        target_margin_bps: 3500,
+        minimum_margin_bps: 2000,
+        overhead_bps: 500,
+      })
+    )
+  })
 })
 
 describe('pricing proposal review', () => {
@@ -114,6 +142,11 @@ describe('pricing proposal review', () => {
     render(
       <PricingProposalReview
         proposals={[proposal]}
+        total={1}
+        limit={50}
+        offset={0}
+        loading={false}
+        onPageChange={vi.fn()}
         recalculating={false}
         updating={false}
         onRecalculate={vi.fn()}
@@ -135,6 +168,11 @@ describe('pricing proposal review', () => {
     render(
       <PricingProposalReview
         proposals={[{ ...proposal, pricing_changed: true }]}
+        total={1}
+        limit={50}
+        offset={0}
+        loading={false}
+        onPageChange={vi.fn()}
         recalculating={false}
         updating={false}
         onRecalculate={vi.fn()}

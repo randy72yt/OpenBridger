@@ -29,10 +29,19 @@ services:
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:?Set only the actual reverse proxy addresses}
       NODE_TYPE: master
       GIN_MODE: release
-      PRICING_CONTROL_ENABLED: "true"
-      PRICING_AUTO_PUBLISH: "true"
-      PRICING_AUTO_PUBLISH_OPERATOR_ID: "1"
-      OPENBRIDGER_ONLINE_PAYMENT_ENABLED: "true"
+      # Every runtime switch below is supplied by /srv/openbridger/.env.
+      # The fallbacks are the documented defaults; auto-publish defaults to
+      # false because unattended price changes need an explicit opt-in (D1).
+      PRICING_CONTROL_ENABLED: ${PRICING_CONTROL_ENABLED:-true}
+      PRICING_AUTO_PUBLISH: ${PRICING_AUTO_PUBLISH:-false}
+      PRICING_AUTO_PUBLISH_OPERATOR_ID: ${PRICING_AUTO_PUBLISH_OPERATOR_ID:-1}
+      PRICING_OFFER_SYNC_INTERVAL_MINUTES: ${PRICING_OFFER_SYNC_INTERVAL_MINUTES:-60}
+      PRICING_OFFER_TTL_MINUTES: ${PRICING_OFFER_TTL_MINUTES:-120}
+      PRICING_RECALCULATE_INTERVAL_MINUTES: ${PRICING_RECALCULATE_INTERVAL_MINUTES:-60}
+      PRICING_GROUP_RATIO_POLICY: ${PRICING_GROUP_RATIO_POLICY:-key_group}
+      CHANNEL_UPSTREAM_MODEL_UPDATE_TASK_ENABLED: ${CHANNEL_UPSTREAM_MODEL_UPDATE_TASK_ENABLED:-true}
+      CHANNEL_UPSTREAM_MODEL_UPDATE_TASK_INTERVAL_MINUTES: ${CHANNEL_UPSTREAM_MODEL_UPDATE_TASK_INTERVAL_MINUTES:-30}
+      OPENBRIDGER_ONLINE_PAYMENT_ENABLED: ${OPENBRIDGER_ONLINE_PAYMENT_ENABLED:-false}
       ERROR_LOG_ENABLED: "true"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api/status | grep -q '\"success\":true'"]

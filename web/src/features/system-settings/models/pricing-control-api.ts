@@ -22,32 +22,77 @@ import { api } from '@/lib/api'
 
 import type {
   ModelPricePolicy,
-  ModelPriceProposal,
   PricingApiResponse,
+  PricingOfferPage,
   PricingOfferSyncResult,
+  PricingProposalPage,
   PricingRisk,
+  PricingSyncRunsResponse,
   UpstreamModelOffer,
 } from './pricing-control-types'
 
-export async function getPricingControlData() {
-  const [offers, policies, proposals, risks] = await Promise.all([
-    api.get<PricingApiResponse<UpstreamModelOffer[]>>(
-      '/api/pricing-control/offers'
-    ),
-    api.get<PricingApiResponse<ModelPricePolicy[]>>(
-      '/api/pricing-control/policies'
-    ),
-    api.get<PricingApiResponse<ModelPriceProposal[]>>(
-      '/api/pricing-control/proposals'
-    ),
-    api.get<PricingApiResponse<PricingRisk[]>>('/api/pricing-control/risk'),
-  ])
-  return {
-    offers: offers.data.data,
-    policies: policies.data.data,
-    proposals: proposals.data.data,
-    risks: risks.data.data,
-  }
+export type PricingOfferListParams = {
+  model?: string
+  keyword?: string
+  sourceType?: string
+  includeExpired?: boolean
+  limit?: number
+  offset?: number
+}
+
+export async function getPricingOffers(params: PricingOfferListParams = {}) {
+  const response = await api.get<PricingApiResponse<PricingOfferPage>>(
+    '/api/pricing-control/offers',
+    {
+      params: {
+        model: params.model || undefined,
+        q: params.keyword || undefined,
+        source_type: params.sourceType || undefined,
+        include_expired: params.includeExpired ? 'true' : undefined,
+        limit: params.limit ?? 50,
+        offset: params.offset ?? 0,
+      },
+    }
+  )
+  return response.data.data
+}
+
+export async function getPricingPolicies() {
+  const response = await api.get<PricingApiResponse<ModelPricePolicy[]>>(
+    '/api/pricing-control/policies'
+  )
+  return response.data.data
+}
+
+export async function getPricingRisks() {
+  const response = await api.get<PricingApiResponse<PricingRisk[]>>(
+    '/api/pricing-control/risk'
+  )
+  return response.data.data
+}
+
+export async function getPricingProposals(
+  params: { status?: string; limit?: number; offset?: number } = {}
+) {
+  const response = await api.get<PricingApiResponse<PricingProposalPage>>(
+    '/api/pricing-control/proposals',
+    {
+      params: {
+        status: params.status || undefined,
+        limit: params.limit ?? 50,
+        offset: params.offset ?? 0,
+      },
+    }
+  )
+  return response.data.data
+}
+
+export async function getPricingSyncRuns(limit = 10) {
+  const response = await api.get<PricingApiResponse<PricingSyncRunsResponse>>(
+    '/api/pricing-control/sync-runs',
+    { params: { limit } }
+  )
+  return response.data.data
 }
 
 export async function importPricingOffers(offers: UpstreamModelOffer[]) {

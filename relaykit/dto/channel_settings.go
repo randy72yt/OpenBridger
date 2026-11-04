@@ -24,6 +24,11 @@ type ChannelSettings struct {
 	// HTTP2ConnectionShards spreads HTTP/2 traffic across N independent transports
 	// (1-8). Zero/unset means 1. Ignored when HTTPProtocol is "http1".
 	HTTP2ConnectionShards int `json:"http2_connection_shards,omitempty"`
+	// PricingEndpoint overrides where pricing control collects this channel's
+	// upstream price list. Absolute URLs are used as-is; paths such as
+	// "/api/ratio_config" are resolved against the channel base URL host.
+	// Empty means the default "/api/pricing".
+	PricingEndpoint string `json:"pricing_endpoint,omitempty"`
 }
 
 const (

@@ -40,6 +40,27 @@ func ListPricingProposalReviews(status string) ([]PricingProposalReview, error) 
 	if err != nil {
 		return nil, err
 	}
+	return buildPricingProposalReviews(proposals)
+}
+
+// ListPricingProposalReviewsPage returns one console page of reviews plus the
+// total count, so a growing proposal table can no longer be silently truncated.
+func ListPricingProposalReviewsPage(status string, limit, offset int) ([]PricingProposalReview, int64, error) {
+	proposals, total, err := model.ListModelPriceProposalsPage(status, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	reviews, err := buildPricingProposalReviews(proposals)
+	if err != nil {
+		return nil, 0, err
+	}
+	return reviews, total, nil
+}
+
+func buildPricingProposalReviews(proposals []model.ModelPriceProposal) ([]PricingProposalReview, error) {
+	if len(proposals) == 0 {
+		return []PricingProposalReview{}, nil
+	}
 	policies, err := model.ListModelPricePolicies()
 	if err != nil {
 		return nil, err
@@ -157,8 +178,16 @@ var (
 )
 
 func ValidateAndImportPricingOffers(offers []model.UpstreamModelOffer) error {
+	_, err := ValidateAndImportPricingOffersWithStats(offers)
+	return err
+}
+
+// ValidateAndImportPricingOffersWithStats validates a batch and reports how
+// many rows were written versus kept because a higher-priority source owns
+// them (D3: automated collection wins over manual import).
+func ValidateAndImportPricingOffersWithStats(offers []model.UpstreamModelOffer) (model.PricingOfferImportStats, error) {
 	if len(offers) == 0 {
-		return ErrPricingOfferInvalid
+		return model.PricingOfferImportStats{}, ErrPricingOfferInvalid
 	}
 	now := common.GetTimestamp()
 	for i := range offers {
@@ -168,16 +197,16 @@ func ValidateAndImportPricingOffers(offers []model.UpstreamModelOffer) error {
 		offer.Currency = strings.ToUpper(strings.TrimSpace(offer.Currency))
 		offer.SourceType = strings.TrimSpace(offer.SourceType)
 		if offer.ChannelID <= 0 || offer.UpstreamModel == "" || offer.PublicModel == "" || offer.Currency != "USD" || offer.SourceType == "" {
-			return fmt.Errorf("%w at item %d", ErrPricingOfferInvalid, i)
+			return model.PricingOfferImportStats{}, fmt.Errorf("%w at item %d", ErrPricingOfferInvalid, i)
 		}
 		if !validPriceNumber(offer.InputCost) || !validPriceNumber(offer.OutputCost) || !validPriceNumber(offer.CacheReadCost) {
-			return fmt.Errorf("%w at item %d", ErrPricingOfferInvalid, i)
+			return model.PricingOfferImportStats{}, fmt.Errorf("%w at item %d", ErrPricingOfferInvalid, i)
 		}
 		if offer.UpstreamGroupRatio == nil || !validPriceNumber(*offer.UpstreamGroupRatio) || *offer.UpstreamGroupRatio <= 0 {
-			return fmt.Errorf("%w at item %d", ErrPricingOfferInvalid, i)
+			return model.PricingOfferImportStats{}, fmt.Errorf("%w at item %d", ErrPricingOfferInvalid, i)
 		}
 		if offer.SuccessRateBPS < 0 || offer.SuccessRateBPS > 10000 {
-			return fmt.Errorf("%w at item %d", ErrPricingOfferInvalid, i)
+			return model.PricingOfferImportStats{}, fmt.Errorf("%w at item %d", ErrPricingOfferInvalid, i)
 		}
 		if offer.CollectedAt <= 0 {
 			offer.CollectedAt = now
@@ -186,7 +215,7 @@ func ValidateAndImportPricingOffers(offers []model.UpstreamModelOffer) error {
 			offer.ExpiresAt = offer.CollectedAt + 24*60*60
 		}
 	}
-	return model.ImportUpstreamModelOffers(offers)
+	return model.ImportUpstreamModelOffersWithStats(offers)
 }
 
 func ValidateAndUpsertPricePolicy(policy *model.ModelPricePolicy) error {
@@ -198,13 +227,34 @@ func ValidateAndUpsertPricePolicy(policy *model.ModelPricePolicy) error {
 	if policy.ServiceTier == "" {
 		policy.ServiceTier = "default"
 	}
-	if policy.PublicModel == "" || policy.PrimaryChannelID <= 0 || policy.BackupChannelID < 0 {
+	if policy.Scope == "" {
+		if policy.PublicModel == model.GlobalPricePolicyModel {
+			policy.Scope = model.PricePolicyScopeGlobal
+		} else {
+			policy.Scope = model.PricePolicyScopeModel
+		}
+	}
+	if policy.IsGlobal() {
+		// The default policy carries margins only: no channels, no proposals.
+		policy.Scope = model.PricePolicyScopeGlobal
+		policy.PublicModel = model.GlobalPricePolicyModel
+		policy.PrimaryChannelID = 0
+		policy.BackupChannelID = 0
+	} else if policy.PublicModel == "" || policy.PrimaryChannelID <= 0 || policy.BackupChannelID < 0 {
 		return ErrPricingPolicyInvalid
 	}
-	if policy.TargetMarginBPS <= 0 || policy.TargetMarginBPS >= 10000 || policy.MinimumMarginBPS < 0 || policy.MinimumMarginBPS >= policy.TargetMarginBPS {
+	// A model policy may leave a knob at zero to inherit the global value, so
+	// validate the effective policy while storing the operator's raw input.
+	effective := *policy
+	if !effective.IsGlobal() {
+		if global, err := model.GlobalPricePolicy(); err == nil {
+			effective.ApplyGlobalDefaults(global)
+		}
+	}
+	if effective.TargetMarginBPS <= 0 || effective.TargetMarginBPS >= 10000 || effective.MinimumMarginBPS < 0 || effective.MinimumMarginBPS >= effective.TargetMarginBPS {
 		return ErrPricingPolicyInvalid
 	}
-	if policy.OverheadBPS < 0 || policy.OverheadBPS > 5000 || policy.FallbackProbabilityBPS < 0 || policy.FallbackProbabilityBPS > 10000 || policy.AutoPublishChangeBPS < 0 || policy.AutoPublishChangeBPS > 5000 {
+	if effective.OverheadBPS < 0 || effective.OverheadBPS > 5000 || effective.FallbackProbabilityBPS < 0 || effective.FallbackProbabilityBPS > 10000 || effective.AutoPublishChangeBPS < 0 || effective.AutoPublishChangeBPS > 5000 {
 		return ErrPricingPolicyInvalid
 	}
 	return model.UpsertModelPricePolicy(policy)
@@ -220,6 +270,10 @@ func recalculatePricingProposals(ctx context.Context) (int, []int64, error) {
 	if err != nil {
 		return 0, nil, err
 	}
+	global, err := model.GlobalPricePolicy()
+	if err != nil {
+		return 0, nil, err
+	}
 	created := 0
 	ids := make([]int64, 0)
 	for i := range policies {
@@ -227,9 +281,13 @@ func recalculatePricingProposals(ctx context.Context) (int, []int64, error) {
 			return created, ids, ctx.Err()
 		}
 		policy := policies[i]
+		if policy.IsGlobal() {
+			continue
+		}
 		if !policy.Enabled || policy.PriceLocked {
 			continue
 		}
+		policy.ApplyGlobalDefaults(global)
 		proposal, err := buildPriceProposal(&policy)
 		if err != nil {
 			if errors.Is(err, ErrPricingOfferMissing) || errors.Is(err, ErrPricingCostInvalid) {
@@ -437,6 +495,10 @@ func PublishPricingProposal(id int64) error {
 	return nil
 }
 
+// PricingRisks lists every enabled policy whose effective procurement cost
+// cannot be trusted right now. Each row carries the channel, the timestamps and
+// a machine-readable suggested action so the console can offer a fix instead of
+// an English error code.
 func PricingRisks() ([]map[string]any, error) {
 	policies, err := model.ListModelPricePolicies()
 	if err != nil {
@@ -446,28 +508,70 @@ func PricingRisks() ([]map[string]any, error) {
 	risks := make([]map[string]any, 0)
 	for i := range policies {
 		policy := policies[i]
-		if !policy.Enabled {
+		if policy.IsGlobal() || !policy.Enabled {
 			continue
 		}
-		primary, err := currentOffer(policy.PublicModel, policy.PrimaryChannelID, now)
-		if err != nil {
-			risks = append(risks, map[string]any{"public_model": policy.PublicModel, "service_tier": policy.ServiceTier, "code": "primary_offer_missing_or_expired"})
-		} else if !validPriceNumber(primary.InputCost) || !validPriceNumber(primary.OutputCost) ||
-			primary.InputCost <= 0 || primary.OutputCost <= 0 || primary.UpstreamGroupRatio == nil ||
-			!validPriceNumber(*primary.UpstreamGroupRatio) || *primary.UpstreamGroupRatio <= 0 {
-			risks = append(risks, map[string]any{"public_model": policy.PublicModel, "service_tier": policy.ServiceTier, "code": "primary_offer_cost_invalid"})
-		}
+		risks = append(risks, channelPricingRisks(&policy, "primary", policy.PrimaryChannelID, now)...)
 		if policy.BackupChannelID > 0 {
-			backup, err := currentOffer(policy.PublicModel, policy.BackupChannelID, now)
-			if err != nil {
-				risks = append(risks, map[string]any{"public_model": policy.PublicModel, "service_tier": policy.ServiceTier, "code": "backup_offer_missing_or_expired"})
-			} else if !validPriceNumber(backup.InputCost) || !validPriceNumber(backup.OutputCost) ||
-				backup.UpstreamGroupRatio == nil || !validPriceNumber(*backup.UpstreamGroupRatio) || *backup.UpstreamGroupRatio <= 0 {
-				risks = append(risks, map[string]any{"public_model": policy.PublicModel, "service_tier": policy.ServiceTier, "code": "backup_offer_cost_invalid"})
-			}
+			risks = append(risks, channelPricingRisks(&policy, "backup", policy.BackupChannelID, now)...)
 		}
 	}
 	return risks, nil
+}
+
+func channelPricingRisks(policy *model.ModelPricePolicy, role string, channelID int, now int64) []map[string]any {
+	base := map[string]any{
+		"public_model": policy.PublicModel,
+		"service_tier": policy.ServiceTier,
+		"channel_id":   channelID,
+		"channel_role": role,
+	}
+	offer, err := currentOffer(policy.PublicModel, channelID, now)
+	if err != nil {
+		risk := copyRisk(base)
+		risk["code"] = role + "_offer_missing_or_expired"
+		risk["suggested_action"] = "resync_offers"
+		if latest, ok := latestOfferRow(policy.PublicModel, channelID); ok {
+			risk["last_collected_at"] = latest.CollectedAt
+			risk["expires_at"] = latest.ExpiresAt
+			risk["upstream_group"] = latest.UpstreamGroup
+		}
+		return []map[string]any{risk}
+	}
+	invalid := !validPriceNumber(offer.InputCost) || !validPriceNumber(offer.OutputCost) ||
+		offer.InputCost <= 0 || offer.OutputCost <= 0 || offer.UpstreamGroupRatio == nil ||
+		!validPriceNumber(*offer.UpstreamGroupRatio) || *offer.UpstreamGroupRatio <= 0
+	if !invalid {
+		return nil
+	}
+	risk := copyRisk(base)
+	risk["code"] = role + "_offer_cost_invalid"
+	risk["suggested_action"] = "import_manual_offer"
+	risk["last_collected_at"] = offer.CollectedAt
+	risk["expires_at"] = offer.ExpiresAt
+	risk["upstream_group"] = offer.UpstreamGroup
+	if offer.UpstreamGroupRatio != nil {
+		risk["upstream_group_ratio"] = *offer.UpstreamGroupRatio
+	}
+	return []map[string]any{risk}
+}
+
+func copyRisk(base map[string]any) map[string]any {
+	risk := make(map[string]any, len(base)+6)
+	for key, value := range base {
+		risk[key] = value
+	}
+	return risk
+}
+
+func latestOfferRow(publicModel string, channelID int) (*model.UpstreamModelOffer, bool) {
+	var offer model.UpstreamModelOffer
+	err := model.DB.Where("public_model = ? AND channel_id = ?", publicModel, channelID).
+		Order("collected_at desc").First(&offer).Error
+	if err != nil {
+		return nil, false
+	}
+	return &offer, true
 }
 
 func validPriceNumber(value float64) bool {
@@ -512,6 +616,30 @@ type PricingAutoPublishSkip struct {
 
 func pricingAutoPublishEnabled() bool {
 	return strings.EqualFold(strings.TrimSpace(os.Getenv("PRICING_AUTO_PUBLISH")), "true")
+}
+
+// PricingControlEnabled reports whether the dynamic pricing plane owns
+// procurement cost and selling price. When it is on, manual bulk price writes
+// are rejected so two writers cannot fight over the same price version (D2).
+func PricingControlEnabled() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("PRICING_CONTROL_ENABLED")), "true")
+}
+
+// ErrManualPricingWriteBlocked is returned when a manual price write would
+// compete with the dynamic pricing plane.
+var ErrManualPricingWriteBlocked = errors.New("dynamic pricing control is enabled; selling prices may only be written by approving and publishing a pricing proposal")
+
+// ValidateManualPricingWrite guards the admin price editor. A single model can
+// still be edited on purpose by passing an explicit override with a reason;
+// bulk writes stay blocked because they are what the "sync prices" flow does.
+func ValidateManualPricingWrite(changeCount int, override bool, reason string) error {
+	if !PricingControlEnabled() {
+		return nil
+	}
+	if override && changeCount == 1 && strings.TrimSpace(reason) != "" {
+		return nil
+	}
+	return ErrManualPricingWriteBlocked
 }
 
 // pricingAutoPublishVerifySamples returns how many recent cost snapshots must

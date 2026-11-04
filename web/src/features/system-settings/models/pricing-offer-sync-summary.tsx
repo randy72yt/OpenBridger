@@ -46,14 +46,31 @@ export function PricingOfferSyncSummary(props: PricingOfferSyncSummaryProps) {
       <AlertDescription className='space-y-2 text-current'>
         <p>
           {t(
-            'Imported {{imported}} offers; skipped {{skipped}} models; created {{proposals}} proposals.',
+            'Imported {{imported}} offers; kept {{kept}} higher-priority offers; skipped {{skipped}} models; created {{proposals}} proposals.',
             {
               imported: result.imported,
+              kept: result.kept ?? 0,
               skipped: result.skipped,
               proposals: result.created_proposals,
             }
           )}
         </p>
+        {props.response.success && result.channels.every((c) => !c.error) && (
+          <p className='text-xs'>
+            {t(
+              'Manual sync and the scheduled task share the same pipeline. Auto-publish only runs when PRICING_AUTO_PUBLISH is true.'
+            )}
+          </p>
+        )}
+        {result.auto_publish && (
+          <p>
+            {t('Auto-publish: published {{published}}, skipped {{skipped}}.', {
+              published: result.auto_publish.published,
+              skipped: result.auto_publish.skipped,
+            })}
+            {result.auto_publish.error ? ` (${result.auto_publish.error})` : ''}
+          </p>
+        )}
         {!props.response.success && <p>{props.response.message}</p>}
         <ul className='max-h-48 space-y-2 overflow-y-auto'>
           {result.channels.map((channel) => (

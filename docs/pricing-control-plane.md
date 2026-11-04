@@ -212,3 +212,21 @@ DDD、CodeGo 的自动采集适配器仍需根据它们实际提供的价格接�
 售价默认仍由管理员批准后发布。主节点另设 `PRICING_AUTO_PUBLISH=true` 且 `PRICING_AUTO_PUBLISH_OPERATOR_ID` 为启用中的 root 用户时，只有 `pricing_offer_sync` 会在成功导入并重算后自动发布。模型策略的 `auto_publish_change_bps` 为 0 时保持人工审批；大于 0 时，仅当 default 档、报价有效、涨跌幅不超过该带宽、预期毛利不低于 `minimum_margin_bps`、建议售价不低于压力成本（`below_cost` 硬底线，即使最低毛利设为 0 也不会低于成本发布）、且现行表达式为空或已是 `tier("base", p * … + c * …)` 且没有缓存/音频/图像倍率时才写入售价。
 
 自动发布前还会做成本多次校验（`PRICING_AUTO_PUBLISH_VERIFY_SAMPLES`，默认 3，设 1 关闭）：主、备渠道的当前报价必须与最近 N 次同步采样的成本快照一致（容差 `PRICING_AUTO_PUBLISH_VERIFY_TOLERANCE_BPS`，默认 5%），否则跳过（`cost_unverified`），避免单次上游读数异常驱动无人值守调价。成本经多次采样确认一致的降价可以自动发布；未启用或未通过校验的降价、超带宽、复杂表达式和首次没有现售价的模型继续留在待审列表。`pricing_recalculate` 不发布售价。
+
+### 2026-11 整改后的状态（与上文的差异以此节为准）
+
+| 主题 | 现状 |
+|---|---|
+| 报价有效期 | `PRICING_OFFER_TTL_MINUTES`（默认 120，最低 15）。**必须 ≥ 同步间隔**；`TTL < INTERVAL` 时首轮同步记 warning |
+| 分组倍率 | 解析上游 `model_group_ratio[model][group]`，存在时优先于顶层 `group_ratio[group]`；一个模型可服务多组时由 `PRICING_GROUP_RATIO_POLICY`（`key_group` / `max` / `min`）决定；`max`/`min` 在两层倍率间取边界，避免低估成本。`upstream_model_offers.upstream_group` 记录取值来源组 |
+| 采集端点 | 渠道 `setting.pricing_endpoint` 可覆盖，默认 `/api/pricing`；不再硬编码，与管理员「同步端」口径统一 |
+| 来源优先级 | `new-api-pricing` > `manual`；低优先级不得覆盖未过期的高优先级行，被保留的数量计入 `kept` |
+| 同步结果留痕 | `pricing_sync_runs` 记录每次同步的 trigger / status / imported / kept / skipped / created_proposals / 渠道明细，页面刷新不丢 |
+| 手动 vs 定时 | 两条入口共用 `RunPricingOfferSync` → 采集 → 重算 →（`PRICING_AUTO_PUBLISH=true` 时）自动发布 → 落库 |
+| 售价写入方 | 只有「批准 → 发布」。`PATCH /api/option/model_pricing` 在启用动态定价后拒绝批量写（403），单模型需 `override.enabled=true` + 理由；`PublishPricingProposal` 不受影响 |
+| 策略层级 | `model_price_policies.scope`：`global`（`public_model='*'`，只提供毛利/成本默认值，不生成方案、不进风险列表）+ `model`（覆盖项留 0 表示继承全局，只影响该模型） |
+| 清单 | `GET /api/pricing-control/offers` 支持 `q` / `source_type` / `channel_id` / `include_expired` / `limit` / `offset`，默认只返回 `enabled=1 且未过期`；页面直接展示「实际采购成本 = 基础单价 × 分组倍率」 |
+| 方案列表 | `GET /api/pricing-control/proposals` 分页（`limit`/`offset`），返回 `{items,total}`，不再硬截断 500 条 |
+| 风险列表 | 每条带 `channel_id` / `channel_role` / `last_collected_at` / `expires_at` / `upstream_group` / `suggested_action`，页面给「重新同步」「查看报价」入口 |
+| 数据保留 | `pricing_retention` 任务：成本快照保留 `PRICING_SNAPSHOT_RETENTION_DAYS`（30）天，过期报价保留 `PRICING_EXPIRED_OFFER_RETENTION_DAYS`（7）天。快照仍为追加式，因为自动发布的多重校验依赖最近 N 条样本 |
+| 同步资料 | 新建模型默认只写 `description/icon/tags/vendor/endpoints`，`status` 默认 1；`status` 与 `name_rule` 必须显式勾选才写，避免批量同步反向隐藏在售模型 |

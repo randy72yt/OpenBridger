@@ -5,11 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -24,6 +27,7 @@ const pricingOfferSyncResponseLimit = 10 << 20
 type PricingOfferSyncChannelResult struct {
 	ChannelID int      `json:"channel_id"`
 	Imported  int      `json:"imported"`
+	Kept      int      `json:"kept,omitempty"`
 	Skipped   int      `json:"skipped"`
 	Warnings  []string `json:"warnings,omitempty"`
 	Error     string   `json:"error,omitempty"`
@@ -31,19 +35,22 @@ type PricingOfferSyncChannelResult struct {
 
 type PricingOfferSyncResult struct {
 	Imported         int                             `json:"imported"`
+	Kept             int                             `json:"kept,omitempty"`
 	Skipped          int                             `json:"skipped"`
 	CreatedProposals int                             `json:"created_proposals,omitempty"`
 	AutoPublish      *PricingAutoPublishStats        `json:"auto_publish,omitempty"`
 	Channels         []PricingOfferSyncChannelResult `json:"channels"`
+	Trigger          string                          `json:"trigger,omitempty"`
 }
 
 type upstreamPricingResponse struct {
-	Success        bool                `json:"success"`
-	Message        string              `json:"message"`
-	PricingVersion string              `json:"pricing_version"`
-	GroupRatio     map[string]float64  `json:"group_ratio"`
-	AutoGroups     []string            `json:"auto_groups"`
-	Data           []upstreamPriceItem `json:"data"`
+	Success         bool                          `json:"success"`
+	Message         string                        `json:"message"`
+	PricingVersion  string                        `json:"pricing_version"`
+	GroupRatio      map[string]float64            `json:"group_ratio"`
+	ModelGroupRatio map[string]map[string]float64 `json:"model_group_ratio"`
+	AutoGroups      []string                      `json:"auto_groups"`
+	Data            []upstreamPriceItem           `json:"data"`
 }
 
 type upstreamPriceItem struct {
@@ -60,6 +67,7 @@ type upstreamPriceItem struct {
 }
 
 func SyncPricingOffersFromChannels(ctx context.Context, channelIDs []int) (PricingOfferSyncResult, error) {
+	warnPricingOfferTTL(ctx)
 	if len(channelIDs) == 0 {
 		policies, err := model.ListModelPricePolicies()
 		if err != nil {
@@ -119,19 +127,52 @@ func SyncPricingOffersFromChannels(ctx context.Context, channelIDs []int) (Prici
 			result.Channels = append(result.Channels, channelResult)
 			continue
 		}
-		if err := ValidateAndImportPricingOffers(offers); err != nil {
-			channelResult.Error = err.Error()
+		stats, importErr := ValidateAndImportPricingOffersWithStats(offers)
+		if importErr != nil {
+			channelResult.Error = importErr.Error()
 			result.Channels = append(result.Channels, channelResult)
 			continue
 		}
-		channelResult.Imported = len(offers)
-		result.Imported += len(offers)
+		channelResult.Imported = stats.Applied
+		channelResult.Kept = stats.Kept
+		result.Imported += stats.Applied
+		result.Kept += stats.Kept
 		result.Channels = append(result.Channels, channelResult)
 	}
-	if result.Imported == 0 {
+	if result.Imported == 0 && result.Kept == 0 {
 		return result, errors.New("pricing sync did not import any offers")
 	}
 	return result, nil
+}
+
+const defaultUpstreamPricingPath = "/api/pricing"
+
+// upstreamPricingEndpoint resolves where a channel's price list lives.
+// A channel-level override (dto.ChannelSettings.pricing_endpoint) wins over
+// the historical hard-coded "/api/pricing", so the dynamic pricing collector
+// and the admin "sync endpoint" selector finally agree on one URL.
+func upstreamPricingEndpoint(channel *model.Channel, baseURL *url.URL) (*url.URL, error) {
+	endpoint := strings.TrimSpace(channel.GetSetting().PricingEndpoint)
+	if endpoint == "" {
+		endpoint = defaultUpstreamPricingPath
+	}
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pricing endpoint %q: %w", endpoint, err)
+	}
+	if parsed.IsAbs() {
+		parsed.RawQuery = ""
+		parsed.Fragment = ""
+		return parsed, nil
+	}
+	if !strings.HasPrefix(endpoint, "/") {
+		return nil, fmt.Errorf("pricing endpoint %q must be absolute or start with /", endpoint)
+	}
+	resolved := *baseURL
+	resolved.Path = endpoint
+	resolved.RawQuery = ""
+	resolved.Fragment = ""
+	return &resolved, nil
 }
 
 func fetchPricingOffersForChannel(ctx context.Context, channel *model.Channel) ([]model.UpstreamModelOffer, []string, error) {
@@ -139,15 +180,16 @@ func fetchPricingOffersForChannel(ctx context.Context, channel *model.Channel) (
 	if err != nil || baseURL.Scheme == "" || baseURL.Host == "" {
 		return nil, nil, errors.New("channel has no valid upstream base URL")
 	}
-	baseURL.Path = "/api/pricing"
-	baseURL.RawQuery = ""
-	baseURL.Fragment = ""
+	pricingURL, err := upstreamPricingEndpoint(channel, baseURL)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	key, _, keyErr := channel.GetNextEnabledKey()
 	if keyErr != nil || strings.TrimSpace(key) == "" {
 		return nil, nil, errors.New("channel has no enabled API key")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pricingURL.String(), nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -191,7 +233,9 @@ func fetchPricingOffersForChannel(ctx context.Context, channel *model.Channel) (
 		}
 	}
 
+	policy := pricingGroupRatioPolicy()
 	now := common.GetTimestamp()
+	ttl := pricingOfferTTLSeconds()
 	offers := make([]model.UpstreamModelOffer, 0, len(payload.Data))
 	warnings := make([]string, 0)
 	for i := range payload.Data {
@@ -205,16 +249,9 @@ func fetchPricingOffersForChannel(ctx context.Context, channel *model.Channel) (
 		if len(allowedModels) > 0 && !upstreamAllowed && !publicAllowed {
 			continue
 		}
-		group := ""
-		for _, candidate := range payload.AutoGroups {
-			if common.StringsContains(item.EnableGroups, candidate) {
-				group = candidate
-				break
-			}
-		}
-		groupRatio, ok := payload.GroupRatio[group]
-		if !ok || groupRatio <= 0 || !validPriceNumber(groupRatio) {
-			warnings = append(warnings, item.ModelName+": no positive auto-group ratio")
+		groupRatio, warningsForModel := resolveUpstreamGroupRatio(&payload, item, policy)
+		if len(warningsForModel) > 0 {
+			warnings = append(warnings, warningsForModel...)
 			continue
 		}
 
@@ -227,16 +264,182 @@ func fetchPricingOffersForChannel(ctx context.Context, channel *model.Channel) (
 		if version == "" {
 			version = payload.PricingVersion
 		}
-		ratio := groupRatio
+		ratio := groupRatio.Ratio
 		offers = append(offers, model.UpstreamModelOffer{
 			ChannelID: channel.Id, UpstreamModel: item.ModelName, PublicModel: publicModel,
 			InputCost: inputCost, OutputCost: outputCost, CacheReadCost: cacheReadCost,
-			UpstreamGroupRatio: &ratio, Currency: "USD", SourceType: "new-api-pricing",
-			SourceURL: baseURL.String(), SourceVersion: version, SuccessRateBPS: 10000,
-			CollectedAt: now, ExpiresAt: now + 2*60*60, Enabled: true,
+			UpstreamGroupRatio: &ratio, UpstreamGroup: groupRatio.Group, Currency: "USD", SourceType: "new-api-pricing",
+			SourceURL: pricingURL.String(), SourceVersion: version, SuccessRateBPS: 10000,
+			CollectedAt: now, ExpiresAt: now + ttl, Enabled: true,
 		})
 	}
 	return offers, warnings, nil
+}
+
+type upstreamRatioChoice struct {
+	Group string
+	Ratio float64
+	// Scoped is true when the ratio came from the model-level table
+	// (model_group_ratio[model][group]) rather than the top-level group_ratio.
+	Scoped bool
+	// MinRatio and MaxRatio bound the group across both ratio layers. They are
+	// what the max/min policies compare, so an uncertain upstream can never
+	// silently understate procurement cost.
+	MinRatio float64
+	MaxRatio float64
+}
+
+const (
+	pricingGroupRatioPolicyKeyGroup = "key_group"
+	pricingGroupRatioPolicyMax      = "max"
+	pricingGroupRatioPolicyMin      = "min"
+)
+
+// pricingGroupRatioPolicy selects how the settlement multiplier is chosen when
+// an upstream model is served by several groups. A static /api/pricing response
+// does not reveal which group a runtime request will settle on, so operators
+// must state the assumption explicitly.
+func pricingGroupRatioPolicy() string {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("PRICING_GROUP_RATIO_POLICY"))) {
+	case pricingGroupRatioPolicyMax:
+		return pricingGroupRatioPolicyMax
+	case pricingGroupRatioPolicyMin:
+		return pricingGroupRatioPolicyMin
+	default:
+		return pricingGroupRatioPolicyKeyGroup
+	}
+}
+
+// ratioFor resolves one group's multiplier, preferring the model-level
+// override table when the upstream provides it. MinRatio/MaxRatio keep both
+// layers so the max/min policies can stay conservative without guessing which
+// layer the upstream actually bills with.
+func (payload *upstreamPricingResponse) ratioFor(modelName, group string) (upstreamRatioChoice, bool) {
+	if group == "" {
+		return upstreamRatioChoice{}, false
+	}
+	topRatio, hasTop := payload.GroupRatio[group]
+	hasTop = hasTop && topRatio > 0 && validPriceNumber(topRatio)
+	scopedRatio, hasScoped := 0.0, false
+	if byGroup, ok := payload.ModelGroupRatio[modelName]; ok {
+		if ratio, exists := byGroup[group]; exists && ratio > 0 && validPriceNumber(ratio) {
+			scopedRatio, hasScoped = ratio, true
+		}
+	}
+	switch {
+	case hasScoped && hasTop:
+		return upstreamRatioChoice{
+			Group: group, Ratio: scopedRatio, Scoped: true,
+			MinRatio: math.Min(scopedRatio, topRatio), MaxRatio: math.Max(scopedRatio, topRatio),
+		}, true
+	case hasScoped:
+		return upstreamRatioChoice{Group: group, Ratio: scopedRatio, Scoped: true, MinRatio: scopedRatio, MaxRatio: scopedRatio}, true
+	case hasTop:
+		return upstreamRatioChoice{Group: group, Ratio: topRatio, MinRatio: topRatio, MaxRatio: topRatio}, true
+	}
+	return upstreamRatioChoice{}, false
+}
+
+// resolveUpstreamGroupRatio picks the procurement multiplier for one model.
+//
+// key_group keeps the upstream auto-group order (the key's own candidates),
+// max/min widen the choice to every group that can serve the model. max is the
+// conservative default for keys whose settlement group cannot be proven,
+// because understating cost silently eats margin.
+func resolveUpstreamGroupRatio(payload *upstreamPricingResponse, item upstreamPriceItem, policy string) (upstreamRatioChoice, []string) {
+	candidates := make([]upstreamRatioChoice, 0, len(item.EnableGroups))
+	seen := make(map[string]struct{}, len(item.EnableGroups))
+	for _, group := range item.EnableGroups {
+		group = strings.TrimSpace(group)
+		if group == "" {
+			continue
+		}
+		if _, dup := seen[group]; dup {
+			continue
+		}
+		seen[group] = struct{}{}
+		if choice, ok := payload.ratioFor(item.ModelName, group); ok {
+			candidates = append(candidates, choice)
+		}
+	}
+
+	switch policy {
+	case pricingGroupRatioPolicyMax, pricingGroupRatioPolicyMin:
+		if len(candidates) == 0 {
+			return upstreamRatioChoice{}, []string{ratioWarning(item, payload, candidates)}
+		}
+		chosen := candidates[0]
+		best := chosen.MaxRatio
+		if policy == pricingGroupRatioPolicyMin {
+			best = chosen.MinRatio
+		}
+		for _, candidate := range candidates[1:] {
+			if policy == pricingGroupRatioPolicyMax && candidate.MaxRatio > best {
+				chosen, best = candidate, candidate.MaxRatio
+			}
+			if policy == pricingGroupRatioPolicyMin && candidate.MinRatio < best {
+				chosen, best = candidate, candidate.MinRatio
+			}
+		}
+		chosen.Ratio = best
+		return chosen, nil
+	default:
+		for _, autoGroup := range payload.AutoGroups {
+			for _, candidate := range candidates {
+				if candidate.Group == autoGroup {
+					return candidate, nil
+				}
+			}
+		}
+		return upstreamRatioChoice{}, []string{ratioWarning(item, payload, candidates)}
+	}
+}
+
+func ratioWarning(item upstreamPriceItem, payload *upstreamPricingResponse, candidates []upstreamRatioChoice) string {
+	available := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		available = append(available, fmt.Sprintf("%s=%s", candidate.Group, trimFloat(candidate.Ratio)))
+	}
+	if len(available) == 0 {
+		available = append(available, "none")
+	}
+	return fmt.Sprintf("%s: no usable upstream group ratio (enable_groups=[%s], auto_groups=[%s], candidates=[%s])",
+		item.ModelName, strings.Join(item.EnableGroups, ","), strings.Join(payload.AutoGroups, ","), strings.Join(available, ","))
+}
+
+func trimFloat(value float64) string {
+	return strconv.FormatFloat(value, 'f', -1, 64)
+}
+
+// pricingOfferTTLSeconds is the lifetime of a collected offer. It must be at
+// least as long as the sync interval, otherwise the inventory is empty and
+// every policy lands in the risk list between two successful syncs.
+func pricingOfferTTLSeconds() int64 {
+	minutes := common.GetEnvOrDefault("PRICING_OFFER_TTL_MINUTES", 120)
+	if minutes < 15 {
+		minutes = 15
+	}
+	return int64(minutes) * 60
+}
+
+var pricingOfferTTLWarningOnce sync.Once
+
+func warnPricingOfferTTL(ctx context.Context) {
+	pricingOfferTTLWarningOnce.Do(func() {
+		ttlMinutes := common.GetEnvOrDefault("PRICING_OFFER_TTL_MINUTES", 120)
+		intervalMinutes := common.GetEnvOrDefault("PRICING_OFFER_SYNC_INTERVAL_MINUTES", 60)
+		if intervalMinutes < 15 {
+			intervalMinutes = 15
+		}
+		if ttlMinutes < intervalMinutes {
+			logger.LogWarn(ctx, fmt.Sprintf(
+				"PRICING_OFFER_TTL_MINUTES=%d is shorter than PRICING_OFFER_SYNC_INTERVAL_MINUTES=%d; offers will expire before the next sync, leaving the cost inventory empty and every policy in the risk list",
+				ttlMinutes, intervalMinutes))
+		}
+		if ttlMinutes < 15 {
+			logger.LogWarn(ctx, "PRICING_OFFER_TTL_MINUTES below 15 is clamped to 15")
+		}
+	})
 }
 
 type pricingOfferSyncHandler struct{}
@@ -254,12 +457,8 @@ func (pricingOfferSyncHandler) Interval() time.Duration {
 }
 func (pricingOfferSyncHandler) NewPayload() any { return map[string]any{"scheduled": true} }
 func (pricingOfferSyncHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
-	result, err := SyncPricingOffersFromChannels(ctx, nil)
+	result, err := RunPricingOfferSync(ctx, nil, "scheduled")
 	if err != nil {
-		failSystemTask(task, runnerID, err)
-		return
-	}
-	if err := completePricingOfferSync(ctx, &result); err != nil {
 		if result.AutoPublish != nil {
 			logger.LogWarn(ctx, fmt.Sprintf("pricing auto-publish failed: %s", err.Error()))
 			if finishErr := model.FinishSystemTask(task.TaskID, runnerID, model.SystemTaskStatusFailed, result, err.Error()); finishErr != nil {
@@ -275,10 +474,51 @@ func (pricingOfferSyncHandler) Run(ctx context.Context, task *model.SystemTask, 
 	}
 }
 
-// completePricingOfferSync recalculates proposals after a successful import.
-// Selling prices change only when PRICING_AUTO_PUBLISH=true. The separate
-// pricing_recalculate task stays proposal-only.
-func completePricingOfferSync(ctx context.Context, result *PricingOfferSyncResult) error {
+// RunPricingOfferSync is the single entry point for both the manual button and
+// the scheduled task: collect, recalculate, optionally auto-publish, then
+// persist the run so the console can show the last result after a refresh.
+func RunPricingOfferSync(ctx context.Context, channelIDs []int, trigger string) (PricingOfferSyncResult, error) {
+	startedAt := common.GetTimestamp()
+	result, err := SyncPricingOffersFromChannels(ctx, channelIDs)
+	result.Trigger = trigger
+	if err == nil {
+		err = CompletePricingOfferSync(ctx, &result)
+	}
+	recordPricingSyncRun(ctx, trigger, startedAt, &result, err)
+	return result, err
+}
+
+func recordPricingSyncRun(ctx context.Context, trigger string, startedAt int64, result *PricingOfferSyncResult, syncErr error) {
+	status := "succeeded"
+	message := ""
+	if syncErr != nil {
+		status = "failed"
+		message = syncErr.Error()
+		if result.Imported > 0 || result.Kept > 0 {
+			status = "partial"
+		}
+	}
+	channels := ""
+	if encoded, err := common.Marshal(result.Channels); err == nil {
+		channels = string(encoded)
+	}
+	run := &model.PricingSyncRun{
+		Trigger: trigger, Status: status,
+		Imported: result.Imported, Kept: result.Kept, Skipped: result.Skipped,
+		CreatedProposals: result.CreatedProposals, Channels: channels, ErrorMessage: message,
+		StartedAt: startedAt, FinishedAt: common.GetTimestamp(),
+	}
+	if err := model.RecordPricingSyncRun(run); err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("failed to record pricing sync run: %s", err.Error()))
+	}
+}
+
+// CompletePricingOfferSync recalculates proposals after a successful import.
+// Both the manual button and the scheduled task go through this function so the
+// same payload always produces the same outcome. Selling prices change only
+// when PRICING_AUTO_PUBLISH=true; the separate pricing_recalculate task stays
+// proposal-only.
+func CompletePricingOfferSync(ctx context.Context, result *PricingOfferSyncResult) error {
 	created, ids, err := recalculatePricingProposals(ctx)
 	if err != nil {
 		return err

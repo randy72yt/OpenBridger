@@ -37,14 +37,9 @@ func SyncPricingOffers(c *gin.Context) {
 			return
 		}
 	}
-	result, err := service.SyncPricingOffersFromChannels(c.Request.Context(), request.ChannelIDs)
+	result, err := service.RunPricingOfferSync(c.Request.Context(), request.ChannelIDs, "manual")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error(), "data": result})
-		return
-	}
-	result.CreatedProposals, err = service.RecalculatePricingProposals(c.Request.Context())
-	if err != nil {
-		common.ApiError(c, err)
 		return
 	}
 	recordManageAudit(c, "pricing.offers.sync", map[string]interface{}{"channel_ids": request.ChannelIDs, "imported": result.Imported})
@@ -52,12 +47,23 @@ func SyncPricingOffers(c *gin.Context) {
 }
 
 func GetPricingOffers(c *gin.Context) {
-	offers, err := model.ListUpstreamModelOffers(c.Query("model"))
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	offset, _ := strconv.Atoi(c.Query("offset"))
+	channelID, _ := strconv.Atoi(c.Query("channel_id"))
+	page, err := model.ListUpstreamModelOffersPage(model.UpstreamModelOfferQuery{
+		PublicModel:    c.Query("model"),
+		Keyword:        c.Query("q"),
+		SourceType:     c.Query("source_type"),
+		ChannelID:      channelID,
+		IncludeExpired: c.Query("include_expired") == "true",
+		Limit:          limit,
+		Offset:         offset,
+	})
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, offers)
+	common.ApiSuccess(c, page)
 }
 
 func UpsertPricingPolicy(c *gin.Context) {
@@ -94,12 +100,14 @@ func RecalculatePricing(c *gin.Context) {
 }
 
 func GetPricingProposals(c *gin.Context) {
-	proposals, err := service.ListPricingProposalReviews(c.Query("status"))
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	offset, _ := strconv.Atoi(c.Query("offset"))
+	reviews, total, err := service.ListPricingProposalReviewsPage(c.Query("status"), limit, offset)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, proposals)
+	common.ApiSuccess(c, gin.H{"items": reviews, "total": total, "limit": limit, "offset": offset})
 }
 
 func ApprovePricingProposal(c *gin.Context) {
@@ -151,4 +159,19 @@ func GetPricingRisks(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, risks)
+}
+
+func GetPricingSyncRuns(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	runs, err := model.ListPricingSyncRuns(limit)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	latest, err := model.LatestPricingSyncRun()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"items": runs, "latest": latest})
 }
