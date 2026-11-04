@@ -293,20 +293,30 @@ const (
 	pricingGroupRatioPolicyKeyGroup = "key_group"
 	pricingGroupRatioPolicyMax      = "max"
 	pricingGroupRatioPolicyMin      = "min"
+	pricingGroupRatioPolicyMedian   = "median"
 )
 
 // pricingGroupRatioPolicy selects how the settlement multiplier is chosen when
 // an upstream model is served by several groups. A static /api/pricing response
 // does not reveal which group a runtime request will settle on, so operators
 // must state the assumption explicitly.
+//
+// key_group follows the provider's own auto_groups order, max/min bound the
+// uncertainty, and median is the neutral estimate. Median is the default
+// because measuring real traffic showed per-model ratios spanning 0.002-1.0 on
+// the same response: max over-priced models by up to 15x while the private
+// settlement group sat near the median. Calibration supersedes this guess as
+// soon as a model has traffic.
 func pricingGroupRatioPolicy() string {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("PRICING_GROUP_RATIO_POLICY"))) {
 	case pricingGroupRatioPolicyMax:
 		return pricingGroupRatioPolicyMax
 	case pricingGroupRatioPolicyMin:
 		return pricingGroupRatioPolicyMin
-	default:
+	case pricingGroupRatioPolicyKeyGroup:
 		return pricingGroupRatioPolicyKeyGroup
+	default:
+		return pricingGroupRatioPolicyMedian
 	}
 }
 
@@ -382,6 +392,32 @@ func resolveUpstreamGroupRatio(payload *upstreamPricingResponse, item upstreamPr
 			}
 		}
 		chosen.Ratio = best
+		return chosen, nil
+	case pricingGroupRatioPolicyMedian:
+		// The provider never publishes which group a model settles through, so
+		// neither the maximum nor the minimum is right in general: max overprices
+		// a cheap route, min under-prices an expensive one. The median is the
+		// neutral estimate, and calibration corrects it once traffic exists.
+		if len(candidates) == 0 {
+			return upstreamRatioChoice{}, []string{ratioWarning(item, payload, candidates)}
+		}
+		values := make([]float64, 0, len(candidates))
+		for _, candidate := range candidates {
+			values = append(values, candidate.Ratio)
+		}
+		sort.Float64s(values)
+		median := values[len(values)/2]
+		if len(values)%2 == 0 {
+			median = (values[len(values)/2-1] + values[len(values)/2]) / 2
+		}
+		chosen := candidates[0]
+		bestDelta := math.Abs(chosen.Ratio - median)
+		for _, candidate := range candidates[1:] {
+			if delta := math.Abs(candidate.Ratio - median); delta < bestDelta {
+				chosen, bestDelta = candidate, delta
+			}
+		}
+		chosen.Ratio = median
 		return chosen, nil
 	default:
 		for _, autoGroup := range payload.AutoGroups {

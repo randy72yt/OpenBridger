@@ -83,6 +83,46 @@ vi.mock('../pricing-control-api', () => ({
     limit: 50,
     offset: 0,
   })),
+  getPricingCalibrations: vi.fn(async () => ({
+    items: [
+      {
+        id: 1,
+        channel_id: 7,
+        public_model: 'gpt-5.4',
+        upstream_model: 'gpt-5.4',
+        effective_ratio: 0.0368,
+        policy_ratio: 1.8,
+        observed_group: 'claude-kiro',
+        source: 'upstream_log',
+        samples: 30,
+        billed_usd: 0.01,
+        theory_usd: 0.27,
+        dispersion_pct: 0,
+        confidence: 1,
+        window_start: 1,
+        window_end: 4102444800,
+        applied: true,
+        reason: '',
+        created_at: 1,
+        updated_at: 1,
+      },
+    ],
+    total: 1,
+    limit: 50,
+    offset: 0,
+    summary: {
+      models: 1,
+      applied: 1,
+      usable: 1,
+      stale: 0,
+      last_calibrated_at: 4102444800,
+      policy_overstatement: 48.9,
+      observed_groups: [{ group: 'claude-kiro', models: 1 }],
+      stale_hours: 96,
+    },
+  })),
+  syncPricingCalibrations: vi.fn(),
+  pinPricingCalibration: vi.fn(),
   importPricingOffers: vi.fn(),
   syncPricingOffers: vi.fn(),
   savePricingPolicy: vi.fn(),
@@ -114,5 +154,15 @@ describe('pricing control section', () => {
     expect(screen.getByText('$1.8')).toBeInTheDocument()
     expect(screen.getByText('claude-max')).toBeInTheDocument()
     expect(screen.getByText('No valid upstream offer')).toBeInTheDocument()
+
+    // Calibration surfaces the measured factor next to the published ratio and
+    // states how badly the published ratio overprices cost.
+    // The label appears twice: the overview card and the calibration summary.
+    expect(screen.getAllByText('Calibrated models').length).toBeGreaterThan(0)
+    expect(screen.getByText('1/1')).toBeInTheDocument()
+    expect(screen.getByText('48.9×')).toBeInTheDocument()
+    expect(screen.getByText('0.036800')).toBeInTheDocument()
+    // The observed settlement group shows in both the summary and the table row.
+    expect(screen.getAllByText('claude-kiro').length).toBeGreaterThan(0)
   })
 })

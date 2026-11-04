@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 
@@ -41,17 +42,17 @@ type UpstreamModelOffer struct {
 	UpstreamGroupRatio *float64 `json:"upstream_group_ratio" gorm:"type:decimal(20,8)"`
 	// UpstreamGroup records which upstream group produced UpstreamGroupRatio,
 	// so a cost can be traced back to the settlement group it came from.
-	UpstreamGroup      string   `json:"upstream_group" gorm:"type:varchar(64);not null;default:''"`
-	Currency           string   `json:"currency" gorm:"type:varchar(16);not null"`
-	SourceType         string   `json:"source_type" gorm:"type:varchar(32);not null"`
-	SourceURL          string   `json:"source_url" gorm:"type:varchar(512);not null"`
-	SourceVersion      string   `json:"source_version" gorm:"type:varchar(128);not null"`
-	SuccessRateBPS     int      `json:"success_rate_bps" gorm:"not null"`
-	CollectedAt        int64    `json:"collected_at" gorm:"bigint;index"`
-	ExpiresAt          int64    `json:"expires_at" gorm:"bigint;index"`
-	Enabled            bool     `json:"enabled" gorm:"not null"`
-	CreatedAt          int64    `json:"created_at" gorm:"bigint"`
-	UpdatedAt          int64    `json:"updated_at" gorm:"bigint"`
+	UpstreamGroup  string `json:"upstream_group" gorm:"type:varchar(64);not null;default:''"`
+	Currency       string `json:"currency" gorm:"type:varchar(16);not null"`
+	SourceType     string `json:"source_type" gorm:"type:varchar(32);not null"`
+	SourceURL      string `json:"source_url" gorm:"type:varchar(512);not null"`
+	SourceVersion  string `json:"source_version" gorm:"type:varchar(128);not null"`
+	SuccessRateBPS int    `json:"success_rate_bps" gorm:"not null"`
+	CollectedAt    int64  `json:"collected_at" gorm:"bigint;index"`
+	ExpiresAt      int64  `json:"expires_at" gorm:"bigint;index"`
+	Enabled        bool   `json:"enabled" gorm:"not null"`
+	CreatedAt      int64  `json:"created_at" gorm:"bigint"`
+	UpdatedAt      int64  `json:"updated_at" gorm:"bigint"`
 }
 
 type UpstreamCostSnapshot struct {
@@ -84,9 +85,9 @@ func RecentUpstreamCostSnapshots(db *gorm.DB, channelID int, publicModel string,
 }
 
 type ModelPricePolicy struct {
-	ID                     int64  `json:"id" gorm:"primaryKey"`
-	PublicModel            string `json:"public_model" gorm:"type:varchar(191);uniqueIndex:idx_price_policy,priority:1"`
-	ServiceTier            string `json:"service_tier" gorm:"type:varchar(32);uniqueIndex:idx_price_policy,priority:2"`
+	ID          int64  `json:"id" gorm:"primaryKey"`
+	PublicModel string `json:"public_model" gorm:"type:varchar(191);uniqueIndex:idx_price_policy,priority:1"`
+	ServiceTier string `json:"service_tier" gorm:"type:varchar(32);uniqueIndex:idx_price_policy,priority:2"`
 	// Scope is "global" for the single default row and "model" otherwise (D4).
 	Scope                  string `json:"scope" gorm:"type:varchar(16);not null;default:'model'"`
 	PrimaryChannelID       int    `json:"primary_channel_id" gorm:"index"`
@@ -326,7 +327,7 @@ func upsertUpstreamModelOffer(tx *gorm.DB, offer *UpstreamModelOffer) (bool, err
 		OfferID: current.ID, ChannelID: offer.ChannelID, PublicModel: offer.PublicModel,
 		InputCost: offer.InputCost, OutputCost: offer.OutputCost, CacheReadCost: offer.CacheReadCost,
 		UpstreamGroupRatio: offer.UpstreamGroupRatio, UpstreamGroup: offer.UpstreamGroup,
-		Currency:           offer.Currency, SourceVersion: offer.SourceVersion, CollectedAt: offer.CollectedAt,
+		Currency: offer.Currency, SourceVersion: offer.SourceVersion, CollectedAt: offer.CollectedAt,
 	}).Error; err != nil {
 		return false, err
 	}
@@ -590,4 +591,213 @@ func PrunePricingSyncRuns(cutoff int64) (int64, error) {
 	}
 	result := DB.Where("started_at < ?", cutoff).Delete(&PricingSyncRun{})
 	return result.RowsAffected, result.Error
+}
+
+const (
+	// PricingCalibrationSourceUpstreamLog marks a factor derived from the
+	// upstream provider's own consumption log. It is the only source that
+	// reflects what the provider actually charged us.
+	PricingCalibrationSourceUpstreamLog = "upstream_log"
+	// PricingCalibrationSourceManual marks a factor a human pinned on purpose.
+	// A manual row is never overwritten by the automatic calibration.
+	PricingCalibrationSourceManual = "manual"
+	// PricingCalibrationSourceSeed marks the one-shot factor imported from a
+	// measured sample before the automatic loop had any data.
+	PricingCalibrationSourceSeed = "seed"
+)
+
+// UpstreamCostCalibration records the end-to-end factor between what an upstream
+// provider actually billed us and what our own price table predicts for the very
+// same tokens:
+//
+//	factor = (quota / quota_per_unit) / (tokens × our published unit price)
+//
+// Upstream pricing is not reconstructable from `/api/pricing` alone. Real
+// traffic showed the same model settling through a group whose ratio is absent
+// from the public table, cache tokens discounted by a per-request ratio, a
+// night-time factor, tiered expressions and a currency divisor. Rather than
+// modelling each of those, the factor absorbs all of them at once: multiplying
+// our base cost by the factor reproduces the provider's invoice exactly.
+//
+// The factor is a property of (channel, model) and is re-derived from real
+// traffic, so a provider changing its markup is picked up without a code change.
+type UpstreamCostCalibration struct {
+	ID          int64  `json:"id" gorm:"primaryKey"`
+	ChannelID   int    `json:"channel_id" gorm:"uniqueIndex:idx_upstream_cost_calibration,priority:1;index"`
+	PublicModel string `json:"public_model" gorm:"type:varchar(191);uniqueIndex:idx_upstream_cost_calibration,priority:2;index"`
+	// UpstreamModel is the name the provider used, kept for audit because the
+	// same public model can be served under a different upstream name.
+	UpstreamModel string `json:"upstream_model" gorm:"type:varchar(191);not null;default:''"`
+	// EffectiveRatio replaces UpstreamModelOffer.UpstreamGroupRatio when pricing.
+	EffectiveRatio float64 `json:"effective_ratio" gorm:"type:decimal(20,10);not null"`
+	// PolicyRatio is what the group-ratio policy would have produced, kept so
+	// the UI can show how far the policy is off.
+	PolicyRatio float64 `json:"policy_ratio" gorm:"type:decimal(20,10);not null;default:0"`
+	// ObservedGroup is the settlement group seen in the upstream log. It is the
+	// only way to learn which group a model actually settles through.
+	ObservedGroup string  `json:"observed_group" gorm:"type:varchar(64);not null;default:''"`
+	Source        string  `json:"source" gorm:"type:varchar(32);not null"`
+	Samples       int     `json:"samples" gorm:"not null;default:0"`
+	BilledUSD     float64 `json:"billed_usd" gorm:"type:decimal(20,8);not null;default:0"`
+	TheoryUSD     float64 `json:"theory_usd" gorm:"type:decimal(20,8);not null;default:0"`
+	// DispersionPct is the median absolute deviation of the per-request factor,
+	// as a percentage of the median. A high value means traffic is mixing
+	// billing modes (for example standard and long-context tiers), so a single
+	// factor cannot describe them all.
+	DispersionPct float64 `json:"dispersion_pct" gorm:"type:decimal(10,4);not null;default:0"`
+	Confidence    float64 `json:"confidence" gorm:"type:decimal(6,4);not null;default:0"`
+	WindowStart   int64   `json:"window_start" gorm:"bigint;not null;default:0"`
+	WindowEnd     int64   `json:"window_end" gorm:"bigint;not null;default:0;index"`
+	Applied       bool    `json:"applied" gorm:"not null;default:false"`
+	Reason        string  `json:"reason" gorm:"type:varchar(255);not null;default:''"`
+	CreatedAt     int64   `json:"created_at" gorm:"bigint"`
+	UpdatedAt     int64   `json:"updated_at" gorm:"bigint"`
+}
+
+func (UpstreamCostCalibration) TableName() string {
+	return "upstream_cost_calibrations"
+}
+
+// UpstreamCostCalibrationKey is the lookup key used by the pricing path.
+func UpstreamCostCalibrationKey(channelID int, publicModel string) string {
+	return fmt.Sprintf("%d|%s", channelID, strings.ToLower(strings.TrimSpace(publicModel)))
+}
+
+func (cal *UpstreamCostCalibration) IsUsable(now, staleSeconds int64) bool {
+	if cal == nil || !cal.Applied {
+		return false
+	}
+	if cal.EffectiveRatio <= 0 || math.IsNaN(cal.EffectiveRatio) || math.IsInf(cal.EffectiveRatio, 0) {
+		return false
+	}
+	if staleSeconds > 0 && now-cal.WindowEnd > staleSeconds {
+		return false
+	}
+	return true
+}
+
+func UpsertUpstreamCostCalibration(cal *UpstreamCostCalibration) error {
+	if cal == nil {
+		return errors.New("calibration is required")
+	}
+	cal.PublicModel = strings.TrimSpace(cal.PublicModel)
+	if cal.ChannelID <= 0 || cal.PublicModel == "" {
+		return errors.New("calibration channel and model are required")
+	}
+	now := common.GetTimestamp()
+	if cal.CreatedAt <= 0 {
+		cal.CreatedAt = now
+	}
+	cal.UpdatedAt = now
+	return DB.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "channel_id"}, {Name: "public_model"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"upstream_model", "effective_ratio", "policy_ratio", "observed_group",
+			"source", "samples", "billed_usd", "theory_usd", "dispersion_pct",
+			"confidence", "window_start", "window_end", "applied", "reason", "updated_at",
+		}),
+	}).Create(cal).Error
+}
+
+func ListUpstreamCostCalibrations() ([]UpstreamCostCalibration, error) {
+	var rows []UpstreamCostCalibration
+	err := DB.Order("public_model asc").Find(&rows).Error
+	return rows, err
+}
+
+// UpstreamCostCalibrationMap loads every calibration in one query. The pricing
+// path calls this once per recalculation instead of per model.
+func UpstreamCostCalibrationMap() (map[string]UpstreamCostCalibration, error) {
+	rows, err := ListUpstreamCostCalibrations()
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]UpstreamCostCalibration, len(rows))
+	for _, row := range rows {
+		out[UpstreamCostCalibrationKey(row.ChannelID, row.PublicModel)] = row
+	}
+	return out, nil
+}
+
+func FindUpstreamCostCalibration(channelID int, publicModel string) (*UpstreamCostCalibration, error) {
+	var cal UpstreamCostCalibration
+	err := DB.Where("channel_id = ? AND public_model = ?", channelID, strings.TrimSpace(publicModel)).
+		First(&cal).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &cal, nil
+}
+
+// PruneUpstreamCostCalibrations drops rows for models that stopped being
+// calibrated, so a decommissioned model cannot linger as a stale override.
+func PruneUpstreamCostCalibrations(cutoff int64) (int64, error) {
+	if cutoff <= 0 {
+		return 0, errors.New("calibration cutoff is required")
+	}
+	result := DB.Where("updated_at < ? AND source <> ?", cutoff, PricingCalibrationSourceManual).
+		Delete(&UpstreamCostCalibration{})
+	return result.RowsAffected, result.Error
+}
+
+// ListCurrentUpstreamModelOffers returns the live offers of one channel, newest
+// first per public model. Calibration needs the exact unit prices the pricing
+// path uses, so it must read offers and not the upstream price list.
+func ListCurrentUpstreamModelOffers(channelID int, now int64) ([]UpstreamModelOffer, error) {
+	query := DB.Where("enabled = ?", true)
+	if channelID > 0 {
+		query = query.Where("channel_id = ?", channelID)
+	}
+	if now > 0 {
+		query = query.Where("expires_at > ?", now)
+	}
+	var rows []UpstreamModelOffer
+	err := query.Order("public_model asc, collected_at desc").Find(&rows).Error
+	return rows, err
+}
+
+// ListChannelsWithPricingOffers lists the channels the pricing control plane
+// actually manages, so calibration never walks unrelated channels.
+func ListChannelsWithPricingOffers() ([]int, error) {
+	var ids []int
+	err := DB.Model(&UpstreamModelOffer{}).Distinct("channel_id").Pluck("channel_id", &ids).Error
+	return ids, err
+}
+
+// DeleteUpstreamCostCalibration removes one calibration row, optionally limited
+// to a single source so an automatic row cannot be deleted by mistake.
+func DeleteUpstreamCostCalibration(channelID int, publicModel, source string) error {
+	query := DB.Where("channel_id = ? AND public_model = ?", channelID, strings.TrimSpace(publicModel))
+	if source != "" {
+		query = query.Where("source = ?", source)
+	}
+	return query.Delete(&UpstreamCostCalibration{}).Error
+}
+
+// ListUpstreamCostCalibrationsPage pages the calibration table for the console.
+func ListUpstreamCostCalibrationsPage(keyword string, channelID, limit, offset int) ([]UpstreamCostCalibration, int64, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	query := DB.Model(&UpstreamCostCalibration{})
+	if trimmed := strings.TrimSpace(keyword); trimmed != "" {
+		like := "%" + trimmed + "%"
+		query = query.Where("public_model LIKE ? OR upstream_model LIKE ? OR observed_group LIKE ?", like, like, like)
+	}
+	if channelID > 0 {
+		query = query.Where("channel_id = ?", channelID)
+	}
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var rows []UpstreamCostCalibration
+	err := query.Order("applied desc, public_model asc").Limit(limit).Offset(offset).Find(&rows).Error
+	return rows, total, err
 }

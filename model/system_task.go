@@ -24,6 +24,7 @@ const (
 	SystemTaskTypePricingRecalculate = "pricing_recalculate"
 	SystemTaskTypePricingOfferSync   = "pricing_offer_sync"
 	SystemTaskTypePricingRetention   = "pricing_retention"
+	SystemTaskTypePricingCalibration = "pricing_calibration"
 )
 
 var ErrSystemTaskLockLost = errors.New("system task lock lost")

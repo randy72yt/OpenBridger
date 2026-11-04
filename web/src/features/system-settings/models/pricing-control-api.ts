@@ -23,6 +23,8 @@ import { api } from '@/lib/api'
 import type {
   ModelPricePolicy,
   PricingApiResponse,
+  PricingCalibrationPage,
+  PricingCalibrationResult,
   PricingOfferPage,
   PricingOfferSyncResult,
   PricingProposalPage,
@@ -136,5 +138,40 @@ export async function updatePricingProposal(
   const response = await api.post(
     `/api/pricing-control/proposals/${id}/${action}`
   )
+  return response.data
+}
+
+export async function getPricingCalibrations(
+  params: { keyword?: string; limit?: number; offset?: number } = {}
+) {
+  const response = await api.get<PricingApiResponse<PricingCalibrationPage>>(
+    '/api/pricing-control/calibrations',
+    {
+      params: {
+        q: params.keyword || undefined,
+        limit: params.limit ?? 50,
+        offset: params.offset ?? 0,
+      },
+    }
+  )
+  return response.data.data
+}
+
+export async function syncPricingCalibrations() {
+  const response = await api.post<PricingApiResponse<PricingCalibrationResult>>(
+    '/api/pricing-control/calibrations/sync',
+    {},
+    { skipErrorHandler: true }
+  )
+  return response.data
+}
+
+export async function pinPricingCalibration(payload: {
+  channel_id: number
+  public_model: string
+  effective_ratio: number
+  reason?: string
+}) {
+  const response = await api.put('/api/pricing-control/calibrations', payload)
   return response.data
 }

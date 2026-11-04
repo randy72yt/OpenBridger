@@ -543,3 +543,60 @@ curl -sS -H "Authorization: Bearer $UPSTREAM_KEY" \
 - 后端：`go build ./...` 通过；`go test ./service/... ./model/... ./controller/...` 通过（新增 6 组用例：倍率策略、TTL、来源优先级、全局策略继承、写入守卫、同步记录）。
 - 前端：`tsgo -b` 定价模块零错误；`vitest` 定价模块 7 个用例通过。
 - 未跑：MySQL / PostgreSQL 矩阵（需 `TEST_MYSQL_DSN` / `TEST_POSTGRES_DSN`）；生产账单对账（需真实 key）。
+
+---
+
+## 11. 第二阶段：把成本倍率换成实测值（自校准）
+
+### 11.1 为什么第一阶段的倍率解析不够
+
+用真实 key 在生产上对账后，第一阶段的前提被证伪：
+
+| 验证 | 结果 |
+|---|---|
+| 带 key 与匿名请求 `/api/pricing` | **逐字节相同**，`auto_groups` 与 key 无关 → `key_group` 等于「按顺序猜第一个组」 |
+| `model_group_ratio[m][g] / group_ratio[g]` | 750 条里只有 `0.147059`（=1/6.8，600 条）和 `1.0`（150 条）。上游 `/api/status` 的 `usd_exchange_rate=6.8` → 这是**币种换算**，不是模型级定价 |
+| 实际结算分组 | 日志 `group` 字段显示为 `claude-kiro`、`openai-luna`、`codex-plus`、`gemini`、`grok`、`glm`、`kimi`；`enable_groups` 里还有 7 个组不在公开倍率表中（`openai-ent-13481`、`sub-openai`、`claude-api`…） |
+| 同一响应的实际倍率跨度 | 0.0032–1.0，`max` 策略把 claude 系成本高估 27–49 倍，`gemini-3.6/3.7/3.8` 恰好等于模型级（1.0×），`grok`/`gemini-pro` 反而差 6.8× |
+
+结论：只要「从价格表推算倍率」，无论 `key_group` / `max` / `min` 都会错，且错的量级是 10 倍以上。
+
+### 11.2 自校准的算法
+
+端到端对账，不重建上游公式：
+
+```
+因子 = (quota ÷ quota_per_unit) ÷ ((prompt − cache_read) × in + cache_read × cache_price + completion × out) ÷ 1e6
+```
+
+- 分子 = 上游消费日志 `GET /api/log/token?type=2` 里逐条 `quota`（就是实收）
+- 分母 = 我们 offer 表的同一套单价（`billing_expr` 已由 `billingexpr.RunExpr` 求出）
+- 因此 `基础成本 × 因子 ≡ 上游账单`，与上游用倍率、分档表达式还是按次计费无关
+
+聚合用**中位数**（抗单条异常），离散度用 MAD/中位数。实测 28 个模型里 27 个 MAD = 0.0%，说明因子在同模型内是确定值。
+
+### 11.3 落地内容
+
+| 层 | 内容 |
+|---|---|
+| 数据 | `upstream_cost_calibrations`（`channel_id + public_model` 唯一）：`effective_ratio` / `policy_ratio` / `observed_group` / `source` / `samples` / `billed_usd` / `theory_usd` / `dispersion_pct` / `confidence` / `window_*` / `applied` / `reason` |
+| 服务 | `service/pricing_calibration.go`：拉日志（分页，窗口 `PRICING_CALIBRATION_WINDOW_HOURS`）→ 建样本 → 聚合 → 阈值判定 → 落库；`RunPricingCalibration` 手动/定时共用 |
+| 生效 | `costMultiplierForOffer`：新鲜校准 > `upstream_group_ratio`；**有校准即可定价**，即使上游没公布该模型的分组倍率 |
+| 回退 | 超过 `PRICING_CALIBRATION_STALE_HOURS`（96）未更新 → 失效回退；样本不足 / 离散度 > 15% → `applied=0` 不参与定价 |
+| 任务 | `pricing_calibration`，默认 720 分钟，与报价同步同频 |
+| 接口 | `GET /pricing-control/calibrations`（分页 + summary）、`POST /calibrations/sync`、`PUT /calibrations`（人工钉住，填 0 解除） |
+| 前端 | 新增第 5 张概览卡「已校准模型」+ 「成本校准」区块：覆盖率、策略高估倍数、最近校准、实测结算分组、模型表格（实测/策略/差异/分组/样本/离散度/状态）+ 搜索分页 + 立即校准 + 钉住对话框 |
+| 风险 | 新增 `*_cost_ratio_deviation`（校准与策略差 ≥ 3 倍）；**未校准不进风险列表**，因为上线初期全员未校准，逐条告警会淹没真正的阻断项 |
+| 兜底默认值 | `PRICING_GROUP_RATIO_POLICY` 默认 `max` → **`median`**，并新增 `median` 策略 |
+| 保留 | `pricing_retention` 增加校准清理（30 天，人工钉住不删） |
+
+### 11.4 两处实现上的发现（已写进代码注释）
+
+1. **上游 `page_size` 参数无效**：请求 3 / 50 / 100 都返回 142 条（约 1452 字节/条，单页约 206KB）。所以「返回条数少于 page_size 即最后一页」的判断是错的，会提前中断。改为「空页」或「越过窗口起点」或「累计 3000 条」才停。
+2. **`billing_expr` 的系数就是美元/1M 单价**：`grok-4.7` 表里 `model_ratio=37.5`（→ $75/1M），表达式却是 `p*2 + c*6 + cr*0.5`；而 offer 走 `RunExpr` 后存的正是 2 / 6 / 0.5，与账单吻合。所以校准必须读 offer 而不是定价表，否则 `grok` / `gemini-pro` 会偏 37 倍。
+
+### 11.5 回归
+
+- 后端：`go build ./...`、`go vet ./...` 通过；`go test ./service/... ./model/... ./controller/...` 全绿（service 7.0s / model 10.4s / controller 53.5s）
+- 新增测试 `service/pricing_calibration_test.go` 13 组：单价口径、cache 兜底、跳过无效行、样本不足、混用计费档、中位数抗异常、按模型分组、过期回退、未生效不参与、校准优先于策略、无策略倍率也可定价、人工钉住不被覆盖
+- 前端：`tsgo -b` 定价模块零错误；`vitest` 定价模块 8/8（新增校准渲染断言）；`rsbuild build` 通过（56.4MB / gzip 16.3MB）

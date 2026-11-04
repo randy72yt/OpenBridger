@@ -80,7 +80,7 @@ func qaRunOnDatabase(t *testing.T, dbType common.DatabaseType, openDB func(strin
 
 	models := []any{
 		&model.Option{}, &model.Channel{}, &model.Ability{}, &model.Model{}, &model.Vendor{},
-		&model.UpstreamModelOffer{}, &model.UpstreamCostSnapshot{},
+		&model.UpstreamModelOffer{}, &model.UpstreamCostSnapshot{}, &model.UpstreamCostCalibration{},
 		&model.ModelPricePolicy{}, &model.ModelPriceProposal{},
 	}
 	require.NoError(t, database.Migrator().DropTable(models...))

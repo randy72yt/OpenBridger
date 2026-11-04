@@ -193,7 +193,15 @@ docker images | grep openbridger
 | `PRICING_OFFER_SYNC_INTERVAL_MINUTES` | `720` | 12 小时一次 |
 | `PRICING_OFFER_TTL_MINUTES` | **`840`** | 必须 > 同步间隔，否则两轮之间报价过期、清单空、风险全红 |
 | `PRICING_RECALCULATE_INTERVAL_MINUTES` | `720` | 与同步同频 |
-| `PRICING_GROUP_RATIO_POLICY` | `key_group`（不确定时用 `max`） | 一个模型可服务多个上游分组时取哪个倍率 |
+| `PRICING_GROUP_RATIO_POLICY` | `median` | 兜底倍率：模型多组时取中位数（`key_group` 按上游 auto_groups 顺序、`max`/`min` 取上下界）。**只在没有校准值时生效** |
+| `PRICING_CALIBRATION_ENABLED` | `true` | 用上游消费日志实测成本倍率 |
+| `PRICING_CALIBRATION_INTERVAL_MINUTES` | `720` | 与报价同步同频，跟着上游调价走 |
+| `PRICING_CALIBRATION_WINDOW_HOURS` | `72` | 读最近 72 小时的消费日志 |
+| `PRICING_CALIBRATION_MIN_SAMPLES` | `5` | 低于该样本数不落库，避免拿一两条噪声定价 |
+| `PRICING_CALIBRATION_MAX_DISPERSION_PCT` | `15` | 倍率离散度（MAD/中位数）超过该值视为流量混用多种计费档，不生效 |
+| `PRICING_CALIBRATION_STALE_HOURS` | `96` | 超过该时长未更新的校准自动失效，回退到分组倍率 |
+| `PRICING_CALIBRATION_LOG_PATH` | `/api/log/token` | 上游消费日志路径；上游不是 new-api 时改这里 |
+| `PRICING_CALIBRATION_RETENTION_DAYS` | `30` | 停更模型的校准行保留天数（人工固定的不删） |
 | `CHANNEL_UPSTREAM_MODEL_UPDATE_TASK_ENABLED` | `true` | 上游模型检测任务 |
 | `CHANNEL_UPSTREAM_MODEL_UPDATE_TASK_INTERVAL_MINUTES` | `720` | 每天两次 |
 | `PRICING_SNAPSHOT_RETENTION_DAYS` | `30` | 成本快照保留天数 |
@@ -289,11 +297,42 @@ curl -s http://127.0.0.1:3000/api/status | head -c 300
 
 - 定时 `pricing_offer_sync` 任务确实执行，`system_tasks.result` 里有 imported / kept / skipped / warnings；
 - 页面「最近一次同步」来自 `pricing_sync_runs`，刷新不丢；被跳过的模型运营可见（事项 rhU308）；
-- **倍率不要再手工填**：随 `/api/pricing` 采集 `group_ratio`，存在 `model_group_ratio`（模型 × 组）时优先取模型级；一个模型可服务多个组时由 `PRICING_GROUP_RATIO_POLICY` 决定（`key_group` / `max` / `min`）。倍率几天内会漂移（deepseek 6.8→1、glm 6→0.9），手工填值必然失真（事项 r6UjdF）。
+- **倍率不要再手工填**：随 `/api/pricing` 采集 `group_ratio`，存在 `model_group_ratio`（模型 × 组）时优先取模型级。但**这个值只是兜底**——真实结算走的是上游私有分组，公开倍率表里根本没有。以校准值为准，见 S22b。
 
-通过标准：连续两次同步后清单「实际采购成本 = 基础单价 × 分组倍率」与上游账单口径一致；报价在 `PRICING_OFFER_TTL_MINUTES` 内不过期。
+通过标准：连续两次同步后清单「实际采购成本 = 基础单价 × 成本倍率」与上游账单口径一致；报价在 `PRICING_OFFER_TTL_MINUTES` 内不过期。
 
 **报价有效期必须大于同步间隔**：设 `INTERVAL=720` 就必须把 `TTL` 设到 840 以上。否则每天有 20 小时报价处于过期状态——清单为空、每条策略都进「需要处理」、方案一条也生成不出来。启动和首轮同步会在日志里给出这条 warning。
+
+### S22b 让成本倍率跟上上游账单（自校准）
+
+上游 `/api/pricing` 描述不了真实结算。2026-11 实测同一份响应里：`claude` 系实际走 `claude-kiro`（公开表里没这个组的模型级倍率）、`gemini` 系有夜间因子 0.98、缓存按 `cache_ratio` 折扣、还有 6.8 的币种换算。结论是**任何「从价格表推算倍率」的做法都会错**，`max` 策略实测把 claude 系成本高估了 27 倍。
+
+自校准的做法是端到端对账，不猜公式：
+
+```
+成本倍率 = (上游实收 quota ÷ quota_per_unit) ÷ (基础单价 × token 数 ÷ 1e6)
+```
+
+分子取自上游消费日志 `GET /api/log/token?type=2`（逐条含 model、quota、tokens、cache tokens、结算分组），分母用我们自己 offer 表里的单价。乘回去等于上游账单，无论上游内部按倍率、按表达式还是按次计费。
+
+操作：
+
+1. 确认 `.env` 里 `PRICING_CALIBRATION_ENABLED=true`（默认已开）。
+2. 页面「动态定价控制 → 成本校准」点「立即校准」，或等 `pricing_calibration` 任务（每 12 小时）。
+3. 看三个数：**覆盖率**（应接近 100%）、**策略高估倍数**（应接近 1.0）、**实测结算分组**（这是公开价格表拿不到的信息）。
+
+通过标准：`pricing_calibration` 任务 `status=succeeded`；覆盖率 ≥ 90%；`upstream_cost_calibrations.applied=1` 的行数 ≥ 在售模型数；清单里「实际采购成本」与上游账单差异 < 5%。
+
+不生效的情形与处理：
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| 覆盖率低 | 模型最近没有流量 | 低流量模型在「成本校准」行里点「固定」，手工填实测倍率 |
+| 状态「离散度过高」 | 流量混用标准档与长上下文档（`billing_expr` 换档） | 属正常，此时不生效并回退分组倍率；需要精确就按档拆渠道 |
+| 状态「校准已过期」 | 超过 `PRICING_CALIBRATION_STALE_HOURS` 没更新 | 检查 `pricing_calibration` 任务是否在跑、上游日志接口是否 401 |
+| 全部回退 | 上游不是 new-api，没有 `/api/log/token` | 改 `PRICING_CALIBRATION_LOG_PATH`，或对着账单手工「固定」 |
+
+**校准失效是安全的**：过期或未生效时自动回退到 `PRICING_GROUP_RATIO_POLICY`，不会因为取不到数就停止定价。
 
 ### S23 与上游账单对账
 

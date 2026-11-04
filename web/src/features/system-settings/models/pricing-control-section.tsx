@@ -21,6 +21,7 @@ import {
   AlertTriangle,
   Calculator,
   Database,
+  Gauge,
   RefreshCw,
   ShieldCheck,
 } from 'lucide-react'
@@ -32,29 +33,35 @@ import { ConfirmDialog } from '@/components/confirm-dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useDebounce } from '@/hooks/use-debounce'
 
 import { SettingsCard } from '../components/settings-card'
 import { SettingsSection } from '../components/settings-section'
 import {
+  getPricingCalibrations,
   getPricingOffers,
   getPricingPolicies,
   getPricingProposals,
   getPricingRisks,
   getPricingSyncRuns,
   importPricingOffers,
+  pinPricingCalibration,
   recalculatePricing,
   savePricingPolicy,
+  syncPricingCalibrations,
   syncPricingOffers,
   updatePricingProposal,
 } from './pricing-control-api'
+import { PricingControlCalibration } from './pricing-control-calibration'
 import { PricingControlInventory } from './pricing-control-inventory'
 import { PricingControlPolicyPanel } from './pricing-control-policy-panel'
 import type {
   ModelPricePolicy,
   ModelPriceProposal,
   PricingApiResponse,
+  PricingCalibration,
   PricingOfferSyncResult,
   PricingSyncRun,
   UpstreamModelOffer,
@@ -111,11 +118,21 @@ export function PricingControlSection() {
   const [includeExpired, setIncludeExpired] = useState(false)
   const [offerOffset, setOfferOffset] = useState(0)
   const [proposalOffset, setProposalOffset] = useState(0)
+  const [calibrationKeywordInput, setCalibrationKeywordInput] = useState('')
+  const calibrationKeyword = useDebounce(calibrationKeywordInput, 300)
+  const [calibrationOffset, setCalibrationOffset] = useState(0)
+  const [pinTarget, setPinTarget] = useState<PricingCalibration | null>(null)
+  const [pinValue, setPinValue] = useState('')
+  const [pinReason, setPinReason] = useState('')
   const [highlight, setHighlight] = useState<string | null>(null)
 
   useEffect(() => {
     setOfferOffset(0)
   }, [offerKeyword, offerSource, includeExpired])
+
+  useEffect(() => {
+    setCalibrationOffset(0)
+  }, [calibrationKeyword])
 
   const overviewQuery = useQuery({
     queryKey: [...pricingControlKey, 'overview'],
@@ -152,6 +169,21 @@ export function PricingControlSection() {
     queryKey: [...pricingControlKey, 'proposals', proposalOffset],
     queryFn: () =>
       getPricingProposals({ limit: pageSize, offset: proposalOffset }),
+    refetchInterval: 60000,
+  })
+
+  const calibrationsQuery = useQuery({
+    queryKey: [
+      ...pricingControlKey,
+      'calibrations',
+      { calibrationKeyword, calibrationOffset },
+    ],
+    queryFn: () =>
+      getPricingCalibrations({
+        keyword: calibrationKeyword,
+        limit: pageSize,
+        offset: calibrationOffset,
+      }),
     refetchInterval: 60000,
   })
 
@@ -236,6 +268,42 @@ export function PricingControlSection() {
       toast.error(error.message)
     },
   })
+  const calibrateMutation = useMutation({
+    mutationFn: syncPricingCalibrations,
+    onSuccess: async (response) => {
+      if (!response.success) {
+        toast.error(response.message)
+      } else {
+        toast.success(
+          t('Calibrated {{applied}} models', { applied: response.data.applied })
+        )
+      }
+      await refresh()
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+  const pinMutation = useMutation({
+    mutationFn: (request: {
+      channelId: number
+      model: string
+      ratio: number
+      reason: string
+    }) =>
+      pinPricingCalibration({
+        channel_id: request.channelId,
+        public_model: request.model,
+        effective_ratio: request.ratio,
+        reason: request.reason,
+      }),
+    onSuccess: async () => {
+      toast.success(t('Calibration saved'))
+      setPinTarget(null)
+      setPinValue('')
+      setPinReason('')
+      await refresh()
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
 
   if (overviewQuery.isLoading) {
     return (
@@ -264,6 +332,7 @@ export function PricingControlSection() {
   }
 
   const { policies, risks, syncRuns, pendingTotal } = overviewQuery.data
+  const calibrationSummary = calibrationsQuery.data?.summary
   const modelPolicies = policies.filter(
     (policy) => policy.scope !== 'global' && policy.public_model !== '*'
   )
@@ -277,6 +346,19 @@ export function PricingControlSection() {
       label: t('Current upstream offers'),
       value: offersTotal,
       hint: t('View inventory'),
+    },
+    {
+      id: 'pricing-calibration',
+      icon: Gauge,
+      label: t('Calibrated models'),
+      value: calibrationSummary
+        ? `${calibrationSummary.usable}/${calibrationSummary.models}`
+        : '—',
+      hint: calibrationSummary?.policy_overstatement
+        ? t('Policy prices cost {{factor}}× too high', {
+            factor: calibrationSummary.policy_overstatement,
+          })
+        : t('View calibration'),
     },
     {
       id: 'pricing-policy',
@@ -303,7 +385,7 @@ export function PricingControlSection() {
 
   return (
     <SettingsSection title={t('Pricing Control')}>
-      <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-4'>
+      <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-5'>
         {summary.map(({ id, icon: Icon, label, value, hint }) => (
           <Card
             key={id}
@@ -383,7 +465,7 @@ export function PricingControlSection() {
               <AlertTitle>{t('How cost is computed')}</AlertTitle>
               <AlertDescription>
                 {t(
-                  'Collected unit prices are the upstream base price. Actual procurement cost = base price × the settlement group ratio recorded on the offer. When an upstream exposes several groups per model, PRICING_GROUP_RATIO_POLICY decides which ratio is used (key_group / max / min).'
+                  'Collected unit prices are the upstream base price. Actual procurement cost = base price × cost factor, where the factor comes from the calibration whenever one exists and from the settlement group ratio otherwise. When an upstream exposes several groups per model, PRICING_GROUP_RATIO_POLICY decides the fallback (median / key_group / max / min).'
                 )}
               </AlertDescription>
             </Alert>
@@ -413,6 +495,30 @@ export function PricingControlSection() {
             </div>
           </div>
         </SettingsCard>
+      </div>
+
+      <div
+        id='pricing-calibration'
+        className={sectionClass(highlight === 'pricing-calibration')}
+      >
+        <PricingControlCalibration
+          items={calibrationsQuery.data?.items ?? []}
+          summary={calibrationSummary}
+          total={calibrationsQuery.data?.total ?? 0}
+          limit={calibrationsQuery.data?.limit ?? pageSize}
+          offset={calibrationsQuery.data?.offset ?? calibrationOffset}
+          loading={calibrationsQuery.isFetching}
+          syncing={calibrateMutation.isPending}
+          keyword={calibrationKeywordInput}
+          onKeywordChange={setCalibrationKeywordInput}
+          onPageChange={setCalibrationOffset}
+          onRecalibrate={() => calibrateMutation.mutate()}
+          onPin={(row) => {
+            setPinTarget(row)
+            setPinValue(row.effective_ratio ? String(row.effective_ratio) : '')
+            setPinReason(row.reason ?? '')
+          }}
+        />
       </div>
 
       <div
@@ -460,6 +566,51 @@ export function PricingControlSection() {
           onPageChange={setProposalOffset}
         />
       </div>
+
+      <ConfirmDialog
+        open={pinTarget !== null}
+        onOpenChange={(open) => !open && setPinTarget(null)}
+        title={t('Pin a measured ratio')}
+        desc={t(
+          'Store a cost factor measured by hand for {{model}}. The automatic loop stops overwriting it, and entering 0 clears the pin.',
+          { model: pinTarget?.public_model ?? '' }
+        )}
+        confirmText={t('Save')}
+        isLoading={pinMutation.isPending}
+        handleConfirm={() =>
+          pinTarget &&
+          pinMutation.mutate({
+            channelId: pinTarget.channel_id,
+            model: pinTarget.public_model,
+            ratio: Number(pinValue) || 0,
+            reason: pinReason,
+          })
+        }
+      >
+        <div className='space-y-3'>
+          <div className='space-y-1'>
+            <label className='text-muted-foreground text-xs'>
+              {t('Effective ratio')}
+            </label>
+            <Input
+              value={pinValue}
+              onChange={(event) => setPinValue(event.target.value)}
+              inputMode='decimal'
+              placeholder='0.0368'
+            />
+          </div>
+          <div className='space-y-1'>
+            <label className='text-muted-foreground text-xs'>
+              {t('Reason')}
+            </label>
+            <Input
+              value={pinReason}
+              onChange={(event) => setPinReason(event.target.value)}
+              placeholder={t('Measured from the upstream invoice')}
+            />
+          </div>
+        </div>
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={publishTarget !== null}

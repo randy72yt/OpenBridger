@@ -274,6 +274,13 @@ func recalculatePricingProposals(ctx context.Context) (int, []int64, error) {
 	if err != nil {
 		return 0, nil, err
 	}
+	// Loaded once per recalculation: calibration replaces the group-ratio guess
+	// wherever a fresh measurement exists, so cost tracks the provider's invoice
+	// instead of a published table that does not describe private groups.
+	calibrations, err := model.UpstreamCostCalibrationMap()
+	if err != nil {
+		return 0, nil, err
+	}
 	created := 0
 	ids := make([]int64, 0)
 	for i := range policies {
@@ -288,7 +295,7 @@ func recalculatePricingProposals(ctx context.Context) (int, []int64, error) {
 			continue
 		}
 		policy.ApplyGlobalDefaults(global)
-		proposal, err := buildPriceProposal(&policy)
+		proposal, err := buildPriceProposalWithCalibration(&policy, calibrations)
 		if err != nil {
 			if errors.Is(err, ErrPricingOfferMissing) || errors.Is(err, ErrPricingCostInvalid) {
 				continue
@@ -307,7 +314,29 @@ func recalculatePricingProposals(ctx context.Context) (int, []int64, error) {
 	return created, ids, nil
 }
 
+// costMultiplierForOffer picks the factor applied to an offer's base cost.
+// A fresh calibration always wins because it was measured against the
+// provider's own invoice; the group-ratio policy is only the fallback for models
+// that have no traffic yet. A calibrated model can therefore be priced even when
+// the upstream publishes no ratio for its settlement group at all.
+func costMultiplierForOffer(offer *model.UpstreamModelOffer, calibrations map[string]model.UpstreamCostCalibration, now int64) (float64, string, bool) {
+	if offer == nil {
+		return 0, "", false
+	}
+	if ratio, ok := PricingCalibrationRatio(calibrations, offer.ChannelID, offer.PublicModel, now); ok {
+		return ratio, "calibration", true
+	}
+	if offer.UpstreamGroupRatio != nil && validPriceNumber(*offer.UpstreamGroupRatio) && *offer.UpstreamGroupRatio > 0 {
+		return *offer.UpstreamGroupRatio, "policy", true
+	}
+	return 0, "", false
+}
+
 func buildPriceProposal(policy *model.ModelPricePolicy) (*model.ModelPriceProposal, error) {
+	return buildPriceProposalWithCalibration(policy, nil)
+}
+
+func buildPriceProposalWithCalibration(policy *model.ModelPricePolicy, calibrations map[string]model.UpstreamCostCalibration) (*model.ModelPriceProposal, error) {
 	now := common.GetTimestamp()
 	primary, err := currentOffer(policy.PublicModel, policy.PrimaryChannelID, now)
 	if err != nil {
@@ -320,10 +349,11 @@ func buildPriceProposal(policy *model.ModelPricePolicy) (*model.ModelPricePropos
 			return nil, err
 		}
 	}
-	if primary.UpstreamGroupRatio == nil || !validPriceNumber(*primary.UpstreamGroupRatio) {
-		return nil, fmt.Errorf("%w: model=%s channel=%d", ErrPricingCostInvalid, policy.PublicModel, policy.PrimaryChannelID)
+	primaryMultiplier, primarySource, primaryOK := costMultiplierForOffer(primary, calibrations, now)
+	if !primaryOK {
+		return nil, fmt.Errorf("%w: model=%s channel=%d has neither a calibration nor a group ratio",
+			ErrPricingCostInvalid, policy.PublicModel, policy.PrimaryChannelID)
 	}
-	primaryMultiplier := *primary.UpstreamGroupRatio
 	if !validPriceNumber(primary.InputCost) || !validPriceNumber(primary.OutputCost) || !validPriceNumber(primary.CacheReadCost) ||
 		primary.InputCost <= 0 || primary.OutputCost <= 0 || primaryMultiplier <= 0 {
 		return nil, fmt.Errorf("%w: model=%s channel=%d", ErrPricingCostInvalid, policy.PublicModel, policy.PrimaryChannelID)
@@ -332,13 +362,13 @@ func buildPriceProposal(policy *model.ModelPricePolicy) (*model.ModelPricePropos
 	primary.OutputCost *= primaryMultiplier
 	primary.CacheReadCost *= primaryMultiplier
 	if backup != nil {
-		if backup.UpstreamGroupRatio == nil || !validPriceNumber(*backup.UpstreamGroupRatio) ||
-			!validPriceNumber(backup.InputCost) || !validPriceNumber(backup.OutputCost) || !validPriceNumber(backup.CacheReadCost) {
+		if !validPriceNumber(backup.InputCost) || !validPriceNumber(backup.OutputCost) || !validPriceNumber(backup.CacheReadCost) {
 			return nil, fmt.Errorf("%w: model=%s channel=%d", ErrPricingCostInvalid, policy.PublicModel, policy.BackupChannelID)
 		}
-		backupMultiplier := *backup.UpstreamGroupRatio
-		if backupMultiplier <= 0 {
-			return nil, fmt.Errorf("%w: model=%s channel=%d", ErrPricingCostInvalid, policy.PublicModel, policy.BackupChannelID)
+		backupMultiplier, _, backupOK := costMultiplierForOffer(backup, calibrations, now)
+		if !backupOK || backupMultiplier <= 0 {
+			return nil, fmt.Errorf("%w: model=%s channel=%d has neither a calibration nor a group ratio",
+				ErrPricingCostInvalid, policy.PublicModel, policy.BackupChannelID)
 		}
 		backup.InputCost *= backupMultiplier
 		backup.OutputCost *= backupMultiplier
@@ -390,7 +420,8 @@ func buildPriceProposal(policy *model.ModelPricePolicy) (*model.ModelPricePropos
 		ProposedInputPrice: inputPrice, ProposedOutputPrice: outputPrice,
 		StressInputCost: roundPricingValue(stressInput), StressOutputCost: roundPricingValue(stressOutput),
 		ExpectedMarginBPS: margin, Status: model.PricingProposalPending,
-		Reason:         fmt.Sprintf("target_margin_bps=%d fallback_probability_bps=%d overhead_bps=%d", policy.TargetMarginBPS, policy.FallbackProbabilityBPS, policy.OverheadBPS),
+		Reason: fmt.Sprintf("target_margin_bps=%d fallback_probability_bps=%d overhead_bps=%d cost_ratio=%.8f cost_ratio_source=%s",
+			policy.TargetMarginBPS, policy.FallbackProbabilityBPS, policy.OverheadBPS, primaryMultiplier, primarySource),
 		PricingVersion: version,
 	}, nil
 }
@@ -504,6 +535,10 @@ func PricingRisks() ([]map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	calibrations, err := model.UpstreamCostCalibrationMap()
+	if err != nil {
+		return nil, err
+	}
 	now := common.GetTimestamp()
 	risks := make([]map[string]any, 0)
 	for i := range policies {
@@ -511,15 +546,15 @@ func PricingRisks() ([]map[string]any, error) {
 		if policy.IsGlobal() || !policy.Enabled {
 			continue
 		}
-		risks = append(risks, channelPricingRisks(&policy, "primary", policy.PrimaryChannelID, now)...)
+		risks = append(risks, channelPricingRisks(&policy, "primary", policy.PrimaryChannelID, now, calibrations)...)
 		if policy.BackupChannelID > 0 {
-			risks = append(risks, channelPricingRisks(&policy, "backup", policy.BackupChannelID, now)...)
+			risks = append(risks, channelPricingRisks(&policy, "backup", policy.BackupChannelID, now, calibrations)...)
 		}
 	}
 	return risks, nil
 }
 
-func channelPricingRisks(policy *model.ModelPricePolicy, role string, channelID int, now int64) []map[string]any {
+func channelPricingRisks(policy *model.ModelPricePolicy, role string, channelID int, now int64, calibrations map[string]model.UpstreamCostCalibration) []map[string]any {
 	base := map[string]any{
 		"public_model": policy.PublicModel,
 		"service_tier": policy.ServiceTier,
@@ -538,22 +573,48 @@ func channelPricingRisks(policy *model.ModelPricePolicy, role string, channelID 
 		}
 		return []map[string]any{risk}
 	}
-	invalid := !validPriceNumber(offer.InputCost) || !validPriceNumber(offer.OutputCost) ||
-		offer.InputCost <= 0 || offer.OutputCost <= 0 || offer.UpstreamGroupRatio == nil ||
-		!validPriceNumber(*offer.UpstreamGroupRatio) || *offer.UpstreamGroupRatio <= 0
-	if !invalid {
-		return nil
-	}
-	risk := copyRisk(base)
-	risk["code"] = role + "_offer_cost_invalid"
-	risk["suggested_action"] = "import_manual_offer"
-	risk["last_collected_at"] = offer.CollectedAt
-	risk["expires_at"] = offer.ExpiresAt
-	risk["upstream_group"] = offer.UpstreamGroup
+	base["last_collected_at"] = offer.CollectedAt
+	base["expires_at"] = offer.ExpiresAt
+	base["upstream_group"] = offer.UpstreamGroup
 	if offer.UpstreamGroupRatio != nil {
-		risk["upstream_group_ratio"] = *offer.UpstreamGroupRatio
+		base["upstream_group_ratio"] = *offer.UpstreamGroupRatio
 	}
-	return []map[string]any{risk}
+	// A model is only unpriceable when it has neither a calibration nor a group
+	// ratio. Missing ratios on their own are no longer a risk: real traffic
+	// settles through private groups the price list never mentions, so a
+	// calibrated model prices fine without one.
+	multiplier, source, usable := costMultiplierForOffer(offer, calibrations, now)
+	if !validPriceNumber(offer.InputCost) || !validPriceNumber(offer.OutputCost) ||
+		offer.InputCost <= 0 || offer.OutputCost <= 0 || !usable || multiplier <= 0 {
+		risk := copyRisk(base)
+		risk["code"] = role + "_offer_cost_invalid"
+		risk["suggested_action"] = "import_manual_offer"
+		return []map[string]any{risk}
+	}
+	risks := make([]map[string]any, 0, 1)
+	if source != "calibration" {
+		// Missing calibration is reported as a coverage number on the overview
+		// instead of one risk row per model: at rollout every model is
+		// uncalibrated, and a hundred identical rows would bury the risks that
+		// actually block pricing.
+		return risks
+	}
+	calibration, ok := calibrations[model.UpstreamCostCalibrationKey(channelID, policy.PublicModel)]
+	if !ok || calibration.PolicyRatio <= 0 || multiplier <= 0 {
+		return risks
+	}
+	deviation := multiplier / calibration.PolicyRatio
+	if deviation >= 3 || deviation <= 1.0/3 {
+		risk := copyRisk(base)
+		risk["code"] = role + "_cost_ratio_deviation"
+		risk["suggested_action"] = "review_policy"
+		risk["calibrated_ratio"] = roundPricingValue(multiplier)
+		risk["policy_ratio"] = roundPricingValue(calibration.PolicyRatio)
+		risk["deviation"] = roundPricingValue(deviation)
+		risk["observed_group"] = calibration.ObservedGroup
+		risks = append(risks, risk)
+	}
+	return risks
 }
 
 func copyRisk(base map[string]any) map[string]any {

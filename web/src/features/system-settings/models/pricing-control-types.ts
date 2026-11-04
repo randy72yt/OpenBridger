@@ -153,3 +153,69 @@ export type PricingOfferSyncResult = {
     error?: string
   }[]
 }
+
+/**
+ * A measured factor between what the upstream provider actually invoiced and
+ * what our own offer table would have charged for the same tokens. Upstream
+ * pricing cannot be rebuilt from the published price list: real traffic settles
+ * through private groups, applies cache discounts, night factors and currency
+ * divisors. The factor absorbs all of it, so `offer.unit_price × factor` equals
+ * the invoice.
+ */
+export type PricingCalibration = {
+  id: number
+  channel_id: number
+  public_model: string
+  upstream_model: string
+  effective_ratio: number
+  policy_ratio: number
+  observed_group: string
+  source: 'upstream_log' | 'manual' | 'seed' | string
+  samples: number
+  billed_usd: number
+  theory_usd: number
+  dispersion_pct: number
+  confidence: number
+  window_start: number
+  window_end: number
+  applied: boolean
+  reason: string
+  created_at: number
+  updated_at: number
+}
+
+export type PricingCalibrationSummary = {
+  models: number
+  applied: number
+  usable: number
+  stale: number
+  last_calibrated_at: number
+  /** How many times higher the published group ratio prices cost than reality. */
+  policy_overstatement: number
+  observed_groups: { group: string; models: number }[]
+  stale_hours: number
+}
+
+export type PricingCalibrationPage = {
+  items: PricingCalibration[]
+  total: number
+  limit: number
+  offset: number
+  summary: PricingCalibrationSummary
+}
+
+export type PricingCalibrationResult = {
+  trigger: string
+  applied: number
+  skipped: number
+  window_start: number
+  window_end: number
+  channels: {
+    channel_id: number
+    channel_name: string
+    models: number
+    applied: number
+    records: number
+    error?: string
+  }[]
+}

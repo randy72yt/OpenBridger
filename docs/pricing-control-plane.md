@@ -230,3 +230,32 @@ DDD、CodeGo 的自动采集适配器仍需根据它们实际提供的价格接�
 | 风险列表 | 每条带 `channel_id` / `channel_role` / `last_collected_at` / `expires_at` / `upstream_group` / `suggested_action`，页面给「重新同步」「查看报价」入口 |
 | 数据保留 | `pricing_retention` 任务：成本快照保留 `PRICING_SNAPSHOT_RETENTION_DAYS`（30）天，过期报价保留 `PRICING_EXPIRED_OFFER_RETENTION_DAYS`（7）天。快照仍为追加式，因为自动发布的多重校验依赖最近 N 条样本 |
 | 同步资料 | 新建模型默认只写 `description/icon/tags/vendor/endpoints`，`status` 默认 1；`status` 与 `name_rule` 必须显式勾选才写，避免批量同步反向隐藏在售模型 |
+
+### 2026-11 第二阶段：成本倍率改为实测（自校准）
+
+第一阶段的倍率解析仍然建立在「上游会公开真实结算倍率」这个假设上，而用真实 key 对账后这个假设不成立：
+
+- 带 key 与匿名请求 `/api/pricing` 响应**逐字节相同**，`auto_groups` 拿不到「这把 key 属于哪组」，`key_group` 实际等于「按顺序猜第一个组」。
+- `model_group_ratio[m][g] / group_ratio[g]` 在 750 个条目里只有 `1/6.8` 和 `1.0` 两种取值，对应上游 `usd_exchange_rate=6.8`，是**币种换算**而非模型级定价。
+- 真实流量走的是公开表里没有的组（`claude-kiro`、`openai-luna`、私有 `openai-ent-13481` 等），且同一响应里各模型实际倍率跨 0.02–1.0。
+- 结果：`max` 策略把 claude 系成本高估 27–49 倍，`gemini-3.6/3.7/3.8` 与模型级一致（1.0 倍），`grok`/`gemini-pro` 反而差了 6.8 倍。
+
+因此新增 `upstream_cost_calibrations` 与 `pricing_calibration` 任务，用上游自己的消费日志做端到端对账：
+
+```
+因子 = (quota ÷ quota_per_unit) ÷ ((prompt−cache)×in + cache×cache_price + completion×out) ÷ 1e6
+```
+
+分子是上游实收，分母按我们 offer 表同一套单价计算，因此 `基础成本 × 因子 ≡ 上游账单`，与上游内部用倍率、分档表达式还是按次计费无关。
+
+| 主题 | 现状 |
+|---|---|
+| 生效顺序 | 校准因子（新鲜且已生效）> `upstream_group_ratio`（兜底）。有校准即可定价，即使上游根本没公布该模型的分组倍率 |
+| 失效回退 | 超过 `PRICING_CALIBRATION_STALE_HOURS`（96）未更新的校准自动失效，回退分组倍率；未生效的行（样本不足 / 离散度高）不参与定价 |
+| 兜底策略默认值 | `PRICING_GROUP_RATIO_POLICY` 默认改为 `median`（多组取中位数）。`max` 不再作为默认：实测它是把成本抬高一个量级的直接原因 |
+| 数据来源 | `GET /api/log/token?type=2`，路径可由 `PRICING_CALIBRATION_LOG_PATH` 覆盖；逐条含 `model`/`quota`/`prompt_tokens`/`completion_tokens`/`cache_read_tokens`/`group` |
+| 置信判定 | 样本数 ≥ `PRICING_CALIBRATION_MIN_SAMPLES`（5）且离散度 MAD/中位数 ≤ `PRICING_CALIBRATION_MAX_DISPERSION_PCT`（15%）才 `applied=1`；中位数抗单条异常 |
+| 人工兜底 | `PUT /api/pricing-control/calibrations` 可钉住手工实测值（低流量模型），自动任务不再覆盖；填 0 解除 |
+| 可观测 | 页面「成本校准」：覆盖率、策略高估倍数、最近校准时间、实测结算分组；`GET /api/pricing-control/calibrations` |
+| 风险项 | `*_cost_ratio_deviation`：校准与策略差 ≥ 3 倍时告警（说明策略口径已不可信）。未校准不进风险列表，改为覆盖率数字，避免上百条同义告警 |
+| 保留策略 | `PRICING_CALIBRATION_RETENTION_DAYS`（30）天；人工钉住的行不删 |

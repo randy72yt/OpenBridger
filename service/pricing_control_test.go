@@ -48,6 +48,7 @@ func TestPricingControlDatabaseMatrix(t *testing.T) {
 
 			models := []any{
 				&model.Option{}, &model.Channel{}, &model.UpstreamModelOffer{}, &model.UpstreamCostSnapshot{},
+				&model.UpstreamCostCalibration{},
 				&model.ModelPricePolicy{}, &model.ModelPriceProposal{},
 			}
 			require.NoError(t, database.AutoMigrate(models...))

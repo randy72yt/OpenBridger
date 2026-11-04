@@ -11,8 +11,10 @@ import (
 
 // pricingRetentionHandler bounds the growth of the pricing tables.
 //
-//	upstream_cost_snapshots : append-only, kept for PRICING_SNAPSHOT_RETENTION_DAYS (30)
-//	upstream_model_offers   : rows expired longer than PRICING_EXPIRED_OFFER_RETENTION_DAYS (7) are deleted
+//	upstream_cost_snapshots     : append-only, kept for PRICING_SNAPSHOT_RETENTION_DAYS (30)
+//	upstream_model_offers       : rows expired longer than PRICING_EXPIRED_OFFER_RETENTION_DAYS (7) are deleted
+//	upstream_cost_calibrations  : rows not refreshed for PRICING_CALIBRATION_RETENTION_DAYS (30) are deleted,
+//	                              except manually pinned ones
 //
 // Deleting snapshots only removes history; live offers, proposals and published
 // prices are untouched.
@@ -51,11 +53,22 @@ func (pricingRetentionHandler) Run(ctx context.Context, task *model.SystemTask, 
 		failSystemTask(task, runnerID, err)
 		return
 	}
+	calibrationDays := common.GetEnvOrDefault("PRICING_CALIBRATION_RETENTION_DAYS", 30)
+	if calibrationDays < 1 {
+		calibrationDays = 1
+	}
+	calibrations, err := model.PruneUpstreamCostCalibrations(now - int64(calibrationDays)*86400)
+	if err != nil {
+		failSystemTask(task, runnerID, err)
+		return
+	}
 	result := map[string]any{
-		"deleted_snapshots":  snapshots,
-		"deleted_offers":     offers,
-		"snapshot_keep_days": snapshotDays,
-		"offer_keep_days":    offerDays,
+		"deleted_snapshots":     snapshots,
+		"deleted_offers":        offers,
+		"deleted_calibrations":  calibrations,
+		"snapshot_keep_days":    snapshotDays,
+		"offer_keep_days":       offerDays,
+		"calibration_keep_days": calibrationDays,
 	}
 	if err := model.FinishSystemTask(task.TaskID, runnerID, model.SystemTaskStatusSucceeded, result, ""); err != nil {
 		logSystemTaskLockError(ctx, task, err)

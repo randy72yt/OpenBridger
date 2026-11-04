@@ -62,6 +62,7 @@ func TestMain(m *testing.M) {
 		&model.ModelPricePolicy{},
 		&model.ModelPriceProposal{},
 		&model.PricingSyncRun{},
+		&model.UpstreamCostCalibration{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}
@@ -92,6 +93,7 @@ func truncate(t *testing.T) {
 		model.DB.Exec("DELETE FROM model_price_policies")
 		model.DB.Exec("DELETE FROM model_price_proposals")
 		model.DB.Exec("DELETE FROM pricing_sync_runs")
+		model.DB.Exec("DELETE FROM upstream_cost_calibrations")
 	})
 }
 

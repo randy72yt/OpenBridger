@@ -87,13 +87,19 @@ func TestPricingGroupRatioPolicyRejectsUnknownGroups(t *testing.T) {
 	}
 }
 
-func TestPricingGroupRatioPolicyDefaultsToKeyGroup(t *testing.T) {
+// The measured ratios of one upstream response spanned 0.002 to 1.0 because the
+// provider settles each model through a private group it never publishes. max
+// therefore over-priced whole families by up to 15x, so median is the default
+// and calibration corrects the rest from real invoices.
+func TestPricingGroupRatioPolicyDefaultsToMedian(t *testing.T) {
 	t.Setenv("PRICING_GROUP_RATIO_POLICY", "")
-	assert.Equal(t, pricingGroupRatioPolicyKeyGroup, pricingGroupRatioPolicy())
+	assert.Equal(t, pricingGroupRatioPolicyMedian, pricingGroupRatioPolicy())
 	t.Setenv("PRICING_GROUP_RATIO_POLICY", "MAX")
 	assert.Equal(t, pricingGroupRatioPolicyMax, pricingGroupRatioPolicy())
-	t.Setenv("PRICING_GROUP_RATIO_POLICY", "nonsense")
+	t.Setenv("PRICING_GROUP_RATIO_POLICY", "key_group")
 	assert.Equal(t, pricingGroupRatioPolicyKeyGroup, pricingGroupRatioPolicy())
+	t.Setenv("PRICING_GROUP_RATIO_POLICY", "nonsense")
+	assert.Equal(t, pricingGroupRatioPolicyMedian, pricingGroupRatioPolicy())
 }
 
 // ---------------------------------------------------------------------------
