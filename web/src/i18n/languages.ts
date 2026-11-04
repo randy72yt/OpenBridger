@@ -19,10 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 export const INTERFACE_LANGUAGE_OPTIONS = [
   { code: 'zhCN', label: '简体中文' },
   { code: 'en', label: 'English' },
-  { code: 'fr', label: 'Français' },
-  { code: 'ru', label: 'Русский' },
-  { code: 'ja', label: '日本語' },
-  { code: 'vi', label: 'Tiếng Việt' },
   { code: 'zhTW', label: '繁體中文' },
 ] as const
 
@@ -58,7 +54,8 @@ export function normalizeInterfaceLanguage(value?: string | null): string {
  * but `supportedLngs`/resources use the non-standard camelCase codes, so without
  * this mapping a Chinese browser would never match and fall back to English.
  * Non-Chinese codes are returned unchanged so i18next's own `supportedLngs`
- * matching still applies (e.g. `fr-FR` -> `fr`, `ja` -> `ja`).
+ * matching still applies (e.g. `en-GB` -> `en`); anything unsupported falls
+ * back to `en`.
  */
 export function convertDetectedLanguage(value: string): string {
   const lower = value.trim().replaceAll('_', '-').toLowerCase()
