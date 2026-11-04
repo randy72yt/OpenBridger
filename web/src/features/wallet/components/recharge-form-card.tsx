@@ -46,9 +46,11 @@ import { useSystemConfig } from "@/hooks/use-system-config";
 
 // Round RMB quick-select amounts for CNY display mode; the backend converts
 // them to USD credit via the recharge unit price (1:1 with what is charged).
-const CNY_PRESET_AMOUNTS = [50, 100, 200, 500, 1000, 2000].map((value) => ({
-  value,
-}));
+const CNY_PRESET_AMOUNTS = [10, 20, 50, 100, 200, 500, 1000, 5000].map(
+  (value) => ({
+    value,
+  }),
+);
 import { cn } from "@/lib/utils";
 
 import {

@@ -16,20 +16,20 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Crown, RefreshCw, Sparkles, Check } from 'lucide-react'
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
+import { Crown, RefreshCw, Sparkles, Check } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 
 import {
   StatusBadge,
   dotColorMap,
   textColorMap,
-} from '@/components/status-badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+} from "@/components/status-badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -37,85 +37,90 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
-import { Skeleton } from '@/components/ui/skeleton'
-import { TitledCard } from '@/components/ui/titled-card'
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { TitledCard } from "@/components/ui/titled-card";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
+} from "@/components/ui/tooltip";
 import {
   getPublicPlans,
   getSelfSubscriptionFull,
   updateBillingPreference,
-} from '@/features/subscriptions/api'
-import { SubscriptionPurchaseDialog } from '@/features/subscriptions/components/dialogs/subscription-purchase-dialog'
-import { formatDuration, formatResetPeriod } from '@/features/subscriptions/lib'
+} from "@/features/subscriptions/api";
+import { SubscriptionPurchaseDialog } from "@/features/subscriptions/components/dialogs/subscription-purchase-dialog";
+import {
+  formatDuration,
+  formatResetPeriod,
+} from "@/features/subscriptions/lib";
 import type {
   PlanRecord,
   UserSubscriptionRecord,
-} from '@/features/subscriptions/types'
-import { formatBillingCurrencyFromUSD } from '@/lib/currency'
-import { formatQuota } from '@/lib/format'
-import { cn } from '@/lib/utils'
-import { useSystemConfig } from '@/hooks/use-system-config'
+} from "@/features/subscriptions/types";
+import { formatBillingCurrencyFromUSD } from "@/lib/currency";
+import { formatQuota } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import { useSystemConfig } from "@/hooks/use-system-config";
 
-import type { PaymentMethod, TopupInfo } from '../types'
+import type { PaymentMethod, TopupInfo } from "../types";
 
 interface SubscriptionPlansCardProps {
-  topupInfo: TopupInfo | null
-  onAvailabilityChange?: (available: boolean) => void
-  userQuota?: number
-  onPurchaseSuccess?: () => void | Promise<void>
+  topupInfo: TopupInfo | null;
+  onAvailabilityChange?: (available: boolean) => void;
+  userQuota?: number;
+  onPurchaseSuccess?: () => void | Promise<void>;
 }
 
 function getEpayMethods(payMethods: PaymentMethod[] = []): PaymentMethod[] {
   return payMethods.filter(
-    (m) => m?.type && m.type !== 'stripe' && m.type !== 'creem'
-  )
+    (m) => m?.type && m.type !== "stripe" && m.type !== "creem",
+  );
 }
 
 type RateCell = {
-  label: string
-  price: number
-  currency: string | undefined
-  months: number
-}
+  label: string;
+  price: number;
+  currency: string | undefined;
+  months: number;
+};
 
 type RateRow = {
-  title: string
-  total: number
-  cells: RateCell[]
-}
+  title: string;
+  total: number;
+  cells: RateCell[];
+};
 
 // Convert a plan price from its settlement currency to system-USD so it can
 // be rendered in whatever display currency the site is configured for.
 function planAmountToDisplayUSD(
   amount: number,
   planCurrency: string | undefined,
-  usdExchangeRate: number
+  usdExchangeRate: number,
 ): number {
-  const rate = usdExchangeRate > 0 ? usdExchangeRate : 1
-  return (planCurrency || 'USD').toUpperCase() === 'CNY' ? amount / rate : amount
+  const rate = usdExchangeRate > 0 ? usdExchangeRate : 1;
+  return (planCurrency || "USD").toUpperCase() === "CNY"
+    ? amount / rate
+    : amount;
 }
 
 function getBillingPreferenceLabel(
   preference: string,
-  t: (key: string) => string
+  t: (key: string) => string,
 ): string {
   switch (preference) {
-    case 'subscription_first':
-      return t('Subscription First')
-    case 'wallet_first':
-      return t('Wallet First')
-    case 'subscription_only':
-      return t('Subscription Only')
-    case 'wallet_only':
-      return t('Wallet Only')
+    case "subscription_first":
+      return t("Subscription First");
+    case "wallet_first":
+      return t("Wallet First");
+    case "subscription_only":
+      return t("Subscription Only");
+    case "wallet_only":
+      return t("Wallet Only");
     default:
-      return preference
+      return preference;
   }
 }
 
@@ -125,205 +130,205 @@ export function SubscriptionPlansCard({
   userQuota,
   onPurchaseSuccess,
 }: SubscriptionPlansCardProps) {
-  const { t } = useTranslation()
-  const { currency } = useSystemConfig()
+  const { t } = useTranslation();
+  const { currency } = useSystemConfig();
   const usdExchangeRate =
     currency?.usdExchangeRate && currency.usdExchangeRate > 0
       ? currency.usdExchangeRate
-      : 1
+      : 1;
 
-  const [plans, setPlans] = useState<PlanRecord[]>([])
+  const [plans, setPlans] = useState<PlanRecord[]>([]);
   const [activeSubscriptions, setActiveSubscriptions] = useState<
     UserSubscriptionRecord[]
-  >([])
+  >([]);
   const [allSubscriptions, setAllSubscriptions] = useState<
     UserSubscriptionRecord[]
-  >([])
+  >([]);
   const [billingPreference, setBillingPreference] =
-    useState('subscription_first')
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
+    useState("subscription_first");
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const [purchaseOpen, setPurchaseOpen] = useState(false)
-  const [selectedPlan, setSelectedPlan] = useState<PlanRecord | null>(null)
-  const [periodKey, setPeriodKey] = useState('')
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<PlanRecord | null>(null);
+  const [periodKey, setPeriodKey] = useState("");
 
-  const enableStripe = !!topupInfo?.enable_stripe_topup
-  const enableCreem = !!topupInfo?.enable_creem_topup
-  const enableWaffoPancake = !!topupInfo?.enable_waffo_pancake_topup
-  const enableOnlineTopUp = !!topupInfo?.enable_online_topup
+  const enableStripe = !!topupInfo?.enable_stripe_topup;
+  const enableCreem = !!topupInfo?.enable_creem_topup;
+  const enableWaffoPancake = !!topupInfo?.enable_waffo_pancake_topup;
+  const enableOnlineTopUp = !!topupInfo?.enable_online_topup;
   const epayMethods = useMemo(
     () => getEpayMethods(topupInfo?.pay_methods),
-    [topupInfo?.pay_methods]
-  )
+    [topupInfo?.pay_methods],
+  );
 
   const fetchPlans = useCallback(async () => {
     try {
-      const res = await getPublicPlans()
+      const res = await getPublicPlans();
       if (res.success) {
-        setPlans(res.data || [])
+        setPlans(res.data || []);
       }
     } catch {
-      setPlans([])
+      setPlans([]);
     }
-  }, [])
+  }, []);
 
   const fetchSelfSubscription = useCallback(async () => {
     try {
-      const res = await getSelfSubscriptionFull()
+      const res = await getSelfSubscriptionFull();
       if (res.success && res.data) {
         setBillingPreference(
-          res.data.billing_preference || 'subscription_first'
-        )
-        setActiveSubscriptions(res.data.subscriptions || [])
-        setAllSubscriptions(res.data.all_subscriptions || [])
+          res.data.billing_preference || "subscription_first",
+        );
+        setActiveSubscriptions(res.data.subscriptions || []);
+        setAllSubscriptions(res.data.all_subscriptions || []);
       }
     } catch {
       // ignore
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
     const init = async () => {
-      setLoading(true)
-      await Promise.all([fetchPlans(), fetchSelfSubscription()])
-      setLoading(false)
-    }
-    init()
-  }, [fetchPlans, fetchSelfSubscription])
+      setLoading(true);
+      await Promise.all([fetchPlans(), fetchSelfSubscription()]);
+      setLoading(false);
+    };
+    init();
+  }, [fetchPlans, fetchSelfSubscription]);
 
   const handleRefresh = async () => {
-    setRefreshing(true)
+    setRefreshing(true);
     try {
-      await fetchSelfSubscription()
+      await fetchSelfSubscription();
     } finally {
-      setRefreshing(false)
+      setRefreshing(false);
     }
-  }
+  };
 
   const handlePreferenceChange = async (pref: string) => {
-    const previous = billingPreference
-    setBillingPreference(pref)
+    const previous = billingPreference;
+    setBillingPreference(pref);
     try {
-      const res = await updateBillingPreference(pref)
+      const res = await updateBillingPreference(pref);
       if (res.success) {
-        toast.success(t('Updated successfully'))
-        const normalized = res.data?.billing_preference || pref
-        setBillingPreference(normalized)
+        toast.success(t("Updated successfully"));
+        const normalized = res.data?.billing_preference || pref;
+        setBillingPreference(normalized);
       } else {
-        toast.error(res.message || t('Update failed'))
-        setBillingPreference(previous)
+        toast.error(res.message || t("Update failed"));
+        setBillingPreference(previous);
       }
     } catch {
-      toast.error(t('Request failed'))
-      setBillingPreference(previous)
+      toast.error(t("Request failed"));
+      setBillingPreference(previous);
     }
-  }
+  };
 
-  const hasActive = activeSubscriptions.length > 0
-  const hasAny = allSubscriptions.length > 0
-  const isAvailable = loading || plans.length > 0 || hasAny
-  const disablePref = !hasActive
+  const hasActive = activeSubscriptions.length > 0;
+  const hasAny = allSubscriptions.length > 0;
+  const isAvailable = loading || plans.length > 0 || hasAny;
+  const disablePref = !hasActive;
   const isSubPref =
-    billingPreference === 'subscription_first' ||
-    billingPreference === 'subscription_only'
+    billingPreference === "subscription_first" ||
+    billingPreference === "subscription_only";
 
   const planPurchaseCountMap = useMemo(() => {
-    const map = new Map<number, number>()
+    const map = new Map<number, number>();
     for (const sub of allSubscriptions) {
-      const planId = sub?.subscription?.plan_id
-      if (!planId) continue
-      map.set(planId, (map.get(planId) || 0) + 1)
+      const planId = sub?.subscription?.plan_id;
+      if (!planId) continue;
+      map.set(planId, (map.get(planId) || 0) + 1);
     }
-    return map
-  }, [allSubscriptions])
+    return map;
+  }, [allSubscriptions]);
 
   useEffect(() => {
-    onAvailabilityChange?.(isAvailable)
-  }, [isAvailable, onAvailabilityChange])
+    onAvailabilityChange?.(isAvailable);
+  }, [isAvailable, onAvailabilityChange]);
 
   const planTitleMap = useMemo(() => {
-    const map = new Map<number, string>()
+    const map = new Map<number, string>();
     for (const p of plans) {
       if (p?.plan?.id) {
-        map.set(p.plan.id, p.plan.title || '')
+        map.set(p.plan.id, p.plan.title || "");
       }
     }
-    return map
-  }, [plans])
+    return map;
+  }, [plans]);
 
   // Group plans by billing period (e.g. monthly vs semi-annual) so each
   // cycle is shown on its own tab, mirroring the plan list layout.
   const periodGroups = useMemo(() => {
-    const map = new Map<string, PlanRecord[]>()
+    const map = new Map<string, PlanRecord[]>();
     for (const p of plans) {
-      const plan = p?.plan
-      if (!plan) continue
-      const unit = plan.duration_unit || 'month'
-      const value = Number(plan.duration_value || 1)
-      const key = `${unit}:${value}`
-      const list = map.get(key) || []
-      list.push(p)
-      map.set(key, list)
+      const plan = p?.plan;
+      if (!plan) continue;
+      const unit = plan.duration_unit || "month";
+      const value = Number(plan.duration_value || 1);
+      const key = `${unit}:${value}`;
+      const list = map.get(key) || [];
+      list.push(p);
+      map.set(key, list);
     }
-    const monthlyPlans = map.get('month:1') || []
+    const monthlyPlans = map.get("month:1") || [];
     const groups = Array.from(map.entries())
       .sort(([a], [b]) =>
-        a === 'month:1' ? -1 : b === 'month:1' ? 1 : a.localeCompare(b)
+        a === "month:1" ? -1 : b === "month:1" ? 1 : a.localeCompare(b),
       )
       .map(([key, groupPlans]) => {
-        const [unit, valueStr] = key.split(':')
-        const value = Number(valueStr)
-        let label = `${value} ${unit}`
-        if (unit === 'month') {
-          if (value === 1) label = t('Monthly')
-          else if (value === 3) label = t('Quarterly')
-          else if (value === 6) label = t('Semi-Annually')
-          else if (value === 12) label = t('Yearly')
-        } else if (unit === 'year' && value === 1) {
-          label = t('Yearly')
+        const [unit, valueStr] = key.split(":");
+        const value = Number(valueStr);
+        let label = `${value} ${unit}`;
+        if (unit === "month") {
+          if (value === 1) label = t("Monthly");
+          else if (value === 3) label = t("Quarterly");
+          else if (value === 6) label = t("Semi-Annually");
+          else if (value === 12) label = t("Yearly");
+        } else if (unit === "year" && value === 1) {
+          label = t("Yearly");
         }
         // Savings vs paying monthly: match tiers by identical total quota.
-        let discountPercent: number | null = null
-        if (unit === 'month' && value > 1 && monthlyPlans.length > 0) {
+        let discountPercent: number | null = null;
+        if (unit === "month" && value > 1 && monthlyPlans.length > 0) {
           for (const p of groupPlans) {
             const match = monthlyPlans.find(
               (m) =>
                 Number(m.plan.total_amount || 0) ===
-                Number(p.plan.total_amount || 0)
-            )
-            if (!match) continue
-            const full = Number(match.plan.price_amount || 0) * value
-            const price = Number(p.plan.price_amount || 0)
+                Number(p.plan.total_amount || 0),
+            );
+            if (!match) continue;
+            const full = Number(match.plan.price_amount || 0) * value;
+            const price = Number(p.plan.price_amount || 0);
             if (full > 0 && price > 0 && price < full) {
-              const pct = Math.round((1 - price / full) * 100)
+              const pct = Math.round((1 - price / full) * 100);
               if (discountPercent === null || pct > discountPercent) {
-                discountPercent = pct
+                discountPercent = pct;
               }
             }
           }
         }
-        return { key, label, discountPercent, groupPlans }
-      })
-    return groups
-  }, [plans, t])
+        return { key, label, discountPercent, groupPlans };
+      });
+    return groups;
+  }, [plans, t]);
 
   const activePeriodKey = periodGroups.some((g) => g.key === periodKey)
     ? periodKey
-    : (periodGroups[0]?.key || '')
+    : periodGroups[0]?.key || "";
 
   // Rows for the rate details table: one per tier (matched across billing
   // periods by identical total quota), with each period's price.
   const rateRows = useMemo(() => {
-    if (periodGroups.length === 0) return []
-    const monthlyGroup = periodGroups.find((g) => g.key === 'month:1')
-    const monthly = monthlyGroup?.groupPlans || []
-    const others = periodGroups.filter((g) => g.key !== 'month:1')
-    const base = monthly.length > 0 ? monthly : periodGroups[0].groupPlans
+    if (periodGroups.length === 0) return [];
+    const monthlyGroup = periodGroups.find((g) => g.key === "month:1");
+    const monthly = monthlyGroup?.groupPlans || [];
+    const others = periodGroups.filter((g) => g.key !== "month:1");
+    const base = monthly.length > 0 ? monthly : periodGroups[0].groupPlans;
     const rows = base.map((m) => {
-      const plan = m?.plan
-      if (!plan) return null
-      const total = Number(plan.total_amount || 0)
+      const plan = m?.plan;
+      if (!plan) return null;
+      const total = Number(plan.total_amount || 0);
       const cells = [
         {
           label: monthlyGroup ? monthlyGroup.label : periodGroups[0].label,
@@ -331,260 +336,270 @@ export function SubscriptionPlansCard({
           currency: plan.currency,
           months: 1,
         },
-      ]
+      ];
       for (const g of others) {
         const match = g.groupPlans.find(
-          (p) => Number(p.plan.total_amount || 0) === total
-        )
-        if (!match) continue
-        const [unit, valueStr] = g.key.split(':')
-        const months =
-          Number(valueStr || 1) * (unit === 'year' ? 12 : 1)
+          (p) => Number(p.plan.total_amount || 0) === total,
+        );
+        if (!match) continue;
+        const [unit, valueStr] = g.key.split(":");
+        const months = Number(valueStr || 1) * (unit === "year" ? 12 : 1);
         cells.push({
           label: g.label,
           price: Number(match.plan.price_amount || 0),
           currency: match.plan.currency,
           months,
-        })
+        });
       }
-      return { title: plan.title || '', total, cells }
-    })
-    return rows.filter((r): r is RateRow => !!r && r.total > 0)
-  }, [periodGroups])
+      return { title: plan.title || "", total, cells };
+    });
+    return rows.filter((r): r is RateRow => !!r && r.total > 0);
+  }, [periodGroups]);
 
   const getRemainingDays = (sub: UserSubscriptionRecord) => {
-    const endTime = sub?.subscription?.end_time || 0
-    if (!endTime) return 0
-    const now = Date.now() / 1000
-    return Math.max(0, Math.ceil((endTime - now) / 86400))
-  }
+    const endTime = sub?.subscription?.end_time || 0;
+    if (!endTime) return 0;
+    const now = Date.now() / 1000;
+    return Math.max(0, Math.ceil((endTime - now) / 86400));
+  };
 
   const getUsagePercent = (sub: UserSubscriptionRecord) => {
-    const total = Number(sub?.subscription?.amount_total || 0)
-    const used = Number(sub?.subscription?.amount_used || 0)
-    if (total <= 0) return 0
-    return Math.round((used / total) * 100)
-  }
+    const total = Number(sub?.subscription?.amount_total || 0);
+    const used = Number(sub?.subscription?.amount_used || 0);
+    if (total <= 0) return 0;
+    return Math.round((used / total) * 100);
+  };
 
-  const renderPlansGrid = (gridPlans: PlanRecord[]) => (
-    <div className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
-      {gridPlans.map((p, index) => {
-        const plan = p?.plan
-        if (!plan) return null
-        const totalAmount = Number(plan.total_amount || 0)
-        const displayPrice = formatBillingCurrencyFromUSD(
-          planAmountToDisplayUSD(
-            Number(plan.price_amount || 0),
-            plan.currency,
-            usdExchangeRate
-          )
-        )
-        const isMonthly =
-          (plan.duration_unit || 'month') === 'month' &&
-          Number(plan.duration_value || 1) === 1
-        const isPopular = index === 1 && gridPlans.length > 1
-        const limit = Number(plan.max_purchase_per_user || 0)
-        const count = planPurchaseCountMap.get(plan.id) || 0
-        const reached = limit > 0 && count >= limit
+  const renderPlansGrid = (inputPlans: PlanRecord[]) => {
+    // Cheapest plan first within each billing period.
+    const gridPlans = [...inputPlans].sort(
+      (a, b) =>
+        Number(a?.plan?.price_amount || 0) - Number(b?.plan?.price_amount || 0),
+    );
+    return (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {gridPlans.map((p, index) => {
+          const plan = p?.plan;
+          if (!plan) return null;
+          const totalAmount = Number(plan.total_amount || 0);
+          const displayPrice = formatBillingCurrencyFromUSD(
+            planAmountToDisplayUSD(
+              Number(plan.price_amount || 0),
+              plan.currency,
+              usdExchangeRate,
+            ),
+          );
+          const isMonthly =
+            (plan.duration_unit || "month") === "month" &&
+            Number(plan.duration_value || 1) === 1;
+          const isPopular = index === 1 && gridPlans.length > 1;
+          const limit = Number(plan.max_purchase_per_user || 0);
+          const count = planPurchaseCountMap.get(plan.id) || 0;
+          const reached = limit > 0 && count >= limit;
 
-        const benefits = [
-          `${t('Validity Period')}: ${formatDuration(plan, t)}`,
-          formatResetPeriod(plan, t) !== t('No Reset')
-            ? `${t('Quota Reset')}: ${formatResetPeriod(plan, t)}`
-            : null,
-          totalAmount <= 0 ? `${t('Total Quota')}: ${t('Unlimited')}` : null,
-          limit > 0 ? `${t('Purchase Limit')}: ${limit}` : null,
-          plan.upgrade_group
-            ? `${t('Upgrade Group')}: ${plan.upgrade_group}`
-            : null,
-        ].filter(Boolean) as string[]
+          const benefits = [
+            totalAmount > 0
+              ? `${t("Monthly quota")}: ${formatQuota(totalAmount)}`
+              : `${t("Total Quota")}: ${t("Unlimited")}`,
+            `${t("Validity Period")}: ${formatDuration(plan, t)}`,
+            formatResetPeriod(plan, t) !== t("No Reset")
+              ? `${t("Quota Reset")}: ${formatResetPeriod(plan, t)}`
+              : null,
+            t("Covers all models at wallet rates"),
+            t("Falls back to wallet balance when quota runs out"),
+            limit > 0 ? `${t("Purchase Limit")}: ${limit}` : null,
+            plan.upgrade_group
+              ? `${t("Upgrade Group")}: ${plan.upgrade_group}`
+              : null,
+          ].filter(Boolean) as string[];
 
-        return (
-          <Card
-            key={plan.id}
-            data-card-hover='false'
-            className={cn(isPopular && 'border-primary/70 shadow-sm')}
-          >
-            <CardContent className='flex h-full flex-col p-4 sm:p-5'>
-              <div className='mb-2 flex items-start justify-between gap-3'>
-                <div className='min-w-0'>
-                  <h4 className='truncate font-semibold'>
-                    {plan.title || t('Subscription Plans')}
-                  </h4>
-                  {plan.subtitle && (
-                    <p className='text-muted-foreground line-clamp-2 text-xs leading-relaxed'>
-                      {plan.subtitle}
-                    </p>
+          return (
+            <Card
+              key={plan.id}
+              data-card-hover="false"
+              className={cn(isPopular && "border-primary/70 shadow-sm")}
+            >
+              <CardContent className="flex h-full flex-col p-4 sm:p-5">
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h4 className="truncate font-semibold">
+                      {plan.title || t("Subscription Plans")}
+                    </h4>
+                    {plan.subtitle && (
+                      <p className="text-muted-foreground line-clamp-2 text-xs leading-relaxed">
+                        {plan.subtitle}
+                      </p>
+                    )}
+                  </div>
+                  {isPopular && (
+                    <StatusBadge
+                      variant="info"
+                      copyable={false}
+                      className="shrink-0"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      {t("Recommended")}
+                    </StatusBadge>
                   )}
                 </div>
-                {isPopular && (
-                  <StatusBadge
-                    variant='info'
-                    copyable={false}
-                    className='shrink-0'
-                  >
-                    <Sparkles className='h-3 w-3' />
-                    {t('Recommended')}
-                  </StatusBadge>
-                )}
-              </div>
 
-              <div className='flex items-baseline gap-1 py-2'>
-                <span className='text-primary text-2xl font-bold'>
-                  {displayPrice}
-                </span>
-                {isMonthly && (
-                  <span className='text-muted-foreground text-xs'>
-                    {t('per month')}
+                <div className="flex items-baseline gap-1 py-2">
+                  <span className="text-primary text-2xl font-bold">
+                    {displayPrice}
                   </span>
-                )}
-              </div>
+                  {isMonthly && (
+                    <span className="text-muted-foreground text-xs">
+                      {t("per month")}
+                    </span>
+                  )}
+                </div>
 
-              <div className='flex-1 space-y-1.5 pb-3'>
-                {benefits.map((label) => (
-                  <div
-                    key={label}
-                    className='text-muted-foreground flex items-center gap-2 text-xs leading-relaxed'
+                <div className="flex-1 space-y-1.5 pb-3">
+                  {benefits.map((label) => (
+                    <div
+                      key={label}
+                      className="text-muted-foreground flex items-center gap-2 text-xs leading-relaxed"
+                    >
+                      <Check className="text-primary h-3 w-3 shrink-0" />
+                      <span>{label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <Separator className="mb-3" />
+
+                {reached ? (
+                  <Tooltip>
+                    <TooltipTrigger render={<div />}>
+                      <Button variant="outline" className="w-full" disabled>
+                        {t("Limit Reached")}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {t("Purchase limit reached")} ({count}/{limit})
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      setSelectedPlan(p);
+                      setPurchaseOpen(true);
+                    }}
                   >
-                    <Check className='text-primary h-3 w-3 shrink-0' />
-                    <span>{label}</span>
-                  </div>
-                ))}
-              </div>
-
-              <Separator className='mb-3' />
-
-              {reached ? (
-                <Tooltip>
-                  <TooltipTrigger render={<div />}>
-                    <Button variant='outline' className='w-full' disabled>
-                      {t('Limit Reached')}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {t('Purchase limit reached')} ({count}/{limit})
-                  </TooltipContent>
-                </Tooltip>
-              ) : (
-                <Button
-                  variant='outline'
-                  className='w-full'
-                  onClick={() => {
-                    setSelectedPlan(p)
-                    setPurchaseOpen(true)
-                  }}
-                >
-                  {t('Subscribe Now')}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        )
-      })}
-    </div>
-  )
+                    {t("Subscribe Now")}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  };
 
   if (loading) {
     return (
-      <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
-        <CardHeader className='border-b p-3 !pb-3 sm:p-5 sm:!pb-5'>
-          <Skeleton className='h-6 w-32' />
+      <Card data-card-hover="false" className="gap-0 overflow-hidden py-0">
+        <CardHeader className="border-b p-3 !pb-3 sm:p-5 sm:!pb-5">
+          <Skeleton className="h-6 w-32" />
         </CardHeader>
-        <CardContent className='space-y-4 p-3 sm:p-5'>
-          <Skeleton className='h-20 w-full' />
-          <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3'>
-            {['first', 'second', 'third'].map((key) => (
-              <Skeleton key={key} className='h-48 w-full' />
+        <CardContent className="space-y-4 p-3 sm:p-5">
+          <Skeleton className="h-20 w-full" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {["first", "second", "third"].map((key) => (
+              <Skeleton key={key} className="h-48 w-full" />
             ))}
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   if (plans.length === 0 && !hasAny) {
-    return null
+    return null;
   }
 
   return (
     <>
       <TitledCard
-        title={t('Subscription Plans')}
-        description={t('Subscribe to a plan for model access')}
-        icon={<Crown className='h-4 w-4' />}
-        iconTone='warning'
+        title={t("Subscription Plans")}
+        description={t("Subscribe to a plan for model access")}
+        icon={<Crown className="h-4 w-4" />}
+        iconTone="warning"
         disableHoverEffect
-        contentClassName='space-y-4 sm:space-y-5'
+        contentClassName="space-y-4 sm:space-y-5"
       >
         {/* My subscriptions & billing preference */}
-        <div className='rounded-xl border p-3 sm:p-4'>
-          <div className='flex flex-wrap items-center justify-between gap-2.5 sm:gap-3'>
-            <div className='flex min-w-0 flex-wrap items-center gap-2'>
-              <span className='text-sm font-medium'>
-                {t('My Subscriptions')}
+        <div className="rounded-xl border p-3 sm:p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="text-sm font-medium">
+                {t("My Subscriptions")}
               </span>
-              <span className='flex items-center gap-1.5 text-xs font-medium'>
+              <span className="flex items-center gap-1.5 text-xs font-medium">
                 <span
                   className={cn(
-                    'size-1.5 shrink-0 rounded-full',
-                    hasActive ? dotColorMap.success : dotColorMap.neutral
+                    "size-1.5 shrink-0 rounded-full",
+                    hasActive ? dotColorMap.success : dotColorMap.neutral,
                   )}
-                  aria-hidden='true'
+                  aria-hidden="true"
                 />
                 {hasActive ? (
                   <span className={cn(textColorMap.success)}>
-                    {activeSubscriptions.length} {t('active')}
+                    {activeSubscriptions.length} {t("active")}
                   </span>
                 ) : (
-                  <span className='text-muted-foreground'>
-                    {t('No Active')}
+                  <span className="text-muted-foreground">
+                    {t("No Active")}
                   </span>
                 )}
                 {allSubscriptions.length > activeSubscriptions.length && (
                   <>
-                    <span className='text-muted-foreground/30'>·</span>
-                    <span className='text-muted-foreground'>
-                      {allSubscriptions.length - activeSubscriptions.length}{' '}
-                      {t('expired')}
+                    <span className="text-muted-foreground/30">·</span>
+                    <span className="text-muted-foreground">
+                      {allSubscriptions.length - activeSubscriptions.length}{" "}
+                      {t("expired")}
                     </span>
                   </>
                 )}
               </span>
             </div>
-            <div className='flex w-full items-center gap-2 sm:w-auto'>
+            <div className="flex w-full items-center gap-2 sm:w-auto">
               <Select
                 items={[
                   {
-                    value: 'subscription_first',
+                    value: "subscription_first",
                     label: (
                       <>
-                        {getBillingPreferenceLabel('subscription_first', t)}
-                        {disablePref ? ` (${t('No Active')})` : ''}
+                        {getBillingPreferenceLabel("subscription_first", t)}
+                        {disablePref ? ` (${t("No Active")})` : ""}
                       </>
                     ),
                   },
                   {
-                    value: 'wallet_first',
-                    label: getBillingPreferenceLabel('wallet_first', t),
+                    value: "wallet_first",
+                    label: getBillingPreferenceLabel("wallet_first", t),
                   },
                   {
-                    value: 'subscription_only',
+                    value: "subscription_only",
                     label: (
                       <>
-                        {getBillingPreferenceLabel('subscription_only', t)}
-                        {disablePref ? ` (${t('No Active')})` : ''}
+                        {getBillingPreferenceLabel("subscription_only", t)}
+                        {disablePref ? ` (${t("No Active")})` : ""}
                       </>
                     ),
                   },
                   {
-                    value: 'wallet_only',
-                    label: getBillingPreferenceLabel('wallet_only', t),
+                    value: "wallet_only",
+                    label: getBillingPreferenceLabel("wallet_only", t),
                   },
                 ]}
                 value={billingPreference}
                 onValueChange={(v) => v !== null && handlePreferenceChange(v)}
               >
-                <SelectTrigger className='h-8 flex-1 text-xs sm:w-[140px] sm:flex-none'>
+                <SelectTrigger className="h-8 flex-1 text-xs sm:w-[140px] sm:flex-none">
                   <SelectValue>
                     {getBillingPreferenceLabel(billingPreference, t)}
                   </SelectValue>
@@ -592,187 +607,187 @@ export function SubscriptionPlansCard({
                 <SelectContent alignItemWithTrigger={false}>
                   <SelectGroup>
                     <SelectItem
-                      value='subscription_first'
+                      value="subscription_first"
                       disabled={disablePref}
                     >
-                      {getBillingPreferenceLabel('subscription_first', t)}
-                      {disablePref ? ` (${t('No Active')})` : ''}
+                      {getBillingPreferenceLabel("subscription_first", t)}
+                      {disablePref ? ` (${t("No Active")})` : ""}
                     </SelectItem>
-                    <SelectItem value='wallet_first'>
-                      {getBillingPreferenceLabel('wallet_first', t)}
+                    <SelectItem value="wallet_first">
+                      {getBillingPreferenceLabel("wallet_first", t)}
                     </SelectItem>
                     <SelectItem
-                      value='subscription_only'
+                      value="subscription_only"
                       disabled={disablePref}
                     >
-                      {getBillingPreferenceLabel('subscription_only', t)}
-                      {disablePref ? ` (${t('No Active')})` : ''}
+                      {getBillingPreferenceLabel("subscription_only", t)}
+                      {disablePref ? ` (${t("No Active")})` : ""}
                     </SelectItem>
-                    <SelectItem value='wallet_only'>
-                      {getBillingPreferenceLabel('wallet_only', t)}
+                    <SelectItem value="wallet_only">
+                      {getBillingPreferenceLabel("wallet_only", t)}
                     </SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
               <Button
-                variant='ghost'
-                size='icon'
-                className='h-8 w-8'
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
                 onClick={handleRefresh}
                 disabled={refreshing}
               >
                 <RefreshCw
-                  className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`}
+                  className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
                 />
               </Button>
             </div>
           </div>
 
           {disablePref && isSubPref && (
-            <p className='text-muted-foreground mt-2 text-xs'>
-              {billingPreference === 'subscription_only'
+            <p className="text-muted-foreground mt-2 text-xs">
+              {billingPreference === "subscription_only"
                 ? t(
-                    'Preference saved as {{pref}}, but no active subscription. Requests will be rejected.',
-                    { pref: t('Subscription Only') }
+                    "Preference saved as {{pref}}, but no active subscription. Requests will be rejected.",
+                    { pref: t("Subscription Only") },
                   )
                 : t(
-                    'Preference saved as {{pref}}, but no active subscription. Wallet will be used automatically.',
-                    { pref: t('Subscription First') }
+                    "Preference saved as {{pref}}, but no active subscription. Wallet will be used automatically.",
+                    { pref: t("Subscription First") },
                   )}
             </p>
           )}
 
           {hasAny && (
             <>
-              <Separator className='my-3' />
-              <div className='max-h-64 space-y-3 overflow-y-auto pr-1'>
+              <Separator className="my-3" />
+              <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
                 {allSubscriptions.map((sub) => {
-                  const subscription = sub.subscription
-                  const totalAmount = Number(subscription?.amount_total || 0)
-                  const usedAmount = Number(subscription?.amount_used || 0)
+                  const subscription = sub.subscription;
+                  const totalAmount = Number(subscription?.amount_total || 0);
+                  const usedAmount = Number(subscription?.amount_used || 0);
                   const remainAmount =
-                    totalAmount > 0 ? Math.max(0, totalAmount - usedAmount) : 0
+                    totalAmount > 0 ? Math.max(0, totalAmount - usedAmount) : 0;
                   const planTitle =
-                    planTitleMap.get(subscription?.plan_id) || ''
-                  const remainDays = getRemainingDays(sub)
-                  const usagePercent = getUsagePercent(sub)
-                  const now = Date.now() / 1000
-                  const isExpired = (subscription?.end_time || 0) < now
-                  const isCancelled = subscription?.status === 'cancelled'
+                    planTitleMap.get(subscription?.plan_id) || "";
+                  const remainDays = getRemainingDays(sub);
+                  const usagePercent = getUsagePercent(sub);
+                  const now = Date.now() / 1000;
+                  const isExpired = (subscription?.end_time || 0) < now;
+                  const isCancelled = subscription?.status === "cancelled";
                   const isActive =
-                    subscription?.status === 'active' && !isExpired
-                  const nextResetTime = subscription?.next_reset_time ?? 0
+                    subscription?.status === "active" && !isExpired;
+                  const nextResetTime = subscription?.next_reset_time ?? 0;
                   let statusBadge = (
                     <StatusBadge
-                      label={t('Expired')}
-                      variant='neutral'
+                      label={t("Expired")}
+                      variant="neutral"
                       copyable={false}
                     />
-                  )
+                  );
                   if (isActive) {
                     statusBadge = (
                       <StatusBadge
-                        label={t('Active')}
-                        variant='success'
+                        label={t("Active")}
+                        variant="success"
                         copyable={false}
                       />
-                    )
+                    );
                   } else if (isCancelled) {
                     statusBadge = (
                       <StatusBadge
-                        label={t('Cancelled')}
-                        variant='neutral'
+                        label={t("Cancelled")}
+                        variant="neutral"
                         copyable={false}
                       />
-                    )
+                    );
                   }
 
-                  let endTimeLabel = t('Expired at')
+                  let endTimeLabel = t("Expired at");
                   if (isActive) {
-                    endTimeLabel = t('Until')
+                    endTimeLabel = t("Until");
                   } else if (isCancelled) {
-                    endTimeLabel = t('Cancelled at')
+                    endTimeLabel = t("Cancelled at");
                   }
 
                   return (
                     <div
                       key={subscription?.id}
-                      className='bg-background rounded-md border p-3 text-xs'
+                      className="bg-background rounded-md border p-3 text-xs"
                     >
-                      <div className='flex items-center justify-between'>
-                        <div className='flex items-center gap-2'>
-                          <span className='font-medium'>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">
                             {planTitle
-                              ? `${planTitle} · ${t('Subscription')} #${subscription?.id}`
-                              : `${t('Subscription')} #${subscription?.id}`}
+                              ? `${planTitle} · ${t("Subscription")} #${subscription?.id}`
+                              : `${t("Subscription")} #${subscription?.id}`}
                           </span>
                           {statusBadge}
                         </div>
                         {isActive && (
-                          <span className='text-muted-foreground'>
-                            {t('{{count}} days remaining', {
+                          <span className="text-muted-foreground">
+                            {t("{{count}} days remaining", {
                               count: remainDays,
                             })}
                           </span>
                         )}
                       </div>
-                      <div className='text-muted-foreground mt-1.5'>
-                        {endTimeLabel}{' '}
+                      <div className="text-muted-foreground mt-1.5">
+                        {endTimeLabel}{" "}
                         {new Date(
-                          (subscription?.end_time || 0) * 1000
+                          (subscription?.end_time || 0) * 1000,
                         ).toLocaleString()}
                       </div>
                       {isActive && nextResetTime > 0 && (
-                        <div className='text-muted-foreground mt-1'>
-                          {t('Next reset')}:{' '}
+                        <div className="text-muted-foreground mt-1">
+                          {t("Next reset")}:{" "}
                           {new Date(nextResetTime * 1000).toLocaleString()}
                         </div>
                       )}
-                      <div className='text-muted-foreground mt-1'>
-                        {t('Total Quota')}:{' '}
+                      <div className="text-muted-foreground mt-1">
+                        {t("Total Quota")}:{" "}
                         {totalAmount > 0 ? (
                           <Tooltip>
                             <TooltipTrigger
-                              render={<span className='cursor-help' />}
+                              render={<span className="cursor-help" />}
                             >
                               {formatQuota(usedAmount)}/
-                              {formatQuota(totalAmount)} · {t('Remaining')}{' '}
+                              {formatQuota(totalAmount)} · {t("Remaining")}{" "}
                               {formatQuota(remainAmount)}
                             </TooltipTrigger>
                             <TooltipContent>
-                              {t('Raw Quota')}: {usedAmount}/{totalAmount} ·{' '}
-                              {t('Remaining')} {remainAmount}
+                              {t("Raw Quota")}: {usedAmount}/{totalAmount} ·{" "}
+                              {t("Remaining")} {remainAmount}
                             </TooltipContent>
                           </Tooltip>
                         ) : (
-                          t('Unlimited')
+                          t("Unlimited")
                         )}
                         {totalAmount > 0 && (
-                          <span className='ml-2'>
-                            {t('Used')} {usagePercent}%
+                          <span className="ml-2">
+                            {t("Used")} {usagePercent}%
                           </span>
                         )}
                       </div>
                       {totalAmount > 0 && isActive && (
-                        <Progress value={usagePercent} className='mt-2 h-1.5' />
+                        <Progress value={usagePercent} className="mt-2 h-1.5" />
                       )}
                     </div>
-                  )
+                  );
                 })}
               </div>
             </>
           )}
 
           {!hasAny && (
-            <p className='text-muted-foreground mt-2 text-xs'>
-              {t('Subscribe to a plan for model access')}
+            <p className="text-muted-foreground mt-2 text-xs">
+              {t("Subscribe to a plan for model access")}
             </p>
           )}
         </div>
 
         {/* Available plans grid, grouped by billing period */}
         {plans.length > 0 ? (
-          <div className='space-y-4'>
+          <div className="space-y-4">
             {periodGroups.length > 1 && (
               <Tabs value={activePeriodKey} onValueChange={setPeriodKey}>
                 <TabsList>
@@ -780,7 +795,7 @@ export function SubscriptionPlansCard({
                     <TabsTrigger key={g.key} value={g.key}>
                       {g.label}
                       {g.discountPercent !== null && (
-                        <span className='text-xs font-semibold text-red-500'>
+                        <span className="text-xs font-semibold text-red-500">
                           -{g.discountPercent}%
                         </span>
                       )}
@@ -788,7 +803,7 @@ export function SubscriptionPlansCard({
                   ))}
                 </TabsList>
                 {periodGroups.map((g) => (
-                  <TabsContent key={g.key} value={g.key} className='mt-3'>
+                  <TabsContent key={g.key} value={g.key} className="mt-3">
                     {renderPlansGrid(g.groupPlans)}
                   </TabsContent>
                 ))}
@@ -797,26 +812,26 @@ export function SubscriptionPlansCard({
             {periodGroups.length <= 1 && renderPlansGrid(plans)}
 
             {/* Rate details */}
-            <div className='rounded-xl border bg-muted/40 p-3 sm:p-4'>
-              <p className='text-sm font-medium'>{t('Rate Details')}</p>
-              <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
+            <div className="rounded-xl border bg-muted/40 p-3 sm:p-4">
+              <p className="text-sm font-medium">{t("Rate Details")}</p>
+              <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
                 {t(
-                  'Subscription quota covers all models on this site at the same per-token rates as wallet balance. See the pricing page for model-specific rates.'
+                  "Subscription quota covers all models on this site at the same per-token rates as wallet balance. See the pricing page for model-specific rates.",
                 )}
               </p>
               {rateRows.length > 0 && (
-                <div className='mt-3 overflow-x-auto'>
-                  <table className='w-full text-left text-xs'>
-                    <thead className='text-muted-foreground'>
-                      <tr className='border-b'>
-                        <th className='py-1.5 pr-3 font-medium'>
-                          {t('Plan Name')}
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="text-muted-foreground">
+                      <tr className="border-b">
+                        <th className="py-1.5 pr-3 font-medium">
+                          {t("Plan Name")}
                         </th>
-                        <th className='py-1.5 pr-3 font-medium'>
-                          {t('Monthly quota')}
+                        <th className="py-1.5 pr-3 font-medium">
+                          {t("Monthly quota")}
                         </th>
                         {rateRows[0].cells.map((c) => (
-                          <th key={c.label} className='py-1.5 pr-3 font-medium'>
+                          <th key={c.label} className="py-1.5 pr-3 font-medium">
                             {c.label}
                           </th>
                         ))}
@@ -824,31 +839,31 @@ export function SubscriptionPlansCard({
                     </thead>
                     <tbody>
                       {rateRows.map((row) => (
-                        <tr key={row.title} className='border-b last:border-0'>
-                          <td className='py-1.5 pr-3 font-medium'>
+                        <tr key={row.title} className="border-b last:border-0">
+                          <td className="py-1.5 pr-3 font-medium">
                             {row.title}
                           </td>
-                          <td className='py-1.5 pr-3'>
+                          <td className="py-1.5 pr-3">
                             {formatQuota(row.total)}
                           </td>
                           {row.cells.map((c) => (
-                            <td key={c.label} className='py-1.5 pr-3'>
+                            <td key={c.label} className="py-1.5 pr-3">
                               {formatBillingCurrencyFromUSD(
                                 planAmountToDisplayUSD(
                                   c.price,
                                   c.currency,
-                                  usdExchangeRate
-                                )
+                                  usdExchangeRate,
+                                ),
                               )}
                               {c.months > 1 && (
-                                <span className='text-muted-foreground ml-1'>
-                                  {t('≈ {{price}} / month', {
+                                <span className="text-muted-foreground ml-1">
+                                  {t("≈ {{price}} / month", {
                                     price: formatBillingCurrencyFromUSD(
                                       planAmountToDisplayUSD(
                                         c.price / c.months,
                                         c.currency,
-                                        usdExchangeRate
-                                      )
+                                        usdExchangeRate,
+                                      ),
                                     ),
                                   })}
                                 </span>
@@ -864,8 +879,8 @@ export function SubscriptionPlansCard({
             </div>
           </div>
         ) : (
-          <p className='text-muted-foreground py-4 text-center text-sm'>
-            {t('No plans available')}
+          <p className="text-muted-foreground py-4 text-center text-sm">
+            {t("No plans available")}
           </p>
         )}
       </TitledCard>
@@ -873,9 +888,9 @@ export function SubscriptionPlansCard({
       <SubscriptionPurchaseDialog
         open={purchaseOpen}
         onOpenChange={(open) => {
-          setPurchaseOpen(open)
+          setPurchaseOpen(open);
           if (!open) {
-            fetchSelfSubscription()
+            fetchSelfSubscription();
           }
         }}
         plan={selectedPlan}
@@ -898,5 +913,5 @@ export function SubscriptionPlansCard({
         }
       />
     </>
-  )
+  );
 }

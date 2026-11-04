@@ -6131,5 +6131,7 @@
   "Monthly quota": "Monthly quota",
   "≈ {{price}} / month": "≈ {{price}} / month",
   "Subscription quota covers all models on this site at the same per-token rates as wallet balance. See the pricing page for model-specific rates.": "Subscription quota covers all models on this site at the same per-token rates as wallet balance. See the pricing page for model-specific rates.",
-  "Minimum": "Minimum"
+  "Minimum": "Minimum",
+  "Covers all models at wallet rates": "Covers all models at wallet rates",
+  "Falls back to wallet balance when quota runs out": "Falls back to wallet balance when quota runs out"
 }

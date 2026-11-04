@@ -6096,5 +6096,7 @@
   "Monthly quota": "每月額度",
   "≈ {{price}} / month": "≈ {{price}} /月",
   "Subscription quota covers all models on this site at the same per-token rates as wallet balance. See the pricing page for model-specific rates.": "套餐額度可用於全站所有模型，按 token 計費，費率與錢包餘額一致；各模型具體費率請查看「定價」頁。",
-  "Minimum": "最低"
+  "Minimum": "最低",
+  "Covers all models at wallet rates": "覆蓋全站所有模型，費率與錢包一致",
+  "Falls back to wallet balance when quota runs out": "額度用盡自動回退錢包餘額"
 }

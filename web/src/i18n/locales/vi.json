@@ -6096,5 +6096,7 @@
   "Monthly quota": "Hạn mức tháng",
   "≈ {{price}} / month": "≈ {{price}} /tháng",
   "Subscription quota covers all models on this site at the same per-token rates as wallet balance. See the pricing page for model-specific rates.": "Hạn mức gói dùng được cho mọi mô hình trên trang, tính phí theo token giống như số dư ví; xem trang giá cho mức giá từng mô hình.",
-  "Minimum": "Tối thiểu"
+  "Minimum": "Tối thiểu",
+  "Covers all models at wallet rates": "Dùng được mọi mô hình theo giá ví",
+  "Falls back to wallet balance when quota runs out": "Hết hạn mức sẽ tự động dùng số dư ví"
 }

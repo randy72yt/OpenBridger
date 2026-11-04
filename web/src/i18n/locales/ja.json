@@ -6096,5 +6096,7 @@
   "Monthly quota": "月間枠",
   "≈ {{price}} / month": "≈ {{price}} /月",
   "Subscription quota covers all models on this site at the same per-token rates as wallet balance. See the pricing page for model-specific rates.": "サブスクリプション枠は全モデルで利用でき、トークン単位の課費はウォレット残高と同一です。モデル別料金は価格ページをご覧ください。",
-  "Minimum": "最低"
+  "Minimum": "最低",
+  "Covers all models at wallet rates": "全モデル対応、料率はウォレットと同一",
+  "Falls back to wallet balance when quota runs out": "枠切れ後はウォレット残高に自動フォールバック"
 }

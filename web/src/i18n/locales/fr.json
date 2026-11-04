@@ -6096,5 +6096,7 @@
   "Monthly quota": "Quota mensuel",
   "≈ {{price}} / month": "≈ {{price}} / mois",
   "Subscription quota covers all models on this site at the same per-token rates as wallet balance. See the pricing page for model-specific rates.": "Le quota de l'abonnement couvre tous les modèles du site, facturés au token aux mêmes tarifs que le solde du portefeuille. Consultez la page des tarifs pour le détail par modèle.",
-  "Minimum": "Minimum"
+  "Minimum": "Minimum",
+  "Covers all models at wallet rates": "Couvre tous les modèles aux tarifs du portefeuille",
+  "Falls back to wallet balance when quota runs out": "Bascule sur le solde du portefeuille une fois le quota épuisé"
 }
