@@ -44,6 +44,14 @@ type StripeAdaptor struct {
 }
 
 func (*StripeAdaptor) RequestAmount(c *gin.Context, req *StripePayRequest) {
+	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeCNY {
+		// Stripe amounts are always whole USD units; the client sent RMB.
+		req.Amount = normalizeTopupAmountUSDInt(req.Amount)
+		if req.Amount < 1 {
+			c.JSON(http.StatusOK, gin.H{"message": "error", "data": "充值金额过低"})
+			return
+		}
+	}
 	if req.Amount < getStripeMinTopup() {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": fmt.Sprintf("充值数量不能小于 %d", getStripeMinTopup())})
 		return
@@ -73,6 +81,14 @@ func (*StripeAdaptor) RequestPay(c *gin.Context, req *StripePayRequest) {
 	if req.PaymentMethod != model.PaymentMethodStripe {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "不支持的支付渠道"})
 		return
+	}
+	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeCNY {
+		// Stripe amounts are always whole USD units; the client sent RMB.
+		req.Amount = normalizeTopupAmountUSDInt(req.Amount)
+		if req.Amount < 1 {
+			c.JSON(http.StatusOK, gin.H{"message": "error", "data": "充值金额过低"})
+			return
+		}
 	}
 	if req.Amount < getStripeMinTopup() {
 		c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("充值数量不能小于 %d", getStripeMinTopup()), "data": 10})

@@ -201,3 +201,36 @@ func TestStripeCreditedQuotaIncludesGroupRatio(t *testing.T) {
 	require.NoError(t, common.UpdateTopupGroupRatioByJSONString(`{"free":0}`))
 	assert.True(t, decimal.NewFromInt(500000).Equal(getStripeCreditedQuota(1, "free")))
 }
+
+func TestTopUpCNYAmountSemantics(t *testing.T) {
+	oldQuotaPerUnit := common.QuotaPerUnit
+	oldDisplayType := operation_setting.GetGeneralSetting().QuotaDisplayType
+	oldPrice := operation_setting.Price
+	oldMinTopUp := operation_setting.MinTopUp
+	common.QuotaPerUnit = 500000
+	operation_setting.Price = 7.2
+	operation_setting.MinTopUp = 5
+	t.Cleanup(func() {
+		common.QuotaPerUnit = oldQuotaPerUnit
+		operation_setting.GetGeneralSetting().QuotaDisplayType = oldDisplayType
+		operation_setting.Price = oldPrice
+		operation_setting.MinTopUp = oldMinTopUp
+	})
+	operation_setting.GetGeneralSetting().QuotaDisplayType = operation_setting.QuotaDisplayTypeCNY
+
+	// A ¥100 preset charges exactly ¥100 and credits 100/7.2 USD.
+	pay := getPayMoney(100, "default")
+	assert.InDelta(t, 100.0, pay, 0.000001)
+
+	quota, err := getTopUpQuota(100)
+	require.NoError(t, err)
+	assert.Equal(t, 6_944_444, quota) // 100/7.2*500000, truncated by strict wallet helper
+
+	// Min top-up is converted into RMB units (5 USD × 7.2 → 36).
+	assert.Equal(t, int64(36), getMinTopup())
+
+	// USD display mode keeps the legacy semantics untouched.
+	operation_setting.GetGeneralSetting().QuotaDisplayType = operation_setting.QuotaDisplayTypeUSD
+	pay = getPayMoney(10, "default")
+	assert.InDelta(t, 72.0, pay, 0.000001)
+}

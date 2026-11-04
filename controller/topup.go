@@ -155,10 +155,33 @@ func GetEpayClient() *epay.Client {
 	return withUrl
 }
 
-func getPayMoney(amount int64, group string) float64 {
+// normalizeTopupAmountUSD converts the client-supplied recharge amount (whole
+// units) into USD credit. Amounts are USD by default; when the site displays
+// CNY the client sends whole RMB and we convert via the recharge unit price
+// (Price), so a ¥100 preset charges exactly ¥100.
+func normalizeTopupAmountUSD(amount int64) decimal.Decimal {
 	dAmount := decimal.NewFromInt(amount)
+	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeCNY {
+		price := decimal.NewFromFloat(operation_setting.Price)
+		if price.Cmp(decimal.Zero) <= 0 {
+			return decimal.Zero
+		}
+		return dAmount.Div(price)
+	}
+	return dAmount
+}
+
+// normalizeTopupAmountUSDInt is normalizeTopupAmountUSD rounded to whole USD,
+// used where legacy record columns and gateway quantities require integers.
+func normalizeTopupAmountUSDInt(amount int64) int64 {
+	return normalizeTopupAmountUSD(amount).Round(0).IntPart()
+}
+
+func getPayMoney(amount int64, group string) float64 {
+	dAmount := normalizeTopupAmountUSD(amount)
 	// 充值金额以“展示类型”为准：
-	// - USD/CNY: 前端传 amount 为金额单位；TOKENS: 前端传 tokens，需要换成 USD 金额
+	// - USD: 前端传 amount 为美元金额；CNY: 前端传人民币金额（上方已换算）
+	// - TOKENS: 前端传 tokens，需要换成 USD 金额
 	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
 		dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
 		dAmount = dAmount.Div(dQuotaPerUnit)
@@ -187,6 +210,16 @@ func getPayMoney(amount int64, group string) float64 {
 
 func getMinTopup() int64 {
 	minTopup := operation_setting.MinTopUp
+	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeCNY {
+		// MinTopUp is denominated in USD; the client sends RMB in CNY mode.
+		minCNY := decimal.NewFromInt(int64(minTopup)).
+			Mul(decimal.NewFromFloat(operation_setting.Price)).
+			Ceil().IntPart()
+		if minCNY < 1 {
+			minCNY = 1
+		}
+		return minCNY
+	}
 	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
 		dMinTopup := decimal.NewFromInt(int64(minTopup))
 		dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
@@ -200,7 +233,7 @@ func getMinTopup() int64 {
 }
 
 func getTopUpQuota(amount int64) (int, error) {
-	quota := decimal.NewFromInt(amount)
+	quota := normalizeTopupAmountUSD(amount)
 	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
 		quotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
 		quota = decimal.NewFromInt(quota.Div(quotaPerUnit).IntPart()).Mul(quotaPerUnit)
@@ -224,6 +257,9 @@ func getMaxTopUpAmount() int64 {
 			Ceil().
 			Sub(decimal.NewFromInt(1)).
 			IntPart()
+	}
+	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeCNY {
+		return maxStoredAmount.Mul(decimal.NewFromFloat(operation_setting.Price)).Floor().IntPart()
 	}
 	return maxStoredAmount.IntPart()
 }
@@ -336,6 +372,8 @@ func RequestEpay(c *gin.Context) {
 		dAmount := decimal.NewFromInt(int64(amount))
 		dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
 		amount = dAmount.Div(dQuotaPerUnit).IntPart()
+	} else if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeCNY {
+		amount = normalizeTopupAmountUSD(amount).IntPart()
 	}
 	topUp := &model.TopUp{
 		UserId:          id,
