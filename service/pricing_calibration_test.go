@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strconv"
 	"testing"
 
@@ -338,4 +339,201 @@ func TestFetchUpstreamUsageLogsReturnsEmptyWhenWindowPredatesLog(t *testing.T) {
 	records, err := fetchUpstreamUsageLogs(context.Background(), calibrationTestChannel(server.URL), base+100000)
 	require.NoError(t, err)
 	assert.Empty(t, records)
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue coverage: one windowed query per model
+// ---------------------------------------------------------------------------
+
+type usageLogSeed struct {
+	model     string
+	createdAt int64
+}
+
+type usageLogServerOptions struct {
+	honorModel  bool
+	honorWindow bool
+	descending  bool
+	perPage     int
+	requests    *int
+}
+
+// windowedUsageLogServer honours model_name and, when honorWindow is set, the
+// start_timestamp/end_timestamp filters. Rows are returned oldest-first unless
+// descending is set, matching how the provider orders its log.
+func windowedUsageLogServer(t *testing.T, rows []usageLogSeed, opts usageLogServerOptions) *httptest.Server {
+	t.Helper()
+	perPage := opts.perPage
+	if perPage <= 0 {
+		perPage = 100
+	}
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if opts.requests != nil {
+			*opts.requests++
+		}
+		query := r.URL.Query()
+		model := query.Get("model_name")
+		start, _ := strconv.ParseInt(query.Get("start_timestamp"), 10, 64)
+		end, _ := strconv.ParseInt(query.Get("end_timestamp"), 10, 64)
+		matched := make([]usageLogSeed, 0, len(rows))
+		for _, row := range rows {
+			if opts.honorModel && model != "" && row.model != model {
+				continue
+			}
+			if opts.honorWindow {
+				if start > 0 && row.createdAt < start {
+					continue
+				}
+				if end > 0 && row.createdAt > end {
+					continue
+				}
+			}
+			matched = append(matched, row)
+		}
+		page, _ := strconv.Atoi(query.Get("p"))
+		if page < 1 {
+			page = 1
+		}
+		begin := (page - 1) * perPage
+		if begin >= len(matched) {
+			fmt.Fprint(w, `{"success":true,"data":[]}`)
+			return
+		}
+		stop := begin + perPage
+		if stop > len(matched) {
+			stop = len(matched)
+		}
+		fmt.Fprint(w, `{"success":true,"data":[`)
+		for i := begin; i < stop; i++ {
+			index := i
+			if opts.descending {
+				index = len(matched) - 1 - i
+			}
+			if i > begin {
+				fmt.Fprint(w, ",")
+			}
+			fmt.Fprintf(w, `{"id":%d,"created_at":%d,"model_name":%q,"quota":1,"prompt_tokens":10,"completion_tokens":1,"group":"g"}`,
+				index+1, matched[index].createdAt, matched[index].model)
+		}
+		fmt.Fprint(w, `]}`)
+	}))
+}
+
+// seedCalibrationLog builds an old block of history plus a few recent rows per
+// model, the shape that made the global tail walk price only the hot models.
+func seedCalibrationLog(base int64, recentPerModel map[string]int) ([]usageLogSeed, int64) {
+	rows := make([]usageLogSeed, 0)
+	// History: 200 rows two days back, all outside the window.
+	for i := 0; i < 200; i++ {
+		rows = append(rows, usageLogSeed{model: "m-legacy", createdAt: base + int64(i)*60})
+	}
+	since := base + 2*86400
+	models := make([]string, 0, len(recentPerModel))
+	for model := range recentPerModel {
+		models = append(models, model)
+	}
+	sort.Strings(models)
+	for _, model := range models {
+		for i := 0; i < recentPerModel[model]; i++ {
+			rows = append(rows, usageLogSeed{model: model, createdAt: since + int64(i)*60})
+		}
+	}
+	return rows, since
+}
+
+func TestFetchChannelUsageLogsAsksPerModelSoCoverageDoesNotDependOnTraffic(t *testing.T) {
+	base := int64(1_800_000_000)
+	rows, since := seedCalibrationLog(base, map[string]int{"m-a": 8, "m-b": 6, "m-c": 0})
+	server := windowedUsageLogServer(t, rows, usageLogServerOptions{honorModel: true, honorWindow: true})
+	defer server.Close()
+
+	records, windowed, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a", "m-b", "m-c"})
+	require.NoError(t, err)
+	assert.True(t, windowed, "the provider honours the window filter, so no tail walk is needed")
+	assert.Len(t, records, 14)
+	seen := map[string]int{}
+	for _, record := range records {
+		assert.GreaterOrEqual(t, record.CreatedAt, since)
+		seen[record.ModelName]++
+	}
+	assert.Equal(t, 8, seen["m-a"])
+	assert.Equal(t, 6, seen["m-b"])
+	assert.Zero(t, seen["m-legacy"], "history outside the window must not be counted")
+}
+
+// A provider that ignores both filters answers page 1 with the oldest rows of
+// the whole log. Detecting that is what keeps calibration from silently pricing
+// yesterday's traffic as today's.
+func TestFetchChannelUsageLogsFallsBackWhenProviderIgnoresWindowFilter(t *testing.T) {
+	base := int64(1_800_000_000)
+	rows, since := seedCalibrationLog(base, map[string]int{"m-a": 12})
+	server := windowedUsageLogServer(t, rows, usageLogServerOptions{perPage: 50})
+	defer server.Close()
+
+	records, windowed, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a"})
+	require.NoError(t, err)
+	assert.False(t, windowed, "an ignored filter must be reported so the operator can see it")
+	require.NotEmpty(t, records, "the fallback tail walk still reads the window")
+	for _, record := range records {
+		assert.GreaterOrEqual(t, record.CreatedAt, since)
+	}
+}
+
+// A provider that keeps model_name but drops the timestamps returns the whole
+// history of that model. Page 1 is then inside the window, so the fallback is
+// not triggered - correct results have to come from the client-side clip.
+func TestFetchChannelUsageLogsClipsRowsWhenProviderIgnoresTimeFilterOnly(t *testing.T) {
+	base := int64(1_800_000_000)
+	rows, since := seedCalibrationLog(base, map[string]int{"m-a": 9})
+	server := windowedUsageLogServer(t, rows, usageLogServerOptions{honorModel: true, perPage: 50})
+	defer server.Close()
+
+	records, _, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a"})
+	require.NoError(t, err)
+	require.NotEmpty(t, records)
+	for _, record := range records {
+		assert.GreaterOrEqual(t, record.CreatedAt, since)
+		assert.Equal(t, "m-a", record.ModelName)
+	}
+	assert.LessOrEqual(t, len(records), pricingCalibrationModelRecords)
+}
+
+// The mirror case: a newest-first log that ignores every filter still answers
+// page 1 from inside the window, so the window is not detected as unsupported.
+// The client-side window check has to keep the result correct anyway.
+func TestFetchChannelUsageLogsClipsRowsWhenNewestFirstProviderIgnoresFilter(t *testing.T) {
+	base := int64(1_800_000_000)
+	rows, since := seedCalibrationLog(base, map[string]int{"m-a": 9})
+	server := windowedUsageLogServer(t, rows, usageLogServerOptions{descending: true, perPage: 50})
+	defer server.Close()
+
+	records, _, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a"})
+	require.NoError(t, err)
+	require.NotEmpty(t, records)
+	for _, record := range records {
+		assert.GreaterOrEqual(t, record.CreatedAt, since)
+	}
+	assert.LessOrEqual(t, len(records), pricingCalibrationModelRecords)
+}
+
+func TestWindowWalkStaysInsideRequestBudget(t *testing.T) {
+	base := int64(1_800_000_000)
+	perModel := make(map[string]int, 60)
+	models := make([]string, 0, 60)
+	for i := 0; i < 60; i++ {
+		model := fmt.Sprintf("model-%02d", i)
+		perModel[model] = 40
+		models = append(models, model)
+	}
+	sort.Strings(models)
+	rows, since := seedCalibrationLog(base, perModel)
+	requests := 0
+	server := windowedUsageLogServer(t, rows, usageLogServerOptions{honorModel: true, honorWindow: true, perPage: 10, requests: &requests})
+	defer server.Close()
+
+	_, windowed, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, models)
+	require.NoError(t, err)
+	assert.True(t, windowed)
+	assert.LessOrEqual(t, requests, pricingCalibrationWindowRequestBudget,
+		"a wide catalogue must not turn one calibration run into a crawl")
 }

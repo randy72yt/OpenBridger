@@ -37,6 +37,14 @@ const (
 	// The provider ignores page_size and returns 142 rows per page, so a 72h
 	// window can sit hundreds of pages in. Probes double up to this ceiling.
 	pricingCalibrationProbePageCeiling = 4096
+	// Per-model walk bounds. One page carries 142 rows, which is far more than
+	// the five samples a factor needs, so a second page is already the exception.
+	pricingCalibrationModelPages = 4
+	// Keeps a single very busy model from crowding the sample set and from
+	// dominating the run time.
+	pricingCalibrationModelRecords = 600
+	// Upper bound on requests to a third-party provider per channel per run.
+	pricingCalibrationWindowRequestBudget = 200
 	// DefaultQuotaPerUnit is the new-api convention: one US dollar is worth
 	// 500000 quota units. A provider that publishes a different snapshot in the
 	// per-request billing detail still lands on the same quotient because both
@@ -228,7 +236,32 @@ func upstreamUsageLogEndpoint(channel *model.Channel, baseURL *url.URL) (*url.UR
 // walk continues forward. The same code still works if a provider flips to
 // newest-first: page 1 is already inside the window, and the "whole page is
 // older than the window" rule ends the walk instead.
+//
+// This is the fallback path. It sees whatever the provider happens to have
+// logged recently, which on a busy account is minutes of traffic covering a
+// handful of models - on the first production run, 3060 rows that only matched
+// 3 of 28 models. fetchChannelUsageLogs prefers the per-model window walk and
+// only lands here when the provider ignores the window filter.
 func fetchUpstreamUsageLogs(ctx context.Context, channel *model.Channel, since int64) ([]upstreamUsageLogRecord, error) {
+	client, err := newUpstreamUsageLogClient(ctx, channel)
+	if err != nil {
+		return nil, err
+	}
+	return client.tailWalk(since)
+}
+
+// upstreamUsageLogClient holds one channel's log connection so both walkers
+// send identical headers, decode identically and share a request budget: the
+// provider is a third party and a calibration pass must not turn into a crawl.
+type upstreamUsageLogClient struct {
+	ctx      context.Context
+	endpoint *url.URL
+	key      string
+	client   *http.Client
+	requests int
+}
+
+func newUpstreamUsageLogClient(ctx context.Context, channel *model.Channel) (*upstreamUsageLogClient, error) {
 	baseURL, err := url.Parse(strings.TrimSpace(channel.GetBaseURL()))
 	if err != nil || baseURL.Scheme == "" || baseURL.Host == "" {
 		return nil, errors.New("channel has no valid upstream base URL")
@@ -241,45 +274,66 @@ func fetchUpstreamUsageLogs(ctx context.Context, channel *model.Channel, since i
 	if keyErr != nil || strings.TrimSpace(key) == "" {
 		return nil, errors.New("channel has no enabled API key")
 	}
-	client := &http.Client{Timeout: 30 * time.Second}
-	fetchPage := func(page int) ([]upstreamUsageLogRecord, error) {
-		query := endpoint.Query()
-		query.Set("p", strconv.Itoa(page))
-		query.Set("page_size", strconv.Itoa(pricingCalibrationPageSize))
-		query.Set("type", "2")
-		pageURL := *endpoint
-		pageURL.RawQuery = query.Encode()
-		req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, pageURL.String(), nil)
-		if reqErr != nil {
-			return nil, reqErr
-		}
-		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(key))
-		req.Header.Set("Accept", "application/json")
-		resp, doErr := client.Do(req)
-		if doErr != nil {
-			return nil, doErr
-		}
-		var payload upstreamUsageLogResponse
-		decodeErr := common.DecodeJson(io.LimitReader(resp.Body, pricingCalibrationResponseLimit), &payload)
-		_ = resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("upstream usage log returned %s", resp.Status)
-		}
-		if decodeErr != nil {
-			return nil, decodeErr
-		}
-		if !payload.Success && payload.Message != "" {
-			return nil, errors.New(payload.Message)
-		}
-		return payload.Data, nil
-	}
+	return &upstreamUsageLogClient{
+		ctx:      ctx,
+		endpoint: endpoint,
+		key:      strings.TrimSpace(key),
+		client:   &http.Client{Timeout: 30 * time.Second},
+	}, nil
+}
 
+// fetchPage asks for one page. since/until/modelName are sent to the provider,
+// which filters server-side; callers still re-check the window client-side so a
+// provider that ignores a filter cannot smuggle out-of-window rows in.
+func (c *upstreamUsageLogClient) fetchPage(page int, since, until int64, modelName string) ([]upstreamUsageLogRecord, error) {
+	query := c.endpoint.Query()
+	query.Set("p", strconv.Itoa(page))
+	query.Set("page_size", strconv.Itoa(pricingCalibrationPageSize))
+	query.Set("type", "2")
+	if since > 0 {
+		query.Set("start_timestamp", strconv.FormatInt(since, 10))
+	}
+	if until > 0 {
+		query.Set("end_timestamp", strconv.FormatInt(until, 10))
+	}
+	if modelName != "" {
+		query.Set("model_name", modelName)
+	}
+	pageURL := *c.endpoint
+	pageURL.RawQuery = query.Encode()
+	req, reqErr := http.NewRequestWithContext(c.ctx, http.MethodGet, pageURL.String(), nil)
+	if reqErr != nil {
+		return nil, reqErr
+	}
+	req.Header.Set("Authorization", "Bearer "+c.key)
+	req.Header.Set("Accept", "application/json")
+	c.requests++
+	resp, doErr := c.client.Do(req)
+	if doErr != nil {
+		return nil, doErr
+	}
+	var payload upstreamUsageLogResponse
+	decodeErr := common.DecodeJson(io.LimitReader(resp.Body, pricingCalibrationResponseLimit), &payload)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("upstream usage log returned %s", resp.Status)
+	}
+	if decodeErr != nil {
+		return nil, decodeErr
+	}
+	if !payload.Success && payload.Message != "" {
+		return nil, errors.New(payload.Message)
+	}
+	return payload.Data, nil
+}
+
+func (c *upstreamUsageLogClient) tailWalk(since int64) ([]upstreamUsageLogRecord, error) {
 	startPage := 1
 	// tailMode marks an oldest-first log, where the pages before the window are
 	// simply old and must be skipped rather than treated as the end of the walk.
 	tailMode := false
 	if since > 0 {
-		first, probeErr := fetchPage(1)
+		first, probeErr := c.fetchPage(1, since, 0, "")
 		if probeErr != nil {
 			return nil, probeErr
 		}
@@ -290,7 +344,7 @@ func fetchUpstreamUsageLogs(ctx context.Context, channel *model.Channel, since i
 			lastPage := 1
 			emptyAt := 0
 			for probe := 2; probe <= pricingCalibrationProbePageCeiling; probe *= 2 {
-				rows, err := fetchPage(probe)
+				rows, err := c.fetchPage(probe, since, 0, "")
 				if err != nil {
 					return nil, err
 				}
@@ -304,7 +358,7 @@ func fetchUpstreamUsageLogs(ctx context.Context, channel *model.Channel, since i
 				lo, hi := lastPage, emptyAt
 				for hi-lo > 1 {
 					mid := (lo + hi) / 2
-					rows, err := fetchPage(mid)
+					rows, err := c.fetchPage(mid, since, 0, "")
 					if err != nil {
 						return nil, err
 					}
@@ -325,10 +379,10 @@ func fetchUpstreamUsageLogs(ctx context.Context, channel *model.Channel, since i
 
 	records := make([]upstreamUsageLogRecord, 0, pricingCalibrationPageSize*4)
 	for page := startPage; page < startPage+pricingCalibrationMaxPages; page++ {
-		if ctx != nil && ctx.Err() != nil {
-			return records, ctx.Err()
+		if c.ctx != nil && c.ctx.Err() != nil {
+			return records, c.ctx.Err()
 		}
-		rows, pageErr := fetchPage(page)
+		rows, pageErr := c.fetchPage(page, since, 0, "")
 		if pageErr != nil {
 			return records, pageErr
 		}
@@ -354,6 +408,81 @@ func fetchUpstreamUsageLogs(ctx context.Context, channel *model.Channel, since i
 	return records, nil
 }
 
+// windowWalk reads the window one model at a time. A single global tail walk
+// only ever sees the models that happen to be hot right now, which is why the
+// first production pass priced 3 of 28 models; asking per model gives every
+// model in the catalogue the same chance regardless of how much of the traffic
+// it owns. The provider filters on start_timestamp/end_timestamp/model_name, so
+// one page usually carries enough samples for a model.
+//
+// supported=false means the provider ignored the window filter (an unsupported
+// fork, or a proxy that strips query parameters). The caller then falls back to
+// the tail walk instead of reading the wrong end of the log.
+func (c *upstreamUsageLogClient) windowWalk(models []string, since, until int64) ([]upstreamUsageLogRecord, bool, error) {
+	records := make([]upstreamUsageLogRecord, 0, pricingCalibrationPageSize*len(models))
+	probed := false
+	for _, name := range models {
+		if c.requests >= pricingCalibrationWindowRequestBudget {
+			break
+		}
+		if c.ctx != nil && c.ctx.Err() != nil {
+			return records, true, c.ctx.Err()
+		}
+		kept := 0
+		for page := 1; page <= pricingCalibrationModelPages; page++ {
+			rows, err := c.fetchPage(page, since, until, name)
+			if err != nil {
+				return records, true, err
+			}
+			if len(rows) == 0 {
+				break
+			}
+			if !probed {
+				probed = true
+				if since > 0 && newestCreatedAt(rows) < since {
+					// The filter was ignored: this is the oldest page of an
+					// unfiltered log, not a page from inside the window.
+					return nil, false, nil
+				}
+			}
+			for _, record := range rows {
+				if since > 0 && record.CreatedAt > 0 && record.CreatedAt < since {
+					continue
+				}
+				if until > 0 && record.CreatedAt > 0 && record.CreatedAt > until {
+					continue
+				}
+				records = append(records, record)
+				kept++
+			}
+			if kept >= pricingCalibrationModelRecords {
+				break
+			}
+		}
+	}
+	return records, true, nil
+}
+
+// fetchChannelUsageLogs prefers the per-model window walk and degrades to the
+// tail walk when the provider ignores the window filter.
+func fetchChannelUsageLogs(ctx context.Context, channel *model.Channel, since, until int64, models []string) ([]upstreamUsageLogRecord, bool, error) {
+	client, err := newUpstreamUsageLogClient(ctx, channel)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(models) > 0 {
+		records, supported, walkErr := client.windowWalk(models, since, until)
+		if walkErr != nil {
+			return records, supported, walkErr
+		}
+		if supported {
+			return records, true, nil
+		}
+	}
+	records, err := client.tailWalk(since)
+	return records, false, err
+}
+
 func newestCreatedAt(rows []upstreamUsageLogRecord) int64 {
 	newest := int64(0)
 	for _, row := range rows {
@@ -363,6 +492,7 @@ func newestCreatedAt(rows []upstreamUsageLogRecord) int64 {
 	}
 	return newest
 }
+
 
 // buildCalibrationSamples turns raw log rows into (billed, theory) pairs. The
 // theory side must use exactly the same unit prices the pricing path uses, which
@@ -536,6 +666,21 @@ func calibrationOffersByUpstreamModel(channelID int, now int64) (map[string]mode
 	return out, nil
 }
 
+// calibrationModelNames lists the upstream model names to ask the provider
+// about, in a stable order so a run is reproducible and the request budget is
+// spent on the same models every time.
+func calibrationModelNames(offers map[string]model.UpstreamModelOffer) []string {
+	names := make([]string, 0, len(offers))
+	for _, offer := range offers {
+		name := strings.TrimSpace(offer.UpstreamModel)
+		if name != "" {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
 // RunPricingCalibration derives the effective cost factor for every model that
 // has both a current offer and recent upstream traffic.
 func RunPricingCalibration(ctx context.Context, channelIDs []int, trigger string) (PricingCalibrationResult, error) {
@@ -571,7 +716,7 @@ func RunPricingCalibration(ctx context.Context, channelIDs []int, trigger string
 			failures = append(failures, fmt.Sprintf("channel %d: %s", channel.Id, offerErr.Error()))
 			continue
 		}
-		records, logErr := fetchUpstreamUsageLogs(ctx, &channel, result.WindowStart)
+		records, _, logErr := fetchChannelUsageLogs(ctx, &channel, result.WindowStart, result.WindowEnd, calibrationModelNames(offers))
 		if logErr != nil {
 			channelResult.Error = logErr.Error()
 			result.Channels = append(result.Channels, channelResult)
@@ -708,6 +853,13 @@ func (pricingCalibrationHandler) Run(ctx context.Context, task *model.SystemTask
 	result, err := RunPricingCalibration(ctx, nil, "scheduled")
 	if err != nil {
 		logger.LogWarn(ctx, fmt.Sprintf("pricing calibration failed: %s", err.Error()))
+		// The runner learns the outcome only through FinishSystemTask. Returning
+		// without it left the row running until the 60s lease expired, so every
+		// run - including the ones that worked - ended up as "task lease
+		// expired" in the console and hid the real reason.
+		if finishErr := model.FinishSystemTask(task.TaskID, runnerID, model.SystemTaskStatusFailed, result, err.Error()); finishErr != nil {
+			logSystemTaskLockError(ctx, task, finishErr)
+		}
 		return
 	}
 	records := 0
@@ -718,6 +870,9 @@ func (pricingCalibrationHandler) Run(ctx context.Context, task *model.SystemTask
 	// apart from a window that was never read.
 	logger.LogInfo(ctx, fmt.Sprintf("pricing calibration applied=%d skipped=%d channels=%d records=%d",
 		result.Applied, result.Skipped, len(result.Channels), records))
+	if finishErr := model.FinishSystemTask(task.TaskID, runnerID, model.SystemTaskStatusSucceeded, result, ""); finishErr != nil {
+		logSystemTaskLockError(ctx, task, finishErr)
+	}
 }
 
 func init() { RegisterSystemTaskHandler(pricingCalibrationHandler{}) }
