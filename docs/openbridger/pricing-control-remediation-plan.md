@@ -1,12 +1,12 @@
 # OpenBridger 定价与模型数据流：标准流程 + 整改计划
 
-- 状态：**已实施（代码 + 文档，2026-11-04）**；D1–D4 已落地，D5 仍需真实 key 对账　日期：2026-11-04
+- 状态：**已实施并上线（代码 + 文档 + 生产部署，2026-11-04）**；D1–D4 已落地，D5 仍需真实 key 对账　日期：2026-11-04
 - 实证基线：`main` @ `08cdbc8d2`（本轮全部结论均按此 commit 的代码查证）
 - 适用范围：OpenBridger 生产实例「系统设置 → 模型与路由 → 动态定价控制」及「管理员 → 模型」相关链路
 - 关联文档：`docs/openbridger/launch-runbook.md`（S20–S24）、`docs/pricing-control-plane.md`、`docs/openbridger/defect-list-pricing-control.md`、`docs/openbridger/launch-execution-plan.md`
 - 本文件不含任何密钥、DSN、上游域名或 token；命令中的 `<UPSTREAM_KEY>` 一律由服务器 `/srv/openbridger/.env`（600）注入，不落文档、不落聊天记录
 
-> **实施状态（2026-11-04）**：P0 全部 6 项、P1 的 1/2/3/4/5/6/7/8 项、P2 全部 2 项已落到代码与文档；P1-9（把三个任务串成单一流水线）**有意未做**，理由见 §10。代码在工作区未提交，需重新构建发布镜像后才会在生产生效。
+> **实施状态（2026-11-04）**：P0 全部 6 项、P1 的 1/2/3/4/5/6/7/8 项、P2 全部 2 项已落到代码与文档；P1-9（把三个任务串成单一流水线）**有意未做**，理由见 §10。已于同日发布到生产：镜像 `openbridger:18fbd66e9`，服务器侧收尾与实测见 §10.3。
 
 ---
 
@@ -519,13 +519,24 @@ curl -sS -H "Authorization: Bearer $UPSTREAM_KEY" \
 1. **快照未做「同值不追加」去重**（P1-7 原写法）。原因：`PRICING_AUTO_PUBLISH_VERIFY_SAMPLES`（默认 3）要求最近 N 条快照与当前报价一致才能无人值守发布；去重后成本不变时只剩 1 条样本，校验永远不通过。改为**按时间保留**（30 天）+ 追加式写入，容量可控且不破坏校验。若将来要做去重，必须同时把校验口径改成「按采集批次计数」。
 2. **P1-9 未做**（把 model_update / offer_sync / recalculate 串成单一 `pricing_daily_pipeline`）。原因：`model_update` 只改渠道白名单，不参与成本计算；`pricing_offer_sync` 成功后已经自带重算。三者串行只增加一个 task_id 的可追溯性，收益低于改动风险，先按独立调度交付。
 
-### 10.3 仍需在服务器完成（代码之外）
+### 10.3 服务器侧收尾（2026-11-04 已上线）
 
-1. `.env` 按 S13 新表显式写入 8 个开关，重点 `PRICING_AUTO_PUBLISH=false`、`PRICING_OFFER_TTL_MINUTES=840`、`PRICING_OFFER_SYNC_INTERVAL_MINUTES=720`；`docker compose config` 核对展开值。
-2. 重新构建 `web/dist` 与镜像（前端有改动），按 S12 打新 tag 后重启。
-3. 渠道 Base URL 若之前填了 `/v1`，改成域名层（S20）。
-4. **D5 仍未闭环**：用真实 key 跑附录 A，确认 `model_group_ratio` 与顶层 `group_ratio` 哪个是账单口径。未确认前保持 `PRICING_GROUP_RATIO_POLICY=max`，宁高估不亏。
-5. 首次同步后核对 `pricing_sync_runs` 的 `kept` 是否为 0（应为 0，除非混用过人工导入）。
+镜像 `openbridger:18fbd66e9`（代码提交 `18fbd66e9`），部署记录 `08cdbc8d2 → 18fbd66e9`。
+
+| 事项 | 状态 | 实测 |
+|---|---|---|
+| `.env` 显式写入开关 | ✅ 已写 | `PRICING_AUTO_PUBLISH=false`、`PRICING_OFFER_SYNC_INTERVAL_MINUTES=720`、`PRICING_OFFER_TTL_MINUTES=840`、`PRICING_RECALCULATE_INTERVAL_MINUTES=720`、`PRICING_GROUP_RATIO_POLICY=max`、`CHANNEL_UPSTREAM_MODEL_UPDATE_TASK_INTERVAL_MINUTES=720`；改前备份 `.env.bak-*`（600） |
+| compose 展开核对 | ✅ | `docker compose config` 展开与 `.env` 一致；改前 `PRICING_AUTO_PUBLISH` 与 `OPENBRIDGER_ONLINE_PAYMENT_ENABLED` 被写死为 `"true"`，`.env` 完全无效 |
+| `web/dist` + 镜像重建 | ✅ | 前端产物入口 `index.77dcd3868c.js` 与线上一致；产物内已无 fr/ja/ru/vi 文案 |
+| 渠道 Base URL 去 `/v1` | ⬜ 待人工确认 | 代码层结论未变（S20）；需在后台核对两个自定义渠道的实际取值 |
+| 首次同步 `kept` | ✅ | `pricing_sync_runs` id=1，trigger=scheduled，imported=43 / kept=0 / skipped=0 / proposals=30 |
+| 报价 TTL 生效 | ✅ | 同步后 `expires_at` 最大值 = 采集时间 + 14h，不再是 2h |
+| `upstream_group` 落库 | ✅ | 10 个上游组均有报价（gemini 13、claude-max 11、enterprise 6…），倍率与顶层 `group_ratio` 一致 |
+| **D5 倍率口径** | ⬜ 仍未闭环 | 当前 `max` 策略下 claude 系全部取顶层 1.8（模型级为 0.2647），即**按高估口径在用**。若上游账单实际按模型级结算，售价会偏高、竞争力受损；一旦用真实 key 确认口径，改 `.env` 一行即可，无需重新构建 |
+
+部署时的额外动作：旧的 60 分钟调度已把最后一次 `pricing_offer_sync` 记为 18:33，改成 720 分钟后下一轮会在 12h 后；为避免旧 2h TTL 的报价在 20:33 全部过期留下空窗，手动把该 `system_tasks` 行的 `updated_at` 前推 50000 秒使其立即到期，调度器在 15 秒内补跑一轮（即上表 id=1 那条记录）。
+
+已知但未处理（低优先）：`model_price_proposals` 累计 61867 条 `rejected`，`pricing_retention` 目前只清理快照/过期报价/同步记录，不清已决方案。分页后不影响页面，按 720 分钟调度每日新增约 60 条，可在后续版本补一个「已决方案保留 N 天」。
 
 ### 10.4 回归结果
 
