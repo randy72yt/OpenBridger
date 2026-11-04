@@ -34,6 +34,9 @@ const (
 	pricingCalibrationMaxPages      = 40
 	pricingCalibrationMaxRecords    = 3000
 	pricingCalibrationResponseLimit = 32 << 20
+	// The provider ignores page_size and returns 142 rows per page, so a 72h
+	// window can sit hundreds of pages in. Probes double up to this ceiling.
+	pricingCalibrationProbePageCeiling = 4096
 	// DefaultQuotaPerUnit is the new-api convention: one US dollar is worth
 	// 500000 quota units. A provider that publishes a different snapshot in the
 	// per-request billing detail still lands on the same quotient because both
@@ -213,9 +216,18 @@ func upstreamUsageLogEndpoint(channel *model.Channel, baseURL *url.URL) (*url.UR
 	return &resolved, nil
 }
 
-// fetchUpstreamUsageLogs walks the provider's consumption log backwards until it
-// reaches the window start. The log is what makes calibration possible at all:
-// it is the only endpoint that reports what was actually charged.
+// fetchUpstreamUsageLogs walks the provider's consumption log and keeps only the
+// entries inside the window. It is what makes calibration possible at all: this
+// is the only endpoint that reports what was actually charged.
+//
+// The provider returns the log oldest-first, so the window sits at the tail of
+// the log rather than the head. Walking forward from page 1 and stopping at the
+// first old entry therefore reads the wrong end and finds almost nothing - which
+// is exactly what happened on the first run (19 rows out of ~2000 in the window).
+// An exponential search locates the first page that reaches the window, then the
+// walk continues forward. The same code still works if a provider flips to
+// newest-first: page 1 is already inside the window, and the "whole page is
+// older than the window" rule ends the walk instead.
 func fetchUpstreamUsageLogs(ctx context.Context, channel *model.Channel, since int64) ([]upstreamUsageLogRecord, error) {
 	baseURL, err := url.Parse(strings.TrimSpace(channel.GetBaseURL()))
 	if err != nil || baseURL.Scheme == "" || baseURL.Host == "" {
@@ -230,11 +242,7 @@ func fetchUpstreamUsageLogs(ctx context.Context, channel *model.Channel, since i
 		return nil, errors.New("channel has no enabled API key")
 	}
 	client := &http.Client{Timeout: 30 * time.Second}
-	records := make([]upstreamUsageLogRecord, 0, pricingCalibrationPageSize*pricingCalibrationMaxPages/4)
-	for page := 1; page <= pricingCalibrationMaxPages; page++ {
-		if ctx != nil && ctx.Err() != nil {
-			return records, ctx.Err()
-		}
+	fetchPage := func(page int) ([]upstreamUsageLogRecord, error) {
 		query := endpoint.Query()
 		query.Set("p", strconv.Itoa(page))
 		query.Set("page_size", strconv.Itoa(pricingCalibrationPageSize))
@@ -243,50 +251,117 @@ func fetchUpstreamUsageLogs(ctx context.Context, channel *model.Channel, since i
 		pageURL.RawQuery = query.Encode()
 		req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, pageURL.String(), nil)
 		if reqErr != nil {
-			return records, reqErr
+			return nil, reqErr
 		}
 		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(key))
 		req.Header.Set("Accept", "application/json")
 		resp, doErr := client.Do(req)
 		if doErr != nil {
-			return records, doErr
+			return nil, doErr
 		}
 		var payload upstreamUsageLogResponse
 		decodeErr := common.DecodeJson(io.LimitReader(resp.Body, pricingCalibrationResponseLimit), &payload)
 		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			return records, fmt.Errorf("upstream usage log returned %s", resp.Status)
+			return nil, fmt.Errorf("upstream usage log returned %s", resp.Status)
 		}
 		if decodeErr != nil {
-			return records, decodeErr
+			return nil, decodeErr
 		}
 		if !payload.Success && payload.Message != "" {
-			return records, errors.New(payload.Message)
+			return nil, errors.New(payload.Message)
 		}
-		if len(payload.Data) == 0 {
+		return payload.Data, nil
+	}
+
+	startPage := 1
+	// tailMode marks an oldest-first log, where the pages before the window are
+	// simply old and must be skipped rather than treated as the end of the walk.
+	tailMode := false
+	if since > 0 {
+		first, probeErr := fetchPage(1)
+		if probeErr != nil {
+			return nil, probeErr
+		}
+		if len(first) > 0 && newestCreatedAt(first) < since {
+			tailMode = true
+			// Oldest-first log: the window sits at the tail, so the last page has
+			// to be located before we know where to start reading.
+			lastPage := 1
+			emptyAt := 0
+			for probe := 2; probe <= pricingCalibrationProbePageCeiling; probe *= 2 {
+				rows, err := fetchPage(probe)
+				if err != nil {
+					return nil, err
+				}
+				if len(rows) == 0 {
+					emptyAt = probe
+					break
+				}
+				lastPage = probe
+			}
+			if emptyAt > 0 {
+				lo, hi := lastPage, emptyAt
+				for hi-lo > 1 {
+					mid := (lo + hi) / 2
+					rows, err := fetchPage(mid)
+					if err != nil {
+						return nil, err
+					}
+					if len(rows) == 0 {
+						hi = mid
+					} else {
+						lo = mid
+					}
+				}
+				lastPage = lo
+			}
+			startPage = lastPage - pricingCalibrationMaxPages + 1
+			if startPage < 1 {
+				startPage = 1
+			}
+		}
+	}
+
+	records := make([]upstreamUsageLogRecord, 0, pricingCalibrationPageSize*4)
+	for page := startPage; page < startPage+pricingCalibrationMaxPages; page++ {
+		if ctx != nil && ctx.Err() != nil {
+			return records, ctx.Err()
+		}
+		rows, pageErr := fetchPage(page)
+		if pageErr != nil {
+			return records, pageErr
+		}
+		if len(rows) == 0 {
 			return records, nil
 		}
-		oldest := int64(0)
-		for _, record := range payload.Data {
-			if oldest == 0 || record.CreatedAt < oldest {
-				oldest = record.CreatedAt
-			}
+		inWindow := 0
+		for _, record := range rows {
 			if since > 0 && record.CreatedAt > 0 && record.CreatedAt < since {
 				continue
 			}
+			inWindow++
 			records = append(records, record)
 		}
-		// The page size is advisory: new-api clamps it and returned 142 rows
-		// whatever we asked for, so "fewer rows than requested" cannot mean the
-		// last page. Only an empty page or passing the window ends the walk.
-		if len(records) >= pricingCalibrationMaxRecords {
+		if inWindow == 0 && !tailMode {
+			// Newest-first provider: this page predates the window entirely.
 			return records, nil
 		}
-		if since > 0 && oldest > 0 && oldest < since {
+		if len(records) >= pricingCalibrationMaxRecords {
 			return records, nil
 		}
 	}
 	return records, nil
+}
+
+func newestCreatedAt(rows []upstreamUsageLogRecord) int64 {
+	newest := int64(0)
+	for _, row := range rows {
+		if row.CreatedAt > newest {
+			newest = row.CreatedAt
+		}
+	}
+	return newest
 }
 
 // buildCalibrationSamples turns raw log rows into (billed, theory) pairs. The
@@ -635,8 +710,14 @@ func (pricingCalibrationHandler) Run(ctx context.Context, task *model.SystemTask
 		logger.LogWarn(ctx, fmt.Sprintf("pricing calibration failed: %s", err.Error()))
 		return
 	}
-	logger.LogInfo(ctx, fmt.Sprintf("pricing calibration applied=%d skipped=%d channels=%d",
-		result.Applied, result.Skipped, len(result.Channels)))
+	records := 0
+	for _, channel := range result.Channels {
+		records += channel.Records
+	}
+	// Records is logged because "applied=0" alone cannot tell an empty window
+	// apart from a window that was never read.
+	logger.LogInfo(ctx, fmt.Sprintf("pricing calibration applied=%d skipped=%d channels=%d records=%d",
+		result.Applied, result.Skipped, len(result.Channels), records))
 }
 
 func init() { RegisterSystemTaskHandler(pricingCalibrationHandler{}) }

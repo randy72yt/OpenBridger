@@ -2,6 +2,10 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -252,4 +256,86 @@ func loadTestPolicy(t *testing.T, publicModel, tier string) *model.ModelPricePol
 	var policy model.ModelPricePolicy
 	require.NoError(t, model.DB.Where("public_model = ? AND service_tier = ?", publicModel, tier).First(&policy).Error)
 	return &policy
+}
+
+// ---------------------------------------------------------------------------
+// Log pagination: the provider returns the oldest entries first
+// ---------------------------------------------------------------------------
+
+// The first production run read page 1, saw an entry older than the window and
+// stopped, so a 72h window yielded 19 rows instead of ~2000. The walk has to
+// find the tail of an oldest-first log.
+func usageLogServer(t *testing.T, count, perPage int, descending bool, base int64) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		page, _ := strconv.Atoi(r.URL.Query().Get("p"))
+		if page < 1 {
+			page = 1
+		}
+		start := (page - 1) * perPage
+		if start >= count {
+			fmt.Fprint(w, `{"success":true,"data":[]}`)
+			return
+		}
+		end := start + perPage
+		if end > count {
+			end = count
+		}
+		indexes := make([]int, 0, end-start)
+		for i := start; i < end; i++ {
+			if descending {
+				indexes = append(indexes, count-1-i)
+			} else {
+				indexes = append(indexes, i)
+			}
+		}
+		fmt.Fprint(w, `{"success":true,"data":[`)
+		for i, idx := range indexes {
+			if i > 0 {
+				fmt.Fprint(w, ",")
+			}
+			fmt.Fprintf(w, `{"id":%d,"created_at":%d,"model_name":"m","quota":1,"prompt_tokens":10,"completion_tokens":1,"group":"g"}`,
+				idx+1, base+int64(idx)*60)
+		}
+		fmt.Fprint(w, `]}`)
+	}))
+}
+
+func calibrationTestChannel(serverURL string) *model.Channel {
+	base := serverURL
+	return &model.Channel{Id: 1, Key: "test-key", BaseURL: &base}
+}
+
+func TestFetchUpstreamUsageLogsFindsWindowAtTailOfOldestFirstLog(t *testing.T) {
+	const count, perPage = 60, 5
+	base := int64(1_800_000_000)
+	server := usageLogServer(t, count, perPage, false, base)
+	defer server.Close()
+	// Window covers the newest 15 entries.
+	since := base + 45*60
+	records, err := fetchUpstreamUsageLogs(context.Background(), calibrationTestChannel(server.URL), since)
+	require.NoError(t, err)
+	assert.Len(t, records, 15, "an oldest-first log must be read from its tail")
+	assert.GreaterOrEqual(t, records[0].CreatedAt, since)
+}
+
+func TestFetchUpstreamUsageLogsHandlesNewestFirstLog(t *testing.T) {
+	const count, perPage = 60, 5
+	base := int64(1_800_000_000)
+	server := usageLogServer(t, count, perPage, true, base)
+	defer server.Close()
+	since := base + 45*60
+	records, err := fetchUpstreamUsageLogs(context.Background(), calibrationTestChannel(server.URL), since)
+	require.NoError(t, err)
+	assert.Len(t, records, 15, "a newest-first log must stop once a page predates the window")
+}
+
+func TestFetchUpstreamUsageLogsReturnsEmptyWhenWindowPredatesLog(t *testing.T) {
+	const count, perPage = 10, 5
+	base := int64(1_800_000_000)
+	server := usageLogServer(t, count, perPage, false, base)
+	defer server.Close()
+	records, err := fetchUpstreamUsageLogs(context.Background(), calibrationTestChannel(server.URL), base+100000)
+	require.NoError(t, err)
+	assert.Empty(t, records)
 }
