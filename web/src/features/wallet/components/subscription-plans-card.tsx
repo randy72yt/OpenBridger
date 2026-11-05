@@ -376,8 +376,9 @@ export function SubscriptionPlansCard({
       (a, b) =>
         Number(a?.plan?.price_amount || 0) - Number(b?.plan?.price_amount || 0),
     );
+    // One row of up to four equal-height plans on wide screens.
     return (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {gridPlans.map((p, index) => {
           const plan = p?.plan;
           if (!plan) return null;
@@ -507,8 +508,8 @@ export function SubscriptionPlansCard({
         </CardHeader>
         <CardContent className="space-y-4 p-3 sm:p-5">
           <Skeleton className="h-20 w-full" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {["first", "second", "third"].map((key) => (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {["first", "second", "third", "fourth"].map((key) => (
               <Skeleton key={key} className="h-48 w-full" />
             ))}
           </div>
