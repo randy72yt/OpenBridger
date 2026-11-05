@@ -45,10 +45,12 @@ const (
 	pricingCalibrationModelRecords = 600
 	// Upper bound on requests to a third-party provider per channel per run.
 	pricingCalibrationWindowRequestBudget = 200
-	// The log endpoint rate-limits by IP. One request per model turns a 28-model
-	// catalogue into a burst that answers 429, so requests are spaced out and a
-	// 429 is retried with backoff instead of aborting the pass.
-	pricingCalibrationMaxRetries = 4	// DefaultQuotaPerUnit is the new-api convention: one US dollar is worth
+	// The log endpoint rate-limits by IP over a window measured in minutes: it
+	// answers 429 with "retry after 5m17s". One request per model is fine, but
+	// retrying into the same window only pushes the next window further out, so
+	// a long Retry-After ends the pass instead of being waited out.
+	pricingCalibrationMaxRetries  = 2
+	pricingCalibrationMaxInlineWait = 15 * time.Second	// DefaultQuotaPerUnit is the new-api convention: one US dollar is worth
 	// 500000 quota units. A provider that publishes a different snapshot in the
 	// per-request billing detail still lands on the same quotient because both
 	// the billed and the theoretical side use the same unit.
@@ -63,9 +65,9 @@ const (
 // Pacing and backoff for the provider's log endpoint. Variables rather than
 // constants so tests can shrink them; nothing in production writes to them.
 var (
-	pricingCalibrationModelGap      = 200 * time.Millisecond
+	pricingCalibrationModelGap      = 500 * time.Millisecond
 	pricingCalibrationRetryBaseWait = 2 * time.Second
-	pricingCalibrationMaxRetryWait  = 30 * time.Second
+	pricingCalibrationMaxRetryWait  = 10 * time.Second
 )
 
 // PricingCalibrationModelResult is one model's calibration outcome.
@@ -274,6 +276,10 @@ type upstreamUsageLogClient struct {
 	key      string
 	client   *http.Client
 	requests int
+	// blockedUntil is set when the provider answered with a minute-scale
+	// Retry-After. Requests are not attempted again before it expires, so one
+	// throttled pass cannot extend the throttle by hammering.
+	blockedUntil time.Time
 }
 
 func newUpstreamUsageLogClient(ctx context.Context, channel *model.Channel) (*upstreamUsageLogClient, error) {
@@ -332,6 +338,9 @@ func parseRetryAfter(raw string) time.Duration {
 // failing the whole pass. A per-model walk sends one request per model, which a
 // wide catalogue turns into exactly the burst the log endpoint throttles.
 func (c *upstreamUsageLogClient) fetchPage(page int, since, until int64, modelName string) ([]upstreamUsageLogRecord, error) {
+	if !c.blockedUntil.IsZero() && time.Now().Before(c.blockedUntil) {
+		return nil, &upstreamRateLimitError{status: "client paused", retryAfter: time.Until(c.blockedUntil)}
+	}
 	wait := pricingCalibrationRetryBaseWait
 	var lastErr error
 	for attempt := 1; attempt <= pricingCalibrationMaxRetries; attempt++ {
@@ -343,6 +352,13 @@ func (c *upstreamUsageLogClient) fetchPage(page int, since, until int64, modelNa
 		var limited *upstreamRateLimitError
 		if !errors.As(err, &limited) {
 			return nil, err
+		}
+		// A long Retry-After means this window is spent. Waiting it out would
+		// block the task for minutes and every extra request pushes the window
+		// further out, so the pause is recorded and the caller stops.
+		if retryAfter > pricingCalibrationMaxInlineWait {
+			c.blockedUntil = time.Now().Add(retryAfter)
+			return nil, lastErr
 		}
 		if attempt == pricingCalibrationMaxRetries {
 			break
@@ -540,12 +556,22 @@ func (c *upstreamUsageLogClient) windowWalk(models []string, since, until int64)
 		for page := 1; page <= pricingCalibrationModelPages; page++ {
 			rows, err := c.fetchPage(page, since, until, name)
 			if err != nil {
+				failed++
+				lastErr = err
+				var limited *upstreamRateLimitError
+				if errors.As(err, &limited) && !c.blockedUntil.IsZero() && time.Now().Before(c.blockedUntil) {
+					// The provider gave a minute-scale Retry-After: this window is
+					// spent. Stop asking rather than push the window further out,
+					// and keep the factors already collected.
+					if len(records) == 0 {
+						return records, true, failed, lastErr
+					}
+					return records, true, failed, nil
+				}
 				// One blocked model must not throw away the factors every other
 				// model already produced. Abort only when nothing has come back and
 				// two models in a row failed, which means the endpoint itself is
-				// unusable (bad key, wrong path, persistent throttle).
-				failed++
-				lastErr = err
+				// unusable (bad key, wrong path).
 				if len(records) == 0 && failed >= 2 {
 					return records, true, failed, lastErr
 				}

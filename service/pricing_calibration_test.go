@@ -565,7 +565,7 @@ func fastRetry(t *testing.T) {
 
 // rateLimitHook answers 429 for the models in blocked while their budget lasts
 // (blocked[model] = remaining 429s; -1 means forever).
-func rateLimitHook(blocked map[string]int) func(http.ResponseWriter, string) bool {
+func rateLimitHook(blocked map[string]int, retryAfterSeconds int) func(http.ResponseWriter, string) bool {
 	var mu sync.Mutex
 	return func(w http.ResponseWriter, model string) bool {
 		mu.Lock()
@@ -578,7 +578,7 @@ func rateLimitHook(blocked map[string]int) func(http.ResponseWriter, string) boo
 			blocked[model] = remaining - 1
 		}
 		mu.Unlock()
-		w.Header().Set("Retry-After", "0")
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
 		w.WriteHeader(http.StatusTooManyRequests)
 		fmt.Fprint(w, `{"success":false,"message":"too many requests"}`)
 		return true
@@ -594,7 +594,7 @@ func TestFetchChannelUsageLogsRetriesRateLimit(t *testing.T) {
 	server := windowedUsageLogServer(t, rows, usageLogServerOptions{
 		honorModel:  true,
 		honorWindow: true,
-		before:      rateLimitHook(map[string]int{"m-a": 1}),
+		before:      rateLimitHook(map[string]int{"m-a": 1}, 0),
 	})
 	defer server.Close()
 
@@ -615,7 +615,7 @@ func TestWindowWalkKeepsTheOtherModelsWhenOneIsRateLimited(t *testing.T) {
 	server := windowedUsageLogServer(t, rows, usageLogServerOptions{
 		honorModel:  true,
 		honorWindow: true,
-		before:      rateLimitHook(map[string]int{"m-a": -1}),
+		before:      rateLimitHook(map[string]int{"m-a": -1}, 0),
 	})
 	defer server.Close()
 
@@ -639,7 +639,7 @@ func TestWindowWalkReportsFailureWhenEveryModelIsRateLimited(t *testing.T) {
 	server := windowedUsageLogServer(t, rows, usageLogServerOptions{
 		honorModel:  true,
 		honorWindow: true,
-		before:      rateLimitHook(map[string]int{"m-a": -1, "m-b": -1}),
+		before:      rateLimitHook(map[string]int{"m-a": -1, "m-b": -1}, 0),
 	})
 	defer server.Close()
 
@@ -647,4 +647,32 @@ func TestWindowWalkReportsFailureWhenEveryModelIsRateLimited(t *testing.T) {
 	require.Error(t, err)
 	assert.Empty(t, records)
 	assert.GreaterOrEqual(t, failed, 2)
+}
+
+// The provider's real answer is "retry after 5m17s". Waiting that out inside a
+// task would block the runner for the whole window and burn the next window's
+// quota, so a long Retry-After must end the pass quickly with what it has.
+func TestWindowWalkStopsQuicklyOnMinuteScaleRetryAfter(t *testing.T) {
+	fastRetry(t)
+	base := int64(1_800_000_000)
+	rows, since := seedCalibrationLog(base, map[string]int{"m-a": 6, "m-b": 6})
+	server := windowedUsageLogServer(t, rows, usageLogServerOptions{
+		honorModel:  true,
+		honorWindow: true,
+		before:      rateLimitHook(map[string]int{"m-b": -1}, 317),
+	})
+	defer server.Close()
+
+	started := time.Now()
+	records, windowed, failed, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a", "m-b", "m-c"})
+	elapsed := time.Since(started)
+
+	require.NoError(t, err, "a throttle mid-pass must not fail the models already read")
+	assert.True(t, windowed)
+	assert.Equal(t, 1, failed)
+	assert.Less(t, elapsed, 5*time.Second, "a 5-minute Retry-After must not be waited out")
+	require.NotEmpty(t, records)
+	for _, record := range records {
+		assert.Equal(t, "m-a", record.ModelName)
+	}
 }
