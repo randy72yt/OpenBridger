@@ -421,26 +421,25 @@ export function SubscriptionPlansCard({
               className={cn(isPopular && "border-primary/70 shadow-sm")}
             >
               <CardContent className="flex h-full flex-col p-4 sm:p-5">
-                <div className="mb-2 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h4 className="truncate font-semibold">
-                      {plan.title || t("Subscription Plans")}
-                    </h4>
-                    {plan.subtitle && (
-                      <p className="text-muted-foreground line-clamp-2 text-xs leading-relaxed">
-                        {plan.subtitle}
-                      </p>
-                    )}
-                  </div>
-                  {isPopular && (
-                    <StatusBadge
-                      variant="info"
-                      copyable={false}
-                      className="shrink-0"
-                    >
-                      <Sparkles className="h-3 w-3" />
-                      {t("Recommended")}
-                    </StatusBadge>
+                {isPopular && (
+                  <StatusBadge
+                    variant="info"
+                    copyable={false}
+                    className="mb-2 self-start"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    {t("Recommended")}
+                  </StatusBadge>
+                )}
+
+                <div className="mb-2 min-w-0">
+                  <h4 className="truncate font-semibold">
+                    {plan.title || t("Subscription Plans")}
+                  </h4>
+                  {plan.subtitle && (
+                    <p className="text-muted-foreground line-clamp-2 text-xs leading-relaxed">
+                      {plan.subtitle}
+                    </p>
                   )}
                 </div>
 
