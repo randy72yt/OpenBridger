@@ -519,22 +519,19 @@ export function SubscriptionPlansCard({
           ].filter(Boolean) as string[];
 
           return (
-            <Card
-              key={plan.id}
-              data-card-hover="false"
-              className={cn(
-                "relative",
-                isPopular && "border-primary/70 shadow-sm",
-              )}
-            >
+            <div key={plan.id} className="relative">
               {isPopular && (
-                <div className="pointer-events-none absolute -top-3 left-4 z-10">
+                <div className="pointer-events-none absolute -top-3 left-4 z-20">
                   <StatusBadge variant="info" copyable={false}>
                     <Sparkles className="h-3 w-3" />
                     {t("Recommended")}
                   </StatusBadge>
                 </div>
               )}
+              <Card
+                data-card-hover="false"
+                className={cn(isPopular && "border-primary/70 shadow-sm")}
+              >
               <CardContent className="flex h-full flex-col p-4 sm:p-5">
 
                 <div className="mb-2 min-w-0">
@@ -597,7 +594,8 @@ export function SubscriptionPlansCard({
                   </Button>
                 )}
               </CardContent>
-            </Card>
+              </Card>
+            </div>
           );
         })}
       </div>
@@ -897,10 +895,10 @@ export function SubscriptionPlansCard({
               <Tabs value={activePeriodKey} onValueChange={setPeriodKey}>
                 <TabsList>
                   {periodGroups.map((g) => (
-                    <TabsTrigger key={g.key} value={g.key}>
+                    <TabsTrigger key={g.key} value={g.key} className="relative">
                       {g.label}
                       {g.discountPercent !== null && (
-                        <span className="text-xs font-semibold text-red-500">
+                        <span className="pointer-events-none absolute -top-2.5 -right-2.5 z-20 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white shadow-sm">
                           -{g.discountPercent}%
                         </span>
                       )}
