@@ -271,6 +271,13 @@ export function Wallet(props: WalletProps) {
     }
   };
 
+  // 确认弹窗展示「用户看到的那个面额」：CNY 展示下 topupAmount 本身就是元，
+  // 只有 USD 展示时才需要按汇率换成展示货币，否则 ¥10 会显示成 ¥72。
+  const topupAmountDisplay = useMemo(() => {
+    if (currency?.quotaDisplayType === "CNY") return topupAmount;
+    return topupAmount * effectiveUsdExchangeRate;
+  }, [currency?.quotaDisplayType, topupAmount, effectiveUsdExchangeRate]);
+
   // Get discount rate for current topup amount
   const getDiscountRate = useCallback(() => {
     return topupInfo?.discount?.[topupAmount] || DEFAULT_DISCOUNT_RATE;
@@ -343,13 +350,12 @@ export function Wallet(props: WalletProps) {
         open={confirmDialogOpen}
         onOpenChange={setConfirmDialogOpen}
         onConfirm={handlePaymentConfirm}
-        topupAmount={topupAmount}
+        displayTopupAmount={topupAmountDisplay}
         paymentAmount={paymentAmount}
         paymentMethod={selectedPaymentMethod}
         calculating={calculating}
         processing={processing || waffoProcessing || pancakeProcessing}
         discountRate={getDiscountRate()}
-        usdExchangeRate={effectiveUsdExchangeRate}
       />
 
       <TransferDialog

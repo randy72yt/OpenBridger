@@ -232,6 +232,9 @@ func RequestWaffoPay(c *gin.Context) {
 		}
 	}
 
+	// 面额在这里换算成额度保存，回调时不再由取整后的 Amount 反推。
+	creditQuota, _ := getTopUpQuota(req.Amount)
+
 	// 创建本地订单
 	topUp := &model.TopUp{
 		UserId:          id,
@@ -240,6 +243,7 @@ func RequestWaffoPay(c *gin.Context) {
 		TradeNo:         merchantOrderId,
 		PaymentMethod:   model.PaymentMethodWaffo,
 		PaymentProvider: model.PaymentProviderWaffo,
+		CreditQuota:     int64(creditQuota),
 		CreateTime:      time.Now().Unix(),
 		Status:          common.TopUpStatusPending,
 	}

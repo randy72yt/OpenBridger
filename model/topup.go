@@ -19,9 +19,13 @@ type TopUp struct {
 	TradeNo         string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
 	PaymentMethod   string  `json:"payment_method" gorm:"type:varchar(50)"`
 	PaymentProvider string  `json:"payment_provider" gorm:"type:varchar(50);default:''"`
-	CreateTime      int64   `json:"create_time"`
-	CompleteTime    int64   `json:"complete_time"`
-	Status          string  `json:"status"`
+	// CreditQuota 是下单时按用户选定的面额定下来的钱包额度，避免在回调里由
+	// 取整后的 Amount 反推导致少充（CNY 展示模式下 ¥10 曾被截成 1 美元=¥7.2）。
+	// 0 表示历史订单，回落到 Amount/Money 换算。
+	CreditQuota  int64  `json:"credit_quota" gorm:"default:0"`
+	CreateTime   int64  `json:"create_time"`
+	CompleteTime int64  `json:"complete_time"`
+	Status       string `json:"status"`
 }
 
 const (
@@ -54,6 +58,35 @@ func (topUp *TopUp) Insert() error {
 	var err error
 	err = DB.Create(topUp).Error
 	return err
+}
+
+// EffectiveCreditQuota 返回该订单完成时应入账的钱包额度。
+// 优先使用下单时记录的 CreditQuota（面额精确，不受 Amount 取整影响）；
+// 历史订单回落到原有换算规则：
+//   - stripe: Money 已是美元金额
+//   - creem: Amount 本身就是额度
+//   - 其余(epay/waffo/pancake): Amount 是美元金额
+func (topUp *TopUp) EffectiveCreditQuota() (int, error) {
+	if topUp.CreditQuota > 0 {
+		quota, err := common.WalletQuotaFromDecimalStrict(decimal.NewFromInt(topUp.CreditQuota))
+		if err != nil || quota <= 0 {
+			return 0, ErrInvalidTopUpQuota
+		}
+		return quota, nil
+	}
+
+	var quota decimal.Decimal
+	switch topUp.PaymentProvider {
+	case PaymentProviderStripe:
+		quota = decimal.NewFromFloat(topUp.Money)
+	case PaymentProviderCreem:
+		return common.WalletQuotaFromDecimalStrict(decimal.NewFromInt(topUp.Amount))
+	default:
+		quota = decimal.NewFromInt(topUp.Amount)
+	}
+	return common.WalletQuotaFromDecimalStrict(
+		quota.Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
+	)
 }
 
 func topUpQuotaMaxCurrent(creditedQuota int) (int, error) {
@@ -204,9 +237,7 @@ func RechargeEpay(tradeNo string, actualPaymentMethod string, callerIp string) (
 			topUp.PaymentMethod = actualPaymentMethod
 		}
 		var quotaErr error
-		quotaToAdd, quotaErr = common.WalletQuotaFromDecimalStrict(
-			decimal.NewFromInt(topUp.Amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
-		)
+		quotaToAdd, quotaErr = topUp.EffectiveCreditQuota()
 		if quotaErr != nil || quotaToAdd <= 0 {
 			return ErrInvalidTopUpQuota
 		}
@@ -267,9 +298,7 @@ func Recharge(referenceId string, customerId string, callerIp string) (err error
 			return err
 		}
 
-		quota, err = common.WalletQuotaFromDecimalStrict(
-			decimal.NewFromFloat(topUp.Money).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
-		)
+		quota, err = topUp.EffectiveCreditQuota()
 		if err != nil || quota <= 0 {
 			return ErrInvalidTopUpQuota
 		}
@@ -478,19 +507,10 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 			return errors.New("订单状态不是待支付，无法补单")
 		}
 
-		// 计算应充值额度：
-		// - Stripe 订单：Money 代表经分组倍率换算后的美元数量，直接 * QuotaPerUnit
-		// - 其他订单（如易支付）：Amount 为美元数量，* QuotaPerUnit
+		// 计算应充值额度：优先用下单时定下的 CreditQuota，历史订单按
+		// 各渠道原有规则回落（见 EffectiveCreditQuota）。
 		var quotaErr error
-		if topUp.PaymentProvider == PaymentProviderStripe {
-			quotaToAdd, quotaErr = common.WalletQuotaFromDecimalStrict(
-				decimal.NewFromFloat(topUp.Money).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
-			)
-		} else {
-			quotaToAdd, quotaErr = common.WalletQuotaFromDecimalStrict(
-				decimal.NewFromInt(topUp.Amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
-			)
-		}
+		quotaToAdd, quotaErr = topUp.EffectiveCreditQuota()
 		if quotaErr != nil || quotaToAdd <= 0 {
 			return ErrInvalidTopUpQuota
 		}
@@ -556,8 +576,8 @@ func RechargeCreem(referenceId string, customerEmail string, customerName string
 			return err
 		}
 
-		// Creem 直接使用 Amount 作为充值额度（整数）
-		quota, err = common.WalletQuotaFromDecimalStrict(decimal.NewFromInt(topUp.Amount))
+		// Creem 订单的 Amount 本身就是额度（见 EffectiveCreditQuota）
+		quota, err = topUp.EffectiveCreditQuota()
 		if err != nil || quota <= 0 {
 			return ErrInvalidTopUpQuota
 		}
@@ -625,9 +645,7 @@ func RechargeWaffo(tradeNo string, callerIp string) (err error) {
 			return errors.New("充值订单状态错误")
 		}
 
-		quotaToAdd, err = common.WalletQuotaFromDecimalStrict(
-			decimal.NewFromInt(topUp.Amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
-		)
+		quotaToAdd, err = topUp.EffectiveCreditQuota()
 		if err != nil || quotaToAdd <= 0 {
 			return ErrInvalidTopUpQuota
 		}
@@ -685,9 +703,7 @@ func RechargeWaffoPancake(tradeNo string) (err error) {
 			return errors.New("充值订单状态错误")
 		}
 
-		quotaToAdd, err = common.WalletQuotaFromDecimalStrict(
-			decimal.NewFromInt(topUp.Amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)),
-		)
+		quotaToAdd, err = topUp.EffectiveCreditQuota()
 		if err != nil || quotaToAdd <= 0 {
 			return ErrInvalidTopUpQuota
 		}

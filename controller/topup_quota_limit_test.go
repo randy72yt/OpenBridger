@@ -226,6 +226,11 @@ func TestTopUpCNYAmountSemantics(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 6_944_444, quota) // 100/7.2*500000, truncated by strict wallet helper
 
+	// 单笔小额同样按面额 1:1 入账：¥10 → ¥10 额度，不是 1 美元的 ¥7.2。
+	quota, err = getTopUpQuota(10)
+	require.NoError(t, err)
+	assert.Equal(t, 694_444, quota)
+
 	// Min top-up is converted into RMB units (5 USD × 7.2 → 36).
 	assert.Equal(t, int64(36), getMinTopup())
 

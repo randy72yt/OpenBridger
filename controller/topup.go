@@ -375,6 +375,13 @@ func RequestEpay(c *gin.Context) {
 	} else if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeCNY {
 		amount = normalizeTopupAmountUSD(amount).IntPart()
 	}
+	// 面额在这里就换算成额度保存，回调时不再用取整后的 amount 反推，
+	// 否则 CNY 展示模式下 ¥10 会被截成 1 美元（=¥7.2）入账。
+	creditQuota, err := getTopUpQuota(req.Amount)
+	if err != nil || creditQuota <= 0 {
+		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "充值金额无效"})
+		return
+	}
 	topUp := &model.TopUp{
 		UserId:          id,
 		Amount:          amount,
@@ -382,6 +389,7 @@ func RequestEpay(c *gin.Context) {
 		TradeNo:         tradeNo,
 		PaymentMethod:   req.PaymentMethod,
 		PaymentProvider: model.PaymentProviderEpay,
+		CreditQuota:     int64(creditQuota),
 		CreateTime:      time.Now().Unix(),
 		Status:          common.TopUpStatusPending,
 	}

@@ -40,26 +40,25 @@ interface PaymentConfirmDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onConfirm: () => void
-  topupAmount: number
   paymentAmount: number
   paymentMethod: PaymentMethod | undefined
   calculating: boolean
   processing: boolean
   discountRate?: number
-  usdExchangeRate?: number
+  // 已换算成展示货币的充值面额（CNY 展示下就是用户输入的元数）
+  displayTopupAmount: number
 }
 
 export function PaymentConfirmDialog({
   open,
   onOpenChange,
   onConfirm,
-  topupAmount,
   paymentAmount,
   paymentMethod,
   calculating,
   processing,
   discountRate = DEFAULT_DISCOUNT_RATE,
-  usdExchangeRate = 1,
+  displayTopupAmount,
 }: PaymentConfirmDialogProps) {
   const { t } = useTranslation()
   const hasDiscount = discountRate > 0 && discountRate < 1 && paymentAmount > 0
@@ -84,7 +83,7 @@ export function PaymentConfirmDialog({
               {t('Topup Amount')}
             </span>
             <span className='text-lg font-semibold'>
-              {formatLocalCurrencyAmount(topupAmount * usdExchangeRate, {
+              {formatLocalCurrencyAmount(displayTopupAmount, {
                 digitsLarge: 2,
                 digitsSmall: 2,
                 abbreviate: false,
