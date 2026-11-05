@@ -45,7 +45,10 @@ const (
 	pricingCalibrationModelRecords = 600
 	// Upper bound on requests to a third-party provider per channel per run.
 	pricingCalibrationWindowRequestBudget = 200
-	// DefaultQuotaPerUnit is the new-api convention: one US dollar is worth
+	// The log endpoint rate-limits by IP. One request per model turns a 28-model
+	// catalogue into a burst that answers 429, so requests are spaced out and a
+	// 429 is retried with backoff instead of aborting the pass.
+	pricingCalibrationMaxRetries = 4	// DefaultQuotaPerUnit is the new-api convention: one US dollar is worth
 	// 500000 quota units. A provider that publishes a different snapshot in the
 	// per-request billing detail still lands on the same quotient because both
 	// the billed and the theoretical side use the same unit.
@@ -55,6 +58,14 @@ const (
 	pricingCalibrationDefaultMinSamples    = 5
 	pricingCalibrationDefaultMaxDispersion = 15.0
 	pricingCalibrationDefaultStaleHours    = 96
+)
+
+// Pacing and backoff for the provider's log endpoint. Variables rather than
+// constants so tests can shrink them; nothing in production writes to them.
+var (
+	pricingCalibrationModelGap      = 200 * time.Millisecond
+	pricingCalibrationRetryBaseWait = 2 * time.Second
+	pricingCalibrationMaxRetryWait  = 30 * time.Second
 )
 
 // PricingCalibrationModelResult is one model's calibration outcome.
@@ -75,12 +86,16 @@ type PricingCalibrationModelResult struct {
 
 // PricingCalibrationChannelResult is one channel's calibration outcome.
 type PricingCalibrationChannelResult struct {
-	ChannelID   int    `json:"channel_id"`
+	ChannelID int    `json:"channel_id"`
 	ChannelName string `json:"channel_name"`
 	Models      int    `json:"models"`
 	Applied     int    `json:"applied"`
 	Records     int    `json:"records"`
-	Error       string `json:"error,omitempty"`
+	// FailedModels counts models whose log query errored and was skipped. A
+	// partially blocked pass still produces usable factors for the rest, so this
+	// is reported instead of aborting.
+	FailedModels int    `json:"failed_models,omitempty"`
+	Error        string `json:"error,omitempty"`
 }
 
 // PricingCalibrationResult summarizes one calibration run.
@@ -282,10 +297,84 @@ func newUpstreamUsageLogClient(ctx context.Context, channel *model.Channel) (*up
 	}, nil
 }
 
-// fetchPage asks for one page. since/until/modelName are sent to the provider,
-// which filters server-side; callers still re-check the window client-side so a
-// provider that ignores a filter cannot smuggle out-of-window rows in.
+// upstreamRateLimitError is the provider's 429, kept as its own type so the
+// retry loop can tell "you are going too fast" apart from "something is broken".
+type upstreamRateLimitError struct {
+	status     string
+	retryAfter time.Duration
+}
+
+func (e *upstreamRateLimitError) Error() string {
+	if e.retryAfter > 0 {
+		return fmt.Sprintf("upstream usage log rate-limited (%s, retry after %s)", e.status, e.retryAfter)
+	}
+	return fmt.Sprintf("upstream usage log rate-limited (%s)", e.status)
+}
+
+// parseRetryAfter accepts both forms RFC 7231 allows: delay-seconds and HTTP-date.
+func parseRetryAfter(raw string) time.Duration {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	if seconds, err := strconv.Atoi(raw); err == nil && seconds > 0 {
+		return time.Duration(seconds) * time.Second
+	}
+	if when, err := http.ParseTime(raw); err == nil {
+		if wait := time.Until(when); wait > 0 {
+			return wait
+		}
+	}
+	return 0
+}
+
+// fetchPage asks for one page, retrying the provider's rate limit instead of
+// failing the whole pass. A per-model walk sends one request per model, which a
+// wide catalogue turns into exactly the burst the log endpoint throttles.
 func (c *upstreamUsageLogClient) fetchPage(page int, since, until int64, modelName string) ([]upstreamUsageLogRecord, error) {
+	wait := pricingCalibrationRetryBaseWait
+	var lastErr error
+	for attempt := 1; attempt <= pricingCalibrationMaxRetries; attempt++ {
+		rows, retryAfter, err := c.fetchPageOnce(page, since, until, modelName)
+		if err == nil {
+			return rows, nil
+		}
+		lastErr = err
+		var limited *upstreamRateLimitError
+		if !errors.As(err, &limited) {
+			return nil, err
+		}
+		if attempt == pricingCalibrationMaxRetries {
+			break
+		}
+		pause := retryAfter
+		if pause <= 0 {
+			pause = wait
+		}
+		if pause > pricingCalibrationMaxRetryWait {
+			pause = pricingCalibrationMaxRetryWait
+		}
+		if c.ctx != nil {
+			select {
+			case <-time.After(pause):
+			case <-c.ctx.Done():
+				return nil, c.ctx.Err()
+			}
+		} else {
+			time.Sleep(pause)
+		}
+		if wait < pricingCalibrationMaxRetryWait {
+			wait *= 2
+		}
+	}
+	return nil, lastErr
+}
+
+// fetchPageOnce sends one request. since/until/modelName are sent to the
+// provider, which filters server-side; callers still re-check the window
+// client-side so a provider that ignores a filter cannot smuggle out-of-window
+// rows in.
+func (c *upstreamUsageLogClient) fetchPageOnce(page int, since, until int64, modelName string) ([]upstreamUsageLogRecord, time.Duration, error) {
 	query := c.endpoint.Query()
 	query.Set("p", strconv.Itoa(page))
 	query.Set("page_size", strconv.Itoa(pricingCalibrationPageSize))
@@ -303,28 +392,32 @@ func (c *upstreamUsageLogClient) fetchPage(page int, since, until int64, modelNa
 	pageURL.RawQuery = query.Encode()
 	req, reqErr := http.NewRequestWithContext(c.ctx, http.MethodGet, pageURL.String(), nil)
 	if reqErr != nil {
-		return nil, reqErr
+		return nil, 0, reqErr
 	}
 	req.Header.Set("Authorization", "Bearer "+c.key)
 	req.Header.Set("Accept", "application/json")
 	c.requests++
 	resp, doErr := c.client.Do(req)
 	if doErr != nil {
-		return nil, doErr
+		return nil, 0, doErr
 	}
 	var payload upstreamUsageLogResponse
 	decodeErr := common.DecodeJson(io.LimitReader(resp.Body, pricingCalibrationResponseLimit), &payload)
 	_ = resp.Body.Close()
+	if resp.StatusCode == http.StatusTooManyRequests {
+		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
+		return nil, retryAfter, &upstreamRateLimitError{status: resp.Status, retryAfter: retryAfter}
+	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("upstream usage log returned %s", resp.Status)
+		return nil, 0, fmt.Errorf("upstream usage log returned %s", resp.Status)
 	}
 	if decodeErr != nil {
-		return nil, decodeErr
+		return nil, 0, decodeErr
 	}
 	if !payload.Success && payload.Message != "" {
-		return nil, errors.New(payload.Message)
+		return nil, 0, errors.New(payload.Message)
 	}
-	return payload.Data, nil
+	return payload.Data, 0, nil
 }
 
 func (c *upstreamUsageLogClient) tailWalk(since int64) ([]upstreamUsageLogRecord, error) {
@@ -418,21 +511,45 @@ func (c *upstreamUsageLogClient) tailWalk(since int64) ([]upstreamUsageLogRecord
 // supported=false means the provider ignored the window filter (an unsupported
 // fork, or a proxy that strips query parameters). The caller then falls back to
 // the tail walk instead of reading the wrong end of the log.
-func (c *upstreamUsageLogClient) windowWalk(models []string, since, until int64) ([]upstreamUsageLogRecord, bool, error) {
+func (c *upstreamUsageLogClient) windowWalk(models []string, since, until int64) ([]upstreamUsageLogRecord, bool, int, error) {
 	records := make([]upstreamUsageLogRecord, 0, pricingCalibrationPageSize*len(models))
 	probed := false
-	for _, name := range models {
+	failed := 0
+	var lastErr error
+	for index, name := range models {
 		if c.requests >= pricingCalibrationWindowRequestBudget {
 			break
 		}
 		if c.ctx != nil && c.ctx.Err() != nil {
-			return records, true, c.ctx.Err()
+			return records, true, failed, c.ctx.Err()
+		}
+		if index > 0 && pricingCalibrationModelGap > 0 {
+			// Pace the walk. The log endpoint throttles bursts, and a 200ms gap is
+			// far cheaper than a 429 plus its backoff.
+			if c.ctx != nil {
+				select {
+				case <-time.After(pricingCalibrationModelGap):
+				case <-c.ctx.Done():
+					return records, true, failed, c.ctx.Err()
+				}
+			} else {
+				time.Sleep(pricingCalibrationModelGap)
+			}
 		}
 		kept := 0
 		for page := 1; page <= pricingCalibrationModelPages; page++ {
 			rows, err := c.fetchPage(page, since, until, name)
 			if err != nil {
-				return records, true, err
+				// One blocked model must not throw away the factors every other
+				// model already produced. Abort only when nothing has come back and
+				// two models in a row failed, which means the endpoint itself is
+				// unusable (bad key, wrong path, persistent throttle).
+				failed++
+				lastErr = err
+				if len(records) == 0 && failed >= 2 {
+					return records, true, failed, lastErr
+				}
+				break
 			}
 			if len(rows) == 0 {
 				break
@@ -442,7 +559,7 @@ func (c *upstreamUsageLogClient) windowWalk(models []string, since, until int64)
 				if since > 0 && newestCreatedAt(rows) < since {
 					// The filter was ignored: this is the oldest page of an
 					// unfiltered log, not a page from inside the window.
-					return nil, false, nil
+					return nil, false, failed, nil
 				}
 			}
 			for _, record := range rows {
@@ -460,27 +577,28 @@ func (c *upstreamUsageLogClient) windowWalk(models []string, since, until int64)
 			}
 		}
 	}
-	return records, true, nil
+	return records, true, failed, nil
 }
 
 // fetchChannelUsageLogs prefers the per-model window walk and degrades to the
-// tail walk when the provider ignores the window filter.
-func fetchChannelUsageLogs(ctx context.Context, channel *model.Channel, since, until int64, models []string) ([]upstreamUsageLogRecord, bool, error) {
+// tail walk when the provider ignores the window filter. failed counts models
+// the provider refused (rate limit or transient error); the run keeps the rest.
+func fetchChannelUsageLogs(ctx context.Context, channel *model.Channel, since, until int64, models []string) ([]upstreamUsageLogRecord, bool, int, error) {
 	client, err := newUpstreamUsageLogClient(ctx, channel)
 	if err != nil {
-		return nil, false, err
+		return nil, false, 0, err
 	}
 	if len(models) > 0 {
-		records, supported, walkErr := client.windowWalk(models, since, until)
+		records, supported, failed, walkErr := client.windowWalk(models, since, until)
 		if walkErr != nil {
-			return records, supported, walkErr
+			return records, supported, failed, walkErr
 		}
 		if supported {
-			return records, true, nil
+			return records, true, failed, nil
 		}
 	}
 	records, err := client.tailWalk(since)
-	return records, false, err
+	return records, false, 0, err
 }
 
 func newestCreatedAt(rows []upstreamUsageLogRecord) int64 {
@@ -716,14 +834,16 @@ func RunPricingCalibration(ctx context.Context, channelIDs []int, trigger string
 			failures = append(failures, fmt.Sprintf("channel %d: %s", channel.Id, offerErr.Error()))
 			continue
 		}
-		records, _, logErr := fetchChannelUsageLogs(ctx, &channel, result.WindowStart, result.WindowEnd, calibrationModelNames(offers))
+		records, _, failedModels, logErr := fetchChannelUsageLogs(ctx, &channel, result.WindowStart, result.WindowEnd, calibrationModelNames(offers))
 		if logErr != nil {
 			channelResult.Error = logErr.Error()
+			channelResult.FailedModels = failedModels
 			result.Channels = append(result.Channels, channelResult)
 			failures = append(failures, fmt.Sprintf("channel %d: %s", channel.Id, logErr.Error()))
 			continue
 		}
 		channelResult.Records = len(records)
+		channelResult.FailedModels = failedModels
 		samples, _ := buildCalibrationSamples(records, offers, quotaPerUnit)
 		aggregates := aggregateCalibration(samples, minSamples, maxDispersion)
 		channelResult.Models = len(aggregates)
@@ -863,13 +983,16 @@ func (pricingCalibrationHandler) Run(ctx context.Context, task *model.SystemTask
 		return
 	}
 	records := 0
+	failedModels := 0
 	for _, channel := range result.Channels {
 		records += channel.Records
+		failedModels += channel.FailedModels
 	}
 	// Records is logged because "applied=0" alone cannot tell an empty window
-	// apart from a window that was never read.
-	logger.LogInfo(ctx, fmt.Sprintf("pricing calibration applied=%d skipped=%d channels=%d records=%d",
-		result.Applied, result.Skipped, len(result.Channels), records))
+	// apart from a window that was never read. failed_models shows throttled
+	// models that were skipped instead of aborting the pass.
+	logger.LogInfo(ctx, fmt.Sprintf("pricing calibration applied=%d skipped=%d channels=%d records=%d failed_models=%d",
+		result.Applied, result.Skipped, len(result.Channels), records, failedModels))
 	if finishErr := model.FinishSystemTask(task.TaskID, runnerID, model.SystemTaskStatusSucceeded, result, ""); finishErr != nil {
 		logSystemTaskLockError(ctx, task, finishErr)
 	}

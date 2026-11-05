@@ -7,7 +7,9 @@ import (
 	"net/http/httptest"
 	"sort"
 	"strconv"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -356,6 +358,9 @@ type usageLogServerOptions struct {
 	descending  bool
 	perPage     int
 	requests    *int
+	// before runs for every request and can answer it itself (returning true).
+	// Used to simulate the provider's 429 without duplicating the paging logic.
+	before func(w http.ResponseWriter, model string) bool
 }
 
 // windowedUsageLogServer honours model_name and, when honorWindow is set, the
@@ -373,6 +378,9 @@ func windowedUsageLogServer(t *testing.T, rows []usageLogSeed, opts usageLogServ
 		}
 		query := r.URL.Query()
 		model := query.Get("model_name")
+		if opts.before != nil && opts.before(w, model) {
+			return
+		}
 		start, _ := strconv.ParseInt(query.Get("start_timestamp"), 10, 64)
 		end, _ := strconv.ParseInt(query.Get("end_timestamp"), 10, 64)
 		matched := make([]usageLogSeed, 0, len(rows))
@@ -447,7 +455,7 @@ func TestFetchChannelUsageLogsAsksPerModelSoCoverageDoesNotDependOnTraffic(t *te
 	server := windowedUsageLogServer(t, rows, usageLogServerOptions{honorModel: true, honorWindow: true})
 	defer server.Close()
 
-	records, windowed, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a", "m-b", "m-c"})
+	records, windowed, _, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a", "m-b", "m-c"})
 	require.NoError(t, err)
 	assert.True(t, windowed, "the provider honours the window filter, so no tail walk is needed")
 	assert.Len(t, records, 14)
@@ -470,7 +478,7 @@ func TestFetchChannelUsageLogsFallsBackWhenProviderIgnoresWindowFilter(t *testin
 	server := windowedUsageLogServer(t, rows, usageLogServerOptions{perPage: 50})
 	defer server.Close()
 
-	records, windowed, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a"})
+	records, windowed, _, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a"})
 	require.NoError(t, err)
 	assert.False(t, windowed, "an ignored filter must be reported so the operator can see it")
 	require.NotEmpty(t, records, "the fallback tail walk still reads the window")
@@ -488,7 +496,7 @@ func TestFetchChannelUsageLogsClipsRowsWhenProviderIgnoresTimeFilterOnly(t *test
 	server := windowedUsageLogServer(t, rows, usageLogServerOptions{honorModel: true, perPage: 50})
 	defer server.Close()
 
-	records, _, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a"})
+	records, _, _, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a"})
 	require.NoError(t, err)
 	require.NotEmpty(t, records)
 	for _, record := range records {
@@ -507,7 +515,7 @@ func TestFetchChannelUsageLogsClipsRowsWhenNewestFirstProviderIgnoresFilter(t *t
 	server := windowedUsageLogServer(t, rows, usageLogServerOptions{descending: true, perPage: 50})
 	defer server.Close()
 
-	records, _, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a"})
+	records, _, _, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a"})
 	require.NoError(t, err)
 	require.NotEmpty(t, records)
 	for _, record := range records {
@@ -517,6 +525,7 @@ func TestFetchChannelUsageLogsClipsRowsWhenNewestFirstProviderIgnoresFilter(t *t
 }
 
 func TestWindowWalkStaysInsideRequestBudget(t *testing.T) {
+	fastRetry(t)
 	base := int64(1_800_000_000)
 	perModel := make(map[string]int, 60)
 	models := make([]string, 0, 60)
@@ -531,9 +540,111 @@ func TestWindowWalkStaysInsideRequestBudget(t *testing.T) {
 	server := windowedUsageLogServer(t, rows, usageLogServerOptions{honorModel: true, honorWindow: true, perPage: 10, requests: &requests})
 	defer server.Close()
 
-	_, windowed, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, models)
+	_, windowed, _, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, models)
 	require.NoError(t, err)
 	assert.True(t, windowed)
 	assert.LessOrEqual(t, requests, pricingCalibrationWindowRequestBudget,
 		"a wide catalogue must not turn one calibration run into a crawl")
+}
+
+// fastRetry shrinks the pacing and 429 backoff so these tests stay fast.
+func fastRetry(t *testing.T) {
+	t.Helper()
+	previousGap := pricingCalibrationModelGap
+	previousBase := pricingCalibrationRetryBaseWait
+	previousMax := pricingCalibrationMaxRetryWait
+	pricingCalibrationModelGap = 0
+	pricingCalibrationRetryBaseWait = 2 * time.Millisecond
+	pricingCalibrationMaxRetryWait = 10 * time.Millisecond
+	t.Cleanup(func() {
+		pricingCalibrationModelGap = previousGap
+		pricingCalibrationRetryBaseWait = previousBase
+		pricingCalibrationMaxRetryWait = previousMax
+	})
+}
+
+// rateLimitHook answers 429 for the models in blocked while their budget lasts
+// (blocked[model] = remaining 429s; -1 means forever).
+func rateLimitHook(blocked map[string]int) func(http.ResponseWriter, string) bool {
+	var mu sync.Mutex
+	return func(w http.ResponseWriter, model string) bool {
+		mu.Lock()
+		remaining, limited := blocked[model]
+		if !limited || remaining == 0 {
+			mu.Unlock()
+			return false
+		}
+		if remaining > 0 {
+			blocked[model] = remaining - 1
+		}
+		mu.Unlock()
+		w.Header().Set("Retry-After", "0")
+		w.WriteHeader(http.StatusTooManyRequests)
+		fmt.Fprint(w, `{"success":false,"message":"too many requests"}`)
+		return true
+	}
+}
+
+// A per-model walk sends one request per model, which is exactly the burst the
+// log endpoint throttles. A single 429 must be waited out, not surfaced.
+func TestFetchChannelUsageLogsRetriesRateLimit(t *testing.T) {
+	fastRetry(t)
+	base := int64(1_800_000_000)
+	rows, since := seedCalibrationLog(base, map[string]int{"m-a": 6})
+	server := windowedUsageLogServer(t, rows, usageLogServerOptions{
+		honorModel:  true,
+		honorWindow: true,
+		before:      rateLimitHook(map[string]int{"m-a": 1}),
+	})
+	defer server.Close()
+
+	records, windowed, failed, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a"})
+	require.NoError(t, err, "a retryable 429 must not fail the pass")
+	assert.True(t, windowed)
+	assert.Equal(t, 0, failed)
+	assert.NotEmpty(t, records, "the retried page must be read")
+}
+
+// The first production run of the per-model walk died on one 429 and threw away
+// every factor the other models had already produced. A blocked model may be
+// skipped; the rest of the catalogue still gets calibrated.
+func TestWindowWalkKeepsTheOtherModelsWhenOneIsRateLimited(t *testing.T) {
+	fastRetry(t)
+	base := int64(1_800_000_000)
+	rows, since := seedCalibrationLog(base, map[string]int{"m-a": 6, "m-b": 6})
+	server := windowedUsageLogServer(t, rows, usageLogServerOptions{
+		honorModel:  true,
+		honorWindow: true,
+		before:      rateLimitHook(map[string]int{"m-a": -1}),
+	})
+	defer server.Close()
+
+	records, windowed, failed, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a", "m-b"})
+	require.NoError(t, err, "one blocked model must not fail the whole pass")
+	assert.True(t, windowed)
+	assert.Equal(t, 1, failed)
+	require.NotEmpty(t, records)
+	for _, record := range records {
+		assert.Equal(t, "m-b", record.ModelName, "only the blocked model may be missing")
+	}
+}
+
+// The mirror case: when the endpoint itself is unusable every model fails, and
+// reporting success with zero samples would look like "no traffic" instead of
+// "we were throttled".
+func TestWindowWalkReportsFailureWhenEveryModelIsRateLimited(t *testing.T) {
+	fastRetry(t)
+	base := int64(1_800_000_000)
+	rows, since := seedCalibrationLog(base, map[string]int{"m-a": 4, "m-b": 4})
+	server := windowedUsageLogServer(t, rows, usageLogServerOptions{
+		honorModel:  true,
+		honorWindow: true,
+		before:      rateLimitHook(map[string]int{"m-a": -1, "m-b": -1}),
+	})
+	defer server.Close()
+
+	records, _, failed, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a", "m-b"})
+	require.Error(t, err)
+	assert.Empty(t, records)
+	assert.GreaterOrEqual(t, failed, 2)
 }
