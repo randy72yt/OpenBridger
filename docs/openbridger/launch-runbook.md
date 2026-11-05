@@ -328,9 +328,13 @@ curl -s http://127.0.0.1:3000/api/status | head -c 300
 | 现象 | 原因 | 处理 |
 |---|---|---|
 | 覆盖率低 | 模型最近没有流量 | 低流量模型在「成本校准」行里点「固定」，手工填实测倍率 |
+| 覆盖率低且日志里 `records` 很大 | 只读到热门模型的流量（2026-11 第一轮：3060 条只覆盖 3/28） | 已改为按模型逐个查询，见下方「按模型取数」；升级后仍低说明该模型确实没调用 |
 | 状态「离散度过高」 | 流量混用标准档与长上下文档（`billing_expr` 换档） | 属正常，此时不生效并回退分组倍率；需要精确就按档拆渠道 |
 | 状态「校准已过期」 | 超过 `PRICING_CALIBRATION_STALE_HOURS` 没更新 | 检查 `pricing_calibration` 任务是否在跑、上游日志接口是否 401 |
+| 任务 `failed` 且 `error=task lease expired` | 处理器没落 `FinishSystemTask`（`805c9226a` 及更早的缺陷） | 升级到 `e503db5c6` 之后不会出现；出现即视为回归 |
 | 全部回退 | 上游不是 new-api，没有 `/api/log/token` | 改 `PRICING_CALIBRATION_LOG_PATH`，或对着账单手工「固定」 |
+
+**按模型取数（2026-11 起）**：上游 `/api/log/token` 支持 `start_timestamp`/`end_timestamp`/`model_name` 服务端过滤，校准改为对每个在售模型各发一次窗口查询，单轮约 28 个请求、上限 `pricingCalibrationWindowRequestBudget=200`。只有当上游**忽略**时间过滤（老在前的日志首页就是最老记录）时才回退到「尾部翻页」，此时 `records` 很大但覆盖仍然只有热门模型。
 
 **校准失效是安全的**：过期或未生效时自动回退到 `PRICING_GROUP_RATIO_POLICY`，不会因为取不到数就停止定价。
 
