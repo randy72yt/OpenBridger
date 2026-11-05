@@ -16,7 +16,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Crown, RefreshCw, Sparkles, Check } from "lucide-react";
+import {
+  Crown,
+  RefreshCw,
+  Sparkles,
+  Check,
+  Coins,
+  BadgePercent,
+  Wallet,
+  ArrowRightLeft,
+  CreditCard,
+  ReceiptText,
+} from "lucide-react";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -257,6 +268,19 @@ export function SubscriptionPlansCard({
     return map;
   }, [plans]);
 
+  // Match the same tier across billing periods (e.g. 体验 monthly vs 半年付).
+  // Prefer title; fall back to total quota for legacy plans where the reset
+  // period makes totals differ between periods (weekly vs monthly reset).
+  const matchTier = useCallback(
+    (candidates: PlanRecord[], p: PlanRecord): PlanRecord | undefined =>
+      candidates.find((m) => m?.plan?.title === p?.plan?.title) ??
+      candidates.find(
+        (m) =>
+          Number(m?.plan?.total_amount || 0) === Number(p?.plan?.total_amount || 0),
+      ),
+    [],
+  );
+
   // Group plans by billing period (e.g. monthly vs semi-annual) so each
   // cycle is shown on its own tab, mirroring the plan list layout.
   const periodGroups = useMemo(() => {
@@ -292,11 +316,7 @@ export function SubscriptionPlansCard({
         let discountPercent: number | null = null;
         if (unit === "month" && value > 1 && monthlyPlans.length > 0) {
           for (const p of groupPlans) {
-            const match = monthlyPlans.find(
-              (m) =>
-                Number(m.plan.total_amount || 0) ===
-                Number(p.plan.total_amount || 0),
-            );
+            const match = matchTier(monthlyPlans, p);
             if (!match) continue;
             const full = Number(match.plan.price_amount || 0) * value;
             const price = Number(p.plan.price_amount || 0);
@@ -311,7 +331,7 @@ export function SubscriptionPlansCard({
         return { key, label, discountPercent, groupPlans };
       });
     return groups;
-  }, [plans, t]);
+  }, [plans, matchTier, t]);
 
   const activePeriodKey = periodGroups.some((g) => g.key === periodKey)
     ? periodKey
@@ -338,9 +358,7 @@ export function SubscriptionPlansCard({
         },
       ];
       for (const g of others) {
-        const match = g.groupPlans.find(
-          (p) => Number(p.plan.total_amount || 0) === total,
-        );
+        const match = matchTier(g.groupPlans, m);
         if (!match) continue;
         const [unit, valueStr] = g.key.split(":");
         const months = Number(valueStr || 1) * (unit === "year" ? 12 : 1);
@@ -398,9 +416,11 @@ export function SubscriptionPlansCard({
           const count = planPurchaseCountMap.get(plan.id) || 0;
           const reached = limit > 0 && count >= limit;
 
+          const isWeeklyReset =
+            (plan.quota_reset_period || "never") === "weekly";
           const benefits = [
             totalAmount > 0
-              ? `${t("Monthly quota")}: ${formatQuota(totalAmount)}`
+              ? `${t(isWeeklyReset ? "Weekly quota" : "Monthly quota")}: ${formatQuota(totalAmount)}`
               : `${t("Total Quota")}: ${t("Unlimited")}`,
             `${t("Validity Period")}: ${formatDuration(plan, t)}`,
             formatResetPeriod(plan, t) !== t("No Reset")
@@ -830,6 +850,9 @@ export function SubscriptionPlansCard({
                         <th className="py-1.5 pr-3 font-medium">
                           {t("Monthly quota")}
                         </th>
+                        <th className="py-1.5 pr-3 font-medium">
+                          {t("≈ Codex API value")}
+                        </th>
                         {rateRows[0].cells.map((c) => (
                           <th key={c.label} className="py-1.5 pr-3 font-medium">
                             {c.label}
@@ -845,6 +868,17 @@ export function SubscriptionPlansCard({
                           </td>
                           <td className="py-1.5 pr-3">
                             {formatQuota(row.total)}
+                          </td>
+                          <td className="py-1.5 pr-3">
+                            {t("≈ {{price}} / month", {
+                              price: formatBillingCurrencyFromUSD(
+                                planAmountToDisplayUSD(
+                                  row.total / 500000 / 0.6,
+                                  "USD",
+                                  usdExchangeRate,
+                                ),
+                              ),
+                            })}
                           </td>
                           {row.cells.map((c) => (
                             <td key={c.label} className="py-1.5 pr-3">
@@ -876,6 +910,77 @@ export function SubscriptionPlansCard({
                   </table>
                 </div>
               )}
+            </div>
+
+            {/* How credits work */}
+            <div className="rounded-xl border p-3 sm:p-4">
+              <p className="text-sm font-medium">{t("How credits work")}</p>
+              <div className="text-muted-foreground mt-1.5 space-y-1 text-xs leading-relaxed">
+                <p>{t("1 credit = ¥0.01. Credits are billed per token and work on every model — no per-model multipliers.")}</p>
+                <p>{t("Monthly plans come with credits for the whole month; semi-annual plans release a fresh batch of credits every week.")}</p>
+                <p>{t("When plan credits run out, usage continues on your wallet balance automatically — no interruption, no forced renewal.")}</p>
+              </div>
+            </div>
+
+            {/* Features & services */}
+            <div className="rounded-xl border p-3 sm:p-4">
+              <p className="text-sm font-medium">{t("Features & Services")}</p>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {[
+                  {
+                    icon: Coins,
+                    title: t("All models, one subscription"),
+                    desc: t(
+                      "One plan unlocks every model on the site through a single API key.",
+                    ),
+                  },
+                  {
+                    icon: BadgePercent,
+                    title: t("60% of official list price"),
+                    desc: t(
+                      "Standard-pool models bill at 60% of official list price. No hidden group multipliers.",
+                    ),
+                  },
+                  {
+                    icon: Wallet,
+                    title: t("Top up 1:1, never expires"),
+                    desc: t(
+                      "¥10 buys 1,000 credits. Wallet balance never expires and is never devalued.",
+                    ),
+                  },
+                  {
+                    icon: ArrowRightLeft,
+                    title: t("Seamless wallet fallback"),
+                    desc: t(
+                      "Plan credits first, wallet balance second — switching is automatic and instant.",
+                    ),
+                  },
+                  {
+                    icon: CreditCard,
+                    title: t("Alipay & WeChat Pay"),
+                    desc: t(
+                      "Pay in seconds, credits arrive instantly and stay in your account.",
+                    ),
+                  },
+                  {
+                    icon: ReceiptText,
+                    title: t("Transparent per-call billing"),
+                    desc: t(
+                      "Every request shows its token usage and cost. No minimum spend.",
+                    ),
+                  },
+                ].map(({ icon: Icon, title, desc }) => (
+                  <div key={title} className="flex items-start gap-2.5">
+                    <Icon className="text-primary mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium">{title}</p>
+                      <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
+                        {desc}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         ) : (
