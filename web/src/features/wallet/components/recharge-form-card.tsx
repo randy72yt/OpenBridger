@@ -155,12 +155,18 @@ export function RechargeFormCard({
     }
   };
 
+  // A disabled global online-payment switch means the backend strips every
+  // payment channel; the card then degrades to redemption-code only instead of
+  // advertising amounts the user cannot pay for.
+  const onlinePaymentEnabled = topupInfo?.online_payment_enabled !== false;
   const hasConfigurableTopup =
-    topupInfo?.enable_online_topup ||
-    topupInfo?.enable_stripe_topup ||
-    enableWaffoTopup ||
-    enableWaffoPancakeTopup;
-  const hasAnyTopup = hasConfigurableTopup || enableCreemTopup;
+    onlinePaymentEnabled &&
+    (topupInfo?.enable_online_topup ||
+      topupInfo?.enable_stripe_topup ||
+      enableWaffoTopup ||
+      enableWaffoPancakeTopup);
+  const hasAnyTopup =
+    hasConfigurableTopup || (onlinePaymentEnabled && enableCreemTopup);
   const hasStandardPaymentMethods =
     Array.isArray(topupInfo?.pay_methods) && topupInfo.pay_methods.length > 0;
   const hasWaffoPaymentMethods =
@@ -223,8 +229,12 @@ export function RechargeFormCard({
 
   return (
     <TitledCard
-      title={t("Add Funds")}
-      description={t("Choose an amount and payment method")}
+      title={onlinePaymentEnabled ? t("Add Funds") : t("Redeem")}
+      description={
+        onlinePaymentEnabled
+          ? t("Choose an amount and payment method")
+          : t("Enter your redemption code")
+      }
       icon={<WalletCards className="h-4 w-4" />}
       iconTone="success"
       disableHoverEffect
@@ -524,13 +534,15 @@ export function RechargeFormCard({
           )}
         </div>
       ) : (
-        <Alert>
-          <AlertDescription>
-            {t(
-              "Online topup is not enabled. Please use redemption code or contact administrator.",
-            )}
-          </AlertDescription>
-        </Alert>
+        onlinePaymentEnabled && (
+          <Alert>
+            <AlertDescription>
+              {t(
+                "Online topup is not enabled. Please use redemption code or contact administrator.",
+              )}
+            </AlertDescription>
+          </Alert>
+        )
       )}
 
       {/* Creem Products Section */}
