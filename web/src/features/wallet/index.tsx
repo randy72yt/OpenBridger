@@ -20,7 +20,6 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { SectionPageLayout } from "@/components/layout";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useStatus } from "@/hooks/use-status";
 import { useSystemConfig } from "@/hooks/use-system-config";
 import { getSelf } from "@/lib/api";
@@ -284,17 +283,6 @@ export function Wallet(props: WalletProps) {
         <SectionPageLayout.Content>
           <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-5">
             <WalletStatsCard user={user} loading={userLoading} />
-
-            {topupInfo?.online_payment_enabled === false && (
-              <Alert>
-                <AlertTitle>{t("Invite-only trial")}</AlertTitle>
-                <AlertDescription>
-                  {t(
-                    "Trial credits are assigned by an administrator. Online payment is not available during this trial.",
-                  )}
-                </AlertDescription>
-              </Alert>
-            )}
 
             <div className="grid gap-4">
               <div id="wallet-add-funds" className="scroll-mt-4">
