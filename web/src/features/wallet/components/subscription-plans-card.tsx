@@ -268,17 +268,28 @@ export function SubscriptionPlansCard({
     return map;
   }, [plans]);
 
-  // Match the same tier across billing periods (e.g. 体验 monthly vs 半年付).
-  // Prefer title; fall back to total quota for legacy plans where the reset
-  // period makes totals differ between periods (weekly vs monthly reset).
+  // Match the same tier across billing periods (e.g. 体验月付 vs 体验半年付).
+  // Titles may carry period suffixes and quota totals differ when reset
+  // periods differ, so pair by tier rank: position in sort_order within each
+  // period group.
   const matchTier = useCallback(
-    (candidates: PlanRecord[], p: PlanRecord): PlanRecord | undefined =>
-      candidates.find((m) => m?.plan?.title === p?.plan?.title) ??
-      candidates.find(
-        (m) =>
-          Number(m?.plan?.total_amount || 0) === Number(p?.plan?.total_amount || 0),
-      ),
-    [],
+    (candidates: PlanRecord[], p: PlanRecord): PlanRecord | undefined => {
+      const rank = (list: PlanRecord[], item: PlanRecord) =>
+        [...list]
+          .sort(
+            (a, b) =>
+              Number(a?.plan?.sort_order || 0) - Number(b?.plan?.sort_order || 0),
+          )
+          .findIndex((m) => m?.plan?.id === item?.plan?.id);
+      const wanted = rank(plans, p);
+      if (wanted < 0) return undefined;
+      const sorted = [...candidates].sort(
+        (a, b) =>
+          Number(a?.plan?.sort_order || 0) - Number(b?.plan?.sort_order || 0),
+      );
+      return sorted[wanted];
+    },
+    [plans],
   );
 
   // Group plans by billing period (e.g. monthly vs semi-annual) so each
