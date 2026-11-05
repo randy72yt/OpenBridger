@@ -48,6 +48,7 @@ cmd_smoke() {
     docker ps --format '{{.Names}}' | grep -qx "$c" && c_grn "OK  container $c" || { c_red "FAIL container $c not running"; fail=1; }
   done
   hdr "L2 edge (Cloudflare + Nginx + TLS)"
+  local l2_warn=0
   for u in https://openbridger.com/api/status https://api.openbridger.com/api/status https://docs.openbridger.com/; do
     local host code; host=$(echo "$u" | awk -F/ '{print $3}')
     if ! getent hosts "$host" >/dev/null 2>&1; then
@@ -55,8 +56,29 @@ cmd_smoke() {
       continue
     fi
     code=$(http_code "$u")
-    [ "$code" = 200 ] && c_grn "OK  $code $u" || { c_red "FAIL $code $u"; fail=1; }
+    if [ "$code" = 200 ]; then
+      c_grn "OK  $code $u"
+      continue
+    fi
+    if [ "$code" = "403" ] || [ "$code" = "429" ]; then
+      # Cloudflare Bot Fight 会挑战服务器自己的出口 IP，403 不代表公网用户不可用。
+      # 用源站直连区分"CF 层挑战"与"源站真挂了"：源站 200 判 WARN，源站也不健康才判 FAIL。
+      local origin
+      origin=$(curl -s -o /dev/null -m 8 -w '%{http_code}' \
+        --resolve "openbridger.com:443:127.0.0.1" "https://openbridger.com/api/status" 2>/dev/null || echo 000)
+      if [ "$origin" = "200" ]; then
+        c_ylw "WARN $code $u（CF 挑战服务器出口；源站直连 200，需公网侧复核）"
+        l2_warn=1
+        continue
+      fi
+      c_red "FAIL $code $u（源站直连 $origin，源站也不健康）"
+      fail=1
+      continue
+    fi
+    c_red "FAIL $code $u"
+    fail=1
   done
+  [ "$l2_warn" = 1 ] && c_ylw "L2 有 WARN：请用非源站外网复核三域名（deploy 的回滚判定不依赖 L2）"
   [ $fail -eq 0 ] && c_grn "SMOKE PASS" || { c_red "SMOKE FAIL"; return 1; }
 }
 
@@ -127,10 +149,11 @@ cmd_build() {
   git merge --ff-only "origin/$tag" 2>/dev/null || true
   local short; short=$(git rev-parse --short HEAD)
   cp Dockerfile.dev /tmp/Dockerfile.dev.orig
-  sed -i "s|^RUN go build|ENV GOFLAGS=-p=1 GOMAXPROCS=1\nRUN go build|" Dockerfile.dev
+  sed -i "s|^RUN go build|ENV GOFLAGS=-p=1 GOMAXPROCS=1 GOMEMLIMIT=800MiB\nRUN go build|" Dockerfile.dev
   grep -q GOFLAGS Dockerfile.dev || die "GOFLAGS 补丁未生效"
   c_ylw "开始构建 openbridger:$short（日志 $OB/build.log）"
-  nohup sh -c "cd $REPO && OPENBRIDGER_IMAGE_TAG=$short docker compose -f $COMPOSE_FILE --env-file $ENVFILE build; echo \$? > $OB/build.exit; cp /tmp/Dockerfile.dev.orig $REPO/Dockerfile.dev" \
+  # 构建成功后清理 build cache，并只保留最近 3 个 openbridger 镜像（2C/1.6G 小机防内存磁盘吃紧）
+  nohup sh -c "cd $REPO && OPENBRIDGER_IMAGE_TAG=$short docker compose -f $COMPOSE_FILE --env-file $ENVFILE build; code=\$?; echo \$code > $OB/build.exit; cp /tmp/Dockerfile.dev.orig $REPO/Dockerfile.dev; if [ \$code -eq 0 ]; then docker builder prune -f >/dev/null 2>&1 || true; docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' | grep '^openbridger:' | grep -v ' U ' | tail -n +4 | awk '{print \$2}' | xargs -r docker rmi >/dev/null 2>&1 || true; fi" \
     > "$OB/build.log" 2>&1 &
   echo "build pid=$! tag=$short  →  用 obctl build-status 轮询"
 }
@@ -146,9 +169,39 @@ cmd_build_status() {
   fi
 }
 
+GHCR_IMAGE="ghcr.io/randy72yt/openbridger"
+
+# 从 GHCR 拉离机（GitHub Actions）构建的镜像并打本地 openbridger:<sha> tag，
+# 之后照常 obctl deploy <sha>。生产机不再需要本地编译（2026-11-03 OOM 事故后的根治方案）。
+cmd_pull() {
+  local ref="${1:-}"
+  [ -n "$ref" ] || die "用法: obctl pull <short-sha|分支|tag>   （GHCR 离机构建镜像，github.com/randy72yt/OpenBridger actions 产物）"
+  local short="$ref"
+  if ! printf '%s' "$ref" | grep -qE '^[0-9a-f]{7,40}$'; then
+    (cd "$REPO" && git fetch -q origin "$ref") || die "git fetch $ref 失败"
+    short=$(cd "$REPO" && git rev-parse --short FETCH_HEAD)
+  fi
+  hdr "Pull $GHCR_IMAGE:$short"
+  docker pull "$GHCR_IMAGE:$short" \
+    || die "拉取失败：若 GHCR 包为私有，需在 GitHub → Packages 将 openbridger 设为 public，或在服务器 docker login ghcr.io"
+  docker tag "$GHCR_IMAGE:$short" "openbridger:$short"
+  c_grn "已就绪 openbridger:$short → obctl deploy $short"
+}
+
+# L1 本地冒烟：容器三件套 + 本机 /api/status。deploy 以此决定是否自动回滚；
+# L2（经 Cloudflare 的公网自测）只作提示，因为源站出口 IP 常被 Bot Fight 拦 403 造成假失败。
+smoke_l1() {
+  local v; v=$(app_version)
+  [ "$v" != "unreachable" ] || return 1
+  docker ps --format '{{.Names}}' | grep -qx "$APP_CONTAINER" || return 1
+  docker ps --format '{{.Names}}' | grep -qx openbridger-mysql-1 || return 1
+  docker ps --format '{{.Names}}' | grep -qx openbridger-redis-1 || return 1
+  return 0
+}
+
 cmd_deploy() {
   local tag="${1:-}"
-  [ -n "$tag" ] || die "用法: obctl deploy <image-tag>   （obctl build 产物，docker images 可查）"
+  [ -n "$tag" ] || die "用法: obctl deploy <image-tag>   （obctl build/pull 产物，docker images 可查）"
   docker image inspect "openbridger:$tag" >/dev/null 2>&1 || docker image inspect "repo-openbridger:$tag" >/dev/null 2>&1 \
     || die "镜像不存在: $tag（先 obctl build）"
   local prev; prev=$(cur_tag)
@@ -156,13 +209,17 @@ cmd_deploy() {
   hdr "Deploy $prev → $tag"
   OBTAG="$tag" compose up -d || die "compose up 失败"
   sleep 10
-  if cmd_smoke; then
+  if ! smoke_l1; then
+    c_red "L1 本地冒烟未过（容器/本机 API），自动回滚到 $prev"
+    OBTAG="$prev" compose up -d; sleep 10
+    smoke_l1 && c_ylw "已回滚到 $prev，请排查后再发" || die "回滚后仍异常！立即 obctl diag"
+    return 1
+  fi
+  if cmd_smoke >/dev/null 2>&1; then
     c_grn "DEPLOY OK ($prev → $tag)；旧 tag $prev 已记录可回滚: obctl rollback"
   else
-    c_red "冒烟未过，自动回滚到 $prev"
-    OBTAG="$prev" compose up -d; sleep 10
-    cmd_smoke && c_ylw "已回滚到 $prev，请排查后再发" || die "回滚后仍异常！立即 obctl diag"
-    return 1
+    c_grn "DEPLOY OK ($prev → $tag)（L1 通过）"
+    c_ylw "L2 边缘自检未过——源站经 CF 自测常被 Bot Fight 拦 403（假失败，11-03 起不再自动回滚）。请从非源站外网验证三域名 200；异常再 obctl rollback $prev"
   fi
 }
 
@@ -242,7 +299,8 @@ obctl — OpenBridger 一键运维
   backup                    立即执行一次完整备份（MySQL+Redis+配置）
   backup-check              校验最新备份新鲜度（<26h）与大小
   restore <dump.sql.gz>     从备份恢复 MySQL（需 OBCTL_CONFIRM=YES）
-  build <git-ref>           后台构建镜像（自动 GOFLAGS 串行补丁）
+  build <git-ref>           后台构建镜像（自动 GOFLAGS+GOMEMLIMIT 补丁；优先改用 pull）
+  pull <sha|分支>            从 GHCR 拉离机构建镜像（推荐，生产机零编译）
   build-status              查看构建进度/结果
   deploy <image-tag>        切换镜像 + 冒烟，失败自动回滚
   rollback [image-tag]      回滚（默认上一次 deploy 前的 tag）
@@ -258,6 +316,7 @@ case "${1:-help}" in
   status) cmd_status ;; restart) shift; cmd_restart "$@" ;; diag) cmd_diag ;; smoke) cmd_smoke ;;
   backup) cmd_backup ;; backup-check) cmd_backup_check ;; restore) shift; cmd_restore "$@" ;;
   build) shift; cmd_build "$@" ;; build-status) cmd_build_status ;;
+  pull) shift; cmd_pull "$@" ;;
   deploy) shift; cmd_deploy "$@" ;; rollback) shift; cmd_rollback "$@" ;;
   accept) cmd_accept ;; sql) shift; cmd_sql "$@" ;; logs) shift; cmd_logs "$@" ;;
   alert-test) cmd_alert_test ;; help|--help|-h) cmd_help ;;
