@@ -248,6 +248,17 @@ curl -s http://127.0.0.1:3000/api/status | head -c 300
 
 通过标准：`/api/user/topup/info` 的 `online_payment_enabled` 为 `true` 且 `pay_methods` 含 `alipay`/`wxpay`；钱包页出现金额选择与支付方式按钮。
 
+#### 充值面额 = 到账额度（1:1）
+
+站点以美元计价额度、按 `USDExchangeRate`（当前 7.2）展示成人民币，所以「充多少得多少」必须由下单时记下的 `top_ups.credit_quota` 保证，不能靠回调时用整数 `amount` 反推：
+
+| 输入 | `top_ups.amount` | `top_ups.credit_quota` | 钱包应显示 |
+| --- | --- | --- | --- |
+| ¥10 | 1（10/7.2 取整） | 694444 | +¥10.00 |
+| ¥100 | 13 | 6944444 | +¥100.00 |
+
+验收：`SELECT amount, money, credit_quota FROM top_ups ORDER BY id DESC LIMIT 1;` — `money` 必须等于用户输入的人民币，`credit_quota` 必须等于 `money/Price*QuotaPerUnit`；确认弹窗「充值金额」与输入一致（不再 ×7.2）。
+
 ### S18 配置 SMTP 与发件域名
 
 准备 `support@openbridger.com` 邮箱，配置 SMTP 后：
