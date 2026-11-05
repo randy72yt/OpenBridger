@@ -62,3 +62,31 @@ func TestEffectiveCreditQuotaLegacyFallbacks(t *testing.T) {
 		})
 	}
 }
+
+// 回归：CNY 展示模式下 ¥10 的订单 Amount 只能存成 1 美元（整数字段），
+// 若回调按 Amount 换算就只入账 ¥7.2。下单时记下的 CreditQuota 必须优先。
+func TestRechargeEpayCreditsRecordedQuota(t *testing.T) {
+	truncateTables(t)
+
+	oldQuotaPerUnit := common.QuotaPerUnit
+	common.QuotaPerUnit = 500000
+	t.Cleanup(func() { common.QuotaPerUnit = oldQuotaPerUnit })
+
+	user := insertUserForPaymentGuardTest(t, 777, 0)
+	topUp := TopUp{
+		UserId:          user.Id,
+		Amount:          1, // 10 / 7.2 取整后的美元数
+		Money:           10,
+		TradeNo:         "EPAYCNY10",
+		PaymentMethod:   "alipay",
+		PaymentProvider: PaymentProviderEpay,
+		CreditQuota:     694_444, // 10 / 7.2 * 500000
+		CreateTime:      common.GetTimestamp(),
+		Status:          common.TopUpStatusPending,
+	}
+	require.NoError(t, DB.Create(&topUp).Error)
+
+	_, err := RechargeEpay(topUp.TradeNo, "alipay", "127.0.0.1")
+	require.NoError(t, err)
+	assert.Equal(t, 694_444, getUserQuotaForPaymentGuardTest(t, user.Id))
+}
