@@ -211,14 +211,12 @@ func getPayMoney(amount int64, group string) float64 {
 func getMinTopup() int64 {
 	minTopup := operation_setting.MinTopUp
 	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeCNY {
-		// MinTopUp is denominated in USD; the client sends RMB in CNY mode.
-		minCNY := decimal.NewFromInt(int64(minTopup)).
-			Mul(decimal.NewFromFloat(operation_setting.Price)).
-			Ceil().IntPart()
-		if minCNY < 1 {
-			minCNY = 1
+		// 人民币展示下面额本身就是元：后台填 10 就是最低 ¥10，不能再乘 Price，
+		// 否则 ¥10 会被放大成 ¥72，前端预设也会生成 72/360/720 这种怪档位。
+		if minTopup < 1 {
+			minTopup = 1
 		}
-		return minCNY
+		return int64(minTopup)
 	}
 	if operation_setting.GetQuotaDisplayType() == operation_setting.QuotaDisplayTypeTokens {
 		dMinTopup := decimal.NewFromInt(int64(minTopup))

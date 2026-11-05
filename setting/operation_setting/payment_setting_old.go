@@ -14,7 +14,10 @@ var CustomCallbackAddress = ""
 var EpayId = ""
 var EpayKey = ""
 var Price = 7.3
-var MinTopUp = 1
+
+// MinTopUp 是最低充值面额，单位跟随展示类型：
+// CNY 展示下就是人民币（10 = 最低 ¥10），USD 展示下是美元。
+var MinTopUp = 10
 var USDExchangeRate = 7.3
 
 var PayMethods = []map[string]string{

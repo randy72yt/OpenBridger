@@ -209,7 +209,7 @@ func TestTopUpCNYAmountSemantics(t *testing.T) {
 	oldMinTopUp := operation_setting.MinTopUp
 	common.QuotaPerUnit = 500000
 	operation_setting.Price = 7.2
-	operation_setting.MinTopUp = 5
+	operation_setting.MinTopUp = 10
 	t.Cleanup(func() {
 		common.QuotaPerUnit = oldQuotaPerUnit
 		operation_setting.GetGeneralSetting().QuotaDisplayType = oldDisplayType
@@ -231,11 +231,13 @@ func TestTopUpCNYAmountSemantics(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 694_444, quota)
 
-	// Min top-up is converted into RMB units (5 USD × 7.2 → 36).
-	assert.Equal(t, int64(36), getMinTopup())
+	// CNY 展示下 MinTopUp 就是元：填 10 意味着最低 ¥10，不再乘 Price。
+	assert.Equal(t, int64(10), getMinTopup())
 
 	// USD display mode keeps the legacy semantics untouched.
 	operation_setting.GetGeneralSetting().QuotaDisplayType = operation_setting.QuotaDisplayTypeUSD
 	pay = getPayMoney(10, "default")
 	assert.InDelta(t, 72.0, pay, 0.000001)
+	// USD 展示下 MinTopUp 仍是美元数值。
+	assert.Equal(t, int64(10), getMinTopup())
 }
