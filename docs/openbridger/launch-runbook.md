@@ -205,7 +205,7 @@ docker images | grep openbridger
 | `CHANNEL_UPSTREAM_MODEL_UPDATE_TASK_ENABLED` | `true` | 上游模型检测任务 |
 | `CHANNEL_UPSTREAM_MODEL_UPDATE_TASK_INTERVAL_MINUTES` | `720` | 每天两次 |
 | `PRICING_SNAPSHOT_RETENTION_DAYS` | `30` | 成本快照保留天数 |
-| `OPENBRIDGER_ONLINE_PAYMENT_ENABLED` | `false` | 首版不开在线支付 |
+| `OPENBRIDGER_ONLINE_PAYMENT_ENABLED` | `true` | 在线支付总闸。2026-09-26 用户拍板开启（见 `ops-inventory.md`）；只有显式设 `false` 才关闭，compose 默认已改为 `true` |
 
 写完后用 `docker compose -f compose.release.yml config` 确认展开值与 `.env` 一致。
 
@@ -238,13 +238,15 @@ curl -s http://127.0.0.1:3000/api/status | head -c 300
 确认生效值：`SESSION_COOKIE_SECURE=true`、`SESSION_COOKIE_TRUSTED_URL=https://openbridger.com`（Compose 已写死，与域名一致）、`TRUSTED_REDIRECT_DOMAINS=openbridger.com`。
 通过标准：登录后 Cookie 带 `Secure`、`HttpOnly`、`SameSite`；退出登录与 refresh 正常（OPS-002）。
 
-### S17 关闭公开注册与在线支付
+### S17 注册与在线支付开关基线
 
-- 后台关闭公开注册，改为邀请制/管理员建号；
-- `OPENBRIDGER_ONLINE_PAYMENT_ENABLED=false`（发布 Compose 已默认 false）；
-- 验证：钱包页无充值/套餐入口；直接调用订单创建接口被服务端拦截；`PAY-001～003` 记录「首版不适用」。
+> **2026-11-05 更正**：本节原先要求 `OPENBRIDGER_ONLINE_PAYMENT_ENABLED=false`（首版不开在线支付），与 2026-09-26 用户拍板的「在线支付已开启」（`ops-inventory.md`）冲突，导致生产 `.env` 被写成 `false`、钱包页充值入口消失。现按最新口径：**在线支付开启，公开注册常开，不做邀请制**。
 
-通过标准：页面与接口双侧均关闭，不能只关页面。
+- 公开注册：保持开启（`RegisterEnabled=true`），不做邀请制；
+- `OPENBRIDGER_ONLINE_PAYMENT_ENABLED=true`（发布 Compose 已默认 `true`）；
+- 验证：钱包页可见充值金额与支付宝/微信按钮；`POST /api/user/pay` 能下单；`/api/user/topup/info` 返回 `online_payment_enabled=true`、`pay_methods` 非空。
+
+通过标准：`/api/user/topup/info` 的 `online_payment_enabled` 为 `true` 且 `pay_methods` 含 `alipay`/`wxpay`；钱包页出现金额选择与支付方式按钮。
 
 ### S18 配置 SMTP 与发件域名
 
