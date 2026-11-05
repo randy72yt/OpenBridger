@@ -6206,7 +6206,6 @@
     "≈ Codex API value": "≈ Codex API value",
     "How credits work": "How credits work",
     "1 credit = ¥0.01. Credits are billed per token and work on every model — no per-model multipliers.": "1 credit = ¥0.01. Credits are billed per token and work on every model — no per-model multipliers.",
-    "Monthly plans come with credits for the whole month; semi-annual plans release a fresh batch of credits every week.": "Monthly plans come with credits for the whole month; semi-annual plans release a fresh batch of credits every week.",
     "When plan credits run out, usage continues on your wallet balance automatically — no interruption, no forced renewal.": "When plan credits run out, usage continues on your wallet balance automatically — no interruption, no forced renewal.",
     "Features & Services": "Features & Services",
     "All models, one subscription": "All models, one subscription",
@@ -6220,6 +6219,12 @@
     "Alipay & WeChat Pay": "Alipay & WeChat Pay",
     "Pay in seconds, credits arrive instantly and stay in your account.": "Pay in seconds, credits arrive instantly and stay in your account.",
     "Transparent per-call billing": "Transparent per-call billing",
-    "Every request shows its token usage and cost. No minimum spend.": "Every request shows its token usage and cost. No minimum spend."
+    "Every request shows its token usage and cost. No minimum spend.": "Every request shows its token usage and cost. No minimum spend.",
+    "Full model rate list": "Full model rate list",
+    "Expand rate list": "Expand rate list",
+    "Collapse rate list": "Collapse rate list",
+    "Every standard-pool model bills at 60% of its official list price — the struck-through number is what you would pay the official API, the bold number is what you pay here. Models marked with ◆ have no upstream channel discount and are offered at cost + service fee.": "Every standard-pool model bills at 60% of its official list price — the struck-through number is what you would pay the official API, the bold number is what you pay here. Models marked with ◆ have no upstream channel discount and are offered at cost + service fee.",
+    "per 1M tokens": "per 1M tokens",
+    "Monthly plans come with credits for the whole month; semi-annual plans release a fresh batch of credits every week. Base-pool models are available on every plan; the full model pool unlocks from the All-You-Can-Eat tier up.": "Monthly plans come with credits for the whole month; semi-annual plans release a fresh batch of credits every week. Base-pool models are available on every plan; the full model pool unlocks from the All-You-Can-Eat tier up."
   }
 }

@@ -76,7 +76,29 @@ import { formatQuota } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useSystemConfig } from "@/hooks/use-system-config";
 
+import {
+  getPricing,
+} from "@/features/pricing/api";
+import {
+  formatDynamicUnitPrice,
+  getDynamicPricingSummary,
+} from "@/features/pricing/lib/dynamic-price";
+import type { PricingModel } from "@/features/pricing/types";
+import { ChevronDown } from "lucide-react";
+
 import type { PaymentMethod, TopupInfo } from "../types";
+
+// Models whose upstream offers no channel discount: sold at cost + service
+// fee (~official list price) instead of the 60%-of-list rule. Keep in sync
+// with pricing plan §5 when the upstream offer set changes.
+const CHANNEL_PRICE_MODELS = new Set([
+  "glm-5.2",
+  "glm-5.3",
+  "deepseek-v4-pro",
+  "deepseek-v4.1-flash",
+  "kimi-k3",
+  "gpt-6-luna",
+]);
 
 interface SubscriptionPlansCardProps {
   topupInfo: TopupInfo | null;
@@ -161,6 +183,54 @@ export function SubscriptionPlansCard({
   const [refreshing, setRefreshing] = useState(false);
 
   const [purchaseOpen, setPurchaseOpen] = useState(false);
+  const [ratesOpen, setRatesOpen] = useState(false);
+  const [pricingModels, setPricingModels] = useState<PricingModel[] | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!ratesOpen || pricingModels) return;
+    getPricing()
+      .then((d) => setPricingModels(d?.data || []))
+      .catch(() => setPricingModels([]));
+  }, [ratesOpen, pricingModels]);
+
+  // Per-model rate rows: our input/output price in USD per 1M tokens, plus
+  // the official list price implied by the 60%-of-list rule.
+  const modelRateRows = useMemo(() => {
+    if (!pricingModels) return [];
+    const rows = pricingModels
+      .map((m) => {
+        const isDynamic =
+          m.billing_mode === "tiered_expr" && Boolean(m.billing_expr);
+        let inputUsd = Number.NaN;
+        let outputUsd = Number.NaN;
+        if (isDynamic) {
+          const summary = getDynamicPricingSummary(m, {
+            tokenUnit: "1M",
+            usdExchangeRate,
+          });
+          const entries = summary?.entries || [];
+          const input = entries.find((e) => e.key === "p");
+          const output = entries.find((e) => e.key === "c");
+          inputUsd = input?.value ?? Number.NaN;
+          outputUsd = output?.value ?? Number.NaN;
+        } else if (Number(m.model_ratio) > 0) {
+          inputUsd = Number(m.model_ratio) * 2;
+          outputUsd = inputUsd * Number(m.completion_ratio || 1);
+        }
+        if (!Number.isFinite(inputUsd) || inputUsd <= 0) return null;
+        return {
+          name: m.model_name,
+          inputUsd,
+          outputUsd,
+          channel: CHANNEL_PRICE_MODELS.has(m.model_name),
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => !!r)
+      .sort((a, b) => a.inputUsd - b.inputUsd);
+    return rows;
+  }, [pricingModels, usdExchangeRate]);
   const [selectedPlan, setSelectedPlan] = useState<PlanRecord | null>(null);
   const [periodKey, setPeriodKey] = useState("");
 
@@ -928,7 +998,7 @@ export function SubscriptionPlansCard({
               <p className="text-sm font-medium">{t("How credits work")}</p>
               <div className="text-muted-foreground mt-1.5 space-y-1 text-xs leading-relaxed">
                 <p>{t("1 credit = ¥0.01. Credits are billed per token and work on every model — no per-model multipliers.")}</p>
-                <p>{t("Monthly plans come with credits for the whole month; semi-annual plans release a fresh batch of credits every week.")}</p>
+                <p>{t("Monthly plans come with credits for the whole month; semi-annual plans release a fresh batch of credits every week. Base-pool models are available on every plan; the full model pool unlocks from the All-You-Can-Eat tier up.")}</p>
                 <p>{t("When plan credits run out, usage continues on your wallet balance automatically — no interruption, no forced renewal.")}</p>
               </div>
             </div>
@@ -992,6 +1062,98 @@ export function SubscriptionPlansCard({
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Full model rate list */}
+            <div className="rounded-xl border p-3 sm:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium">
+                  {t("Full model rate list")}
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setRatesOpen((v) => !v)}
+                >
+                  {ratesOpen
+                    ? t("Collapse rate list")
+                    : t("Expand rate list", {
+                        count: modelRateRows.length || (pricingModels ? 0 : 49),
+                      })}
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 transition-transform ${ratesOpen ? "rotate-180" : ""}`}
+                  />
+                </Button>
+              </div>
+              <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
+                {t(
+                  "Every standard-pool model bills at 60% of its official list price — the struck-through number is what you would pay the official API, the bold number is what you pay here. Models marked with ◆ have no upstream channel discount and are offered at cost + service fee.",
+                )}
+              </p>
+              {ratesOpen && (
+                <div className="mt-3 max-h-72 overflow-y-auto">
+                  {pricingModels === null ? (
+                    <Skeleton className="h-40 w-full" />
+                  ) : (
+                    <table className="w-full text-left text-xs">
+                      <thead className="text-muted-foreground sticky top-0 bg-background">
+                        <tr className="border-b">
+                          <th className="py-1.5 pr-3 font-medium">
+                            {t("Model")}
+                          </th>
+                          <th className="py-1.5 pr-3 font-medium">
+                            {t("Input")} / {t("per 1M tokens")}
+                          </th>
+                          <th className="py-1.5 pr-3 font-medium">
+                            {t("Output")} / {t("per 1M tokens")}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {modelRateRows.map((row) => {
+                          const priceOpts = {
+                            tokenUnit: "1M" as const,
+                            usdExchangeRate,
+                          };
+                          return (
+                            <tr
+                              key={row.name}
+                              className="border-b last:border-0"
+                            >
+                              <td className="py-1.5 pr-3 font-medium">
+                                {row.channel && (
+                                  <span className="text-warning mr-1">◆</span>
+                                )}
+                                {row.name}
+                              </td>
+                              <td className="py-1.5 pr-3">
+                                {!row.channel && (
+                                  <span className="text-muted-foreground mr-1.5 line-through">
+                                    {formatDynamicUnitPrice(
+                                      row.inputUsd / 0.6,
+                                      priceOpts,
+                                    )}
+                                  </span>
+                                )}
+                                <span className="font-semibold">
+                                  {formatDynamicUnitPrice(row.inputUsd, priceOpts)}
+                                </span>
+                              </td>
+                              <td className="py-1.5 pr-3">
+                                {Number.isFinite(row.outputUsd) &&
+                                row.outputUsd > 0
+                                  ? formatDynamicUnitPrice(row.outputUsd, priceOpts)
+                                  : "-"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ) : (

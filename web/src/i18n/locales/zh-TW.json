@@ -6101,7 +6101,6 @@
     "≈ Codex API value": "≈ Codex API 等值",
     "How credits work": "積分說明",
     "1 credit = ¥0.01. Credits are billed per token and work on every model — no per-model multipliers.": "1 積分 = ¥0.01。積分按 token 計費、全模型通用，沒有任何模型倍率。",
-    "Monthly plans come with credits for the whole month; semi-annual plans release a fresh batch of credits every week.": "月付套餐的積分整月可用；半年付套餐每週發放一批新積分。",
     "When plan credits run out, usage continues on your wallet balance automatically — no interruption, no forced renewal.": "套餐積分用完自動接續錢包餘額，不中斷服務，也不用強制續費。",
     "Features & Services": "功能與服務",
     "All models, one subscription": "一個訂閱，全模型通用",
@@ -6115,6 +6114,12 @@
     "Alipay & WeChat Pay": "支付寶 / 微信支付",
     "Pay in seconds, credits arrive instantly and stay in your account.": "付款秒到賬，積分即時入賬。",
     "Transparent per-call billing": "按次透明計費",
-    "Every request shows its token usage and cost. No minimum spend.": "每次呼叫的 token 用量與費用都可查詢，無最低消費。"
+    "Every request shows its token usage and cost. No minimum spend.": "每次呼叫的 token 用量與費用都可查詢，無最低消費。",
+    "Full model rate list": "全模型費率明細",
+    "Expand rate list": "展開 {{count}} 個模型費率",
+    "Collapse rate list": "收起費率明細",
+    "Every standard-pool model bills at 60% of its official list price — the struck-through number is what you would pay the official API, the bold number is what you pay here. Models marked with ◆ have no upstream channel discount and are offered at cost + service fee.": "標準池模型一律按官方掛牌價 6 折計費——劃線價是你在官方 API 要付的價格，加粗價是你在本站實付的價格。標 ◆ 的模型上游未提供渠道折扣，按原價 + 服務費提供。",
+    "per 1M tokens": "每百萬 token",
+    "Monthly plans come with credits for the whole month; semi-annual plans release a fresh batch of credits every week. Base-pool models are available on every plan; the full model pool unlocks from the All-You-Can-Eat tier up.": "月付套餐的積分整月可用；半年付套餐每週發放一批新積分。基礎池模型全檔位可用，吃到飽及以上解鎖全部模型。"
   }
 }
