@@ -15,6 +15,10 @@ ADD go.mod go.sum ./
 # relaykit is a local submodule referenced via replace; its go.mod must be
 # present for go mod download to resolve the main module graph.
 ADD relaykit/go.mod ./relaykit/go.mod
+# 模块源可覆盖：中国大陆直连 proxy.golang.org 会长时间挂住，构建时传
+# --build-arg GOPROXY=https://goproxy.cn,direct 即可切换镜像源。
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
 RUN go mod download
 
 COPY . .
