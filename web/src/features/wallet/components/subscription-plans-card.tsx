@@ -344,14 +344,17 @@ export function SubscriptionPlansCard({
   // period group.
   const matchTier = useCallback(
     (candidates: PlanRecord[], p: PlanRecord): PlanRecord | undefined => {
-      const rank = (list: PlanRecord[], item: PlanRecord) =>
-        [...list]
-          .sort(
-            (a, b) =>
-              Number(a?.plan?.sort_order || 0) - Number(b?.plan?.sort_order || 0),
-          )
-          .findIndex((m) => m?.plan?.id === item?.plan?.id);
-      const wanted = rank(plans, p);
+      // Rank within the plan's own billing-period group, then pick the same
+      // rank from the candidates group (each sorted by sort_order).
+      const groupKey = (item: PlanRecord) =>
+        `${item?.plan?.duration_unit || "month"}:${item?.plan?.duration_value || 1}`;
+      const ownGroup = plans.filter((m) => groupKey(m) === groupKey(p));
+      const wanted = [...ownGroup]
+        .sort(
+          (a, b) =>
+            Number(a?.plan?.sort_order || 0) - Number(b?.plan?.sort_order || 0),
+        )
+        .findIndex((m) => m?.plan?.id === p?.plan?.id);
       if (wanted < 0) return undefined;
       const sorted = [...candidates].sort(
         (a, b) =>
@@ -519,19 +522,20 @@ export function SubscriptionPlansCard({
             <Card
               key={plan.id}
               data-card-hover="false"
-              className={cn(isPopular && "border-primary/70 shadow-sm")}
+              className={cn(
+                "relative",
+                isPopular && "border-primary/70 shadow-sm",
+              )}
             >
-              <CardContent className="flex h-full flex-col p-4 sm:p-5">
-                {isPopular && (
-                  <StatusBadge
-                    variant="info"
-                    copyable={false}
-                    className="mb-2 self-start"
-                  >
+              {isPopular && (
+                <div className="pointer-events-none absolute -top-3 left-4 z-10">
+                  <StatusBadge variant="info" copyable={false}>
                     <Sparkles className="h-3 w-3" />
                     {t("Recommended")}
                   </StatusBadge>
-                )}
+                </div>
+              )}
+              <CardContent className="flex h-full flex-col p-4 sm:p-5">
 
                 <div className="mb-2 min-w-0">
                   <h4 className="truncate font-semibold">
