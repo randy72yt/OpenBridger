@@ -532,6 +532,28 @@ func (c *upstreamUsageLogClient) windowWalk(models []string, since, until int64)
 	probed := false
 	failed := 0
 	var lastErr error
+
+	// Does the provider actually filter on model_name? Asking 48 models when it
+	// does not returns the same page 48 times: no extra coverage, 48x the
+	// requests, and a 429 that outlives the run. Two one-page probes answer the
+	// question for the price of two requests, and their rows are reused below.
+	prefetched := make(map[string][]upstreamUsageLogRecord, 2)
+	if len(models) >= 2 {
+		firstRows, firstErr := c.fetchPage(1, since, until, models[0])
+		secondRows, secondErr := c.fetchPage(1, since, until, models[1])
+		if firstErr == nil && secondErr == nil && filterLooksIgnored(firstRows, secondRows) {
+			// supported=false sends the caller to the tail walk, which reads the
+			// window once instead of once per model.
+			return nil, false, failed, nil
+		}
+		if firstErr == nil && len(firstRows) > 0 {
+			prefetched[models[0]] = firstRows
+		}
+		if secondErr == nil && len(secondRows) > 0 {
+			prefetched[models[1]] = secondRows
+		}
+	}
+
 	for index, name := range models {
 		if c.requests >= pricingCalibrationWindowRequestBudget {
 			break
@@ -554,7 +576,18 @@ func (c *upstreamUsageLogClient) windowWalk(models []string, since, until int64)
 		}
 		kept := 0
 		for page := 1; page <= pricingCalibrationModelPages; page++ {
-			rows, err := c.fetchPage(page, since, until, name)
+			var rows []upstreamUsageLogRecord
+			var err error
+			if page == 1 {
+				if cached, ok := prefetched[name]; ok {
+					rows = cached
+					delete(prefetched, name)
+				} else {
+					rows, err = c.fetchPage(page, since, until, name)
+				}
+			} else {
+				rows, err = c.fetchPage(page, since, until, name)
+			}
 			if err != nil {
 				failed++
 				lastErr = err
@@ -635,6 +668,32 @@ func newestCreatedAt(rows []upstreamUsageLogRecord) int64 {
 		}
 	}
 	return newest
+}
+
+// filterLooksIgnored compares the first page of two different model filters.
+// Two distinct models cannot share most of their log rows, so heavy overlap
+// means the provider answered both with the same unfiltered page - which the
+// production provider at api.dddai.dev does for model_name on /log/token.
+func filterLooksIgnored(first, second []upstreamUsageLogRecord) bool {
+	if len(first) == 0 || len(second) == 0 {
+		return false
+	}
+	ids := make(map[int64]struct{}, len(first))
+	for _, row := range first {
+		if row.ID == 0 {
+			// Without ids there is no reliable identity to compare; assume the
+			// filter works rather than degrade to a single global read by accident.
+			return false
+		}
+		ids[row.ID] = struct{}{}
+	}
+	overlap := 0
+	for _, row := range second {
+		if _, ok := ids[row.ID]; ok {
+			overlap++
+		}
+	}
+	return overlap*2 >= len(first)
 }
 
 

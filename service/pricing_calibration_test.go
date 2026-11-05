@@ -348,6 +348,7 @@ func TestFetchUpstreamUsageLogsReturnsEmptyWhenWindowPredatesLog(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 type usageLogSeed struct {
+	id        int64
 	model     string
 	createdAt int64
 }
@@ -421,7 +422,7 @@ func windowedUsageLogServer(t *testing.T, rows []usageLogSeed, opts usageLogServ
 				fmt.Fprint(w, ",")
 			}
 			fmt.Fprintf(w, `{"id":%d,"created_at":%d,"model_name":%q,"quota":1,"prompt_tokens":10,"completion_tokens":1,"group":"g"}`,
-				index+1, matched[index].createdAt, matched[index].model)
+				matched[index].id, matched[index].createdAt, matched[index].model)
 		}
 		fmt.Fprint(w, `]}`)
 	}))
@@ -431,9 +432,18 @@ func windowedUsageLogServer(t *testing.T, rows []usageLogSeed, opts usageLogServ
 // model, the shape that made the global tail walk price only the hot models.
 func seedCalibrationLog(base int64, recentPerModel map[string]int) ([]usageLogSeed, int64) {
 	rows := make([]usageLogSeed, 0)
+	// Every row gets a stable, globally unique id: the provider's log ids are
+	// unique, and the "is model_name honoured?" probe compares id sets across
+	// two model queries. Reusing per-page indexes would look like an ignored
+	// filter and send every test down the tail walk.
+	nextID := base
+	appendRow := func(model string, createdAt int64) {
+		rows = append(rows, usageLogSeed{id: nextID, model: model, createdAt: createdAt})
+		nextID++
+	}
 	// History: 200 rows two days back, all outside the window.
 	for i := 0; i < 200; i++ {
-		rows = append(rows, usageLogSeed{model: "m-legacy", createdAt: base + int64(i)*60})
+		appendRow("m-legacy", base+int64(i)*60)
 	}
 	since := base + 2*86400
 	models := make([]string, 0, len(recentPerModel))
@@ -443,7 +453,7 @@ func seedCalibrationLog(base int64, recentPerModel map[string]int) ([]usageLogSe
 	sort.Strings(models)
 	for _, model := range models {
 		for i := 0; i < recentPerModel[model]; i++ {
-			rows = append(rows, usageLogSeed{model: model, createdAt: since + int64(i)*60})
+			appendRow(model, since+int64(i)*60)
 		}
 	}
 	return rows, since
@@ -675,4 +685,26 @@ func TestWindowWalkStopsQuicklyOnMinuteScaleRetryAfter(t *testing.T) {
 	for _, record := range records {
 		assert.Equal(t, "m-a", record.ModelName)
 	}
+}
+
+// The production provider accepts model_name but ignores it. Asking 48 models
+// then returns the same page 48 times: no extra coverage, 48x the requests, and
+// a 429 with an 18-minute Retry-After. Two probe pages must be enough to notice.
+func TestWindowWalkFallsBackWhenProviderIgnoresModelFilter(t *testing.T) {
+	fastRetry(t)
+	base := int64(1_800_000_000)
+	rows, since := seedCalibrationLog(base, map[string]int{"m-a": 6, "m-b": 6, "m-c": 6})
+	requests := 0
+	server := windowedUsageLogServer(t, rows, usageLogServerOptions{
+		honorModel:  false, // model_name accepted but not applied
+		honorWindow: true,
+		requests:    &requests,
+	})
+	defer server.Close()
+
+	records, windowed, _, err := fetchChannelUsageLogs(context.Background(), calibrationTestChannel(server.URL), since, since+86400, []string{"m-a", "m-b", "m-c"})
+	require.NoError(t, err)
+	assert.False(t, windowed, "an ignored model filter must degrade to the tail walk")
+	require.NotEmpty(t, records)
+	assert.Less(t, requests, 20, "detection must cost a couple of requests, not one per model")
 }
