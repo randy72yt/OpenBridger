@@ -152,6 +152,54 @@ func PublishPricingProposal(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
+func BatchUpdatePricingProposals(c *gin.Context) {
+	var request struct {
+		Action string  `json:"action"`
+		IDs    []int64 `json:"ids"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	if len(request.IDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "ids is required"})
+		return
+	}
+	var result *service.PricingProposalBatchResult
+	switch request.Action {
+	case "approve":
+		result = service.BatchApprovePricingProposals(request.IDs, c.GetInt("id"))
+	case "reject":
+		result = service.BatchRejectPricingProposals(request.IDs)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "action must be approve or reject"})
+		return
+	}
+	recordManageAudit(c, "pricing.proposal.batch_"+request.Action, map[string]interface{}{"ids": request.IDs, "succeeded": len(result.Succeeded), "failed": len(result.Failed)})
+	common.ApiSuccess(c, result)
+}
+
+func DisablePricingPolicy(c *gin.Context) {
+	var request struct {
+		PublicModel string `json:"public_model"`
+		ServiceTier string `json:"service_tier"`
+	}
+	if err := common.DecodeJson(c.Request.Body, &request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	if request.ServiceTier == "" {
+		request.ServiceTier = "default"
+	}
+	disabled, err := service.DisablePricingPolicyByModel(request.PublicModel, request.ServiceTier)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	recordManageAudit(c, "pricing.policy.disable", map[string]interface{}{"model": request.PublicModel, "tier": request.ServiceTier})
+	common.ApiSuccess(c, gin.H{"disabled": disabled})
+}
+
 func GetPricingRisks(c *gin.Context) {
 	risks, err := service.PricingRisks()
 	if err != nil {

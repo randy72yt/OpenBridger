@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	"gorm.io/gorm"
@@ -302,6 +303,14 @@ func recalculatePricingProposals(ctx context.Context) (int, []int64, error) {
 			}
 			return created, ids, err
 		}
+		// Content gate: when the newest pending proposal already carries the
+		// same costs and proposed prices, keep it instead of rejecting and
+		// re-inserting a byte-identical row. Without this, every scheduled
+		// sync turned the whole policy table into rejected-proposal churn.
+		if existing, ok := model.LatestPendingModelPriceProposal(proposal.PublicModel, proposal.ServiceTier); ok &&
+			pendingProposalUnchanged(existing, proposal) {
+			continue
+		}
 		if err := model.ReplacePendingModelPriceProposal(proposal); err != nil {
 			return created, ids, err
 		}
@@ -312,6 +321,25 @@ func recalculatePricingProposals(ctx context.Context) (int, []int64, error) {
 		created++
 	}
 	return created, ids, nil
+}
+
+// pendingProposalUnchanged reports whether the existing pending proposal and
+// the freshly built one describe the same pricing decision: identical policy,
+// costs, proposed prices and stress numbers. Floats compare with an epsilon
+// because upstream decimals round-trip through float64.
+func pendingProposalUnchanged(existing, next *model.ModelPriceProposal) bool {
+	if existing == nil || next == nil || existing.PolicyID != next.PolicyID {
+		return false
+	}
+	const eps = 1e-9
+	same := func(a, b float64) bool { return math.Abs(a-b) <= eps }
+	return same(existing.ExpectedInputCost, next.ExpectedInputCost) &&
+		same(existing.ExpectedOutputCost, next.ExpectedOutputCost) &&
+		same(existing.ProposedInputPrice, next.ProposedInputPrice) &&
+		same(existing.ProposedOutputPrice, next.ProposedOutputPrice) &&
+		same(existing.StressInputCost, next.StressInputCost) &&
+		same(existing.StressOutputCost, next.StressOutputCost) &&
+		existing.ExpectedMarginBPS == next.ExpectedMarginBPS
 }
 
 // costMultiplierForOffer picks the factor applied to an offer's base cost.
@@ -502,6 +530,152 @@ func RejectPricingProposal(id int64) error {
 	return nil
 }
 
+// PricingProposalBatchResult reports per-id outcomes so the console can toast
+// exactly which proposals failed and why instead of failing the whole batch.
+type PricingProposalBatchResult struct {
+	Succeeded []int64                       `json:"succeeded"`
+	Failed    []PricingProposalBatchFailure `json:"failed"`
+}
+
+type PricingProposalBatchFailure struct {
+	ID      int64  `json:"id"`
+	Message string `json:"message"`
+}
+
+// BatchApprovePricingProposals approves many pending proposals in one call.
+// Each id goes through the same staleness checks as the single-item path;
+// a stale or already-handled proposal only fails its own entry.
+func BatchApprovePricingProposals(ids []int64, operatorID int) *PricingProposalBatchResult {
+	return batchPricingProposalUpdates(ids, func(id int64) error {
+		return ApprovePricingProposal(id, operatorID)
+	})
+}
+
+// BatchRejectPricingProposals rejects many pending or approved proposals.
+func BatchRejectPricingProposals(ids []int64) *PricingProposalBatchResult {
+	return batchPricingProposalUpdates(ids, RejectPricingProposal)
+}
+
+func batchPricingProposalUpdates(ids []int64, apply func(int64) error) *PricingProposalBatchResult {
+	result := &PricingProposalBatchResult{
+		Succeeded: make([]int64, 0, len(ids)),
+		Failed:    make([]PricingProposalBatchFailure, 0),
+	}
+	seen := make(map[int64]struct{}, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		if err := apply(id); err != nil {
+			result.Failed = append(result.Failed, PricingProposalBatchFailure{ID: id, Message: err.Error()})
+			continue
+		}
+		result.Succeeded = append(result.Succeeded, id)
+	}
+	return result
+}
+
+// MissingOfferVerification is the outcome of one post-sync sweep over enabled
+// policies whose primary channel lost its offer. It is the evidence trail for
+// the "verified missing → auto-disable" path.
+type MissingOfferVerification struct {
+	Checked      int      `json:"checked"`
+	MissingNow   int      `json:"missing_now"`
+	AutoDisabled []string `json:"auto_disabled,omitempty"`
+	Recovered    []string `json:"recovered,omitempty"`
+	Error        string   `json:"error,omitempty"`
+}
+
+// pricingOfferMissingDisableChecks is how many consecutive successful syncs
+// must find no current offer anywhere before the policy is auto-disabled.
+// With the default 12h sync cadence the default of 3 means ~36h of verified
+// absence — enough to ride out a single failed collection or an upstream
+// price-list hiccup.
+func pricingOfferMissingDisableChecks() int {
+	checks := common.GetEnvOrDefault("PRICING_OFFER_MISSING_DISABLE_CHECKS", 3)
+	if checks < 1 {
+		checks = 1
+	}
+	return checks
+}
+
+// DisablePricingPolicyByModel is the risk-console "remove model" action: it
+// disables the model-scoped policy so the model stops being repriced. Model
+// availability itself is channel-level and stays untouched.
+func DisablePricingPolicyByModel(publicModel, serviceTier string) (bool, error) {
+	return model.DisableModelPricePolicy(publicModel, serviceTier)
+}
+
+// VerifyMissingOffers cross-checks every enabled policy against the offer
+// inventory. A model offered by any channel is fine (missing state resets);
+// a model offered nowhere accumulates verified misses and its policy is
+// auto-disabled once the threshold is reached, so a genuinely retired model
+// stops polluting the risk list without human per-run action.
+func VerifyMissingOffers(ctx context.Context) *MissingOfferVerification {
+	verification := &MissingOfferVerification{AutoDisabled: []string{}, Recovered: []string{}}
+	policies, err := model.ListModelPricePolicies()
+	if err != nil {
+		verification.Error = err.Error()
+		return verification
+	}
+	now := common.GetTimestamp()
+	threshold := pricingOfferMissingDisableChecks()
+	for i := range policies {
+		policy := &policies[i]
+		if policy.IsGlobal() || !policy.Enabled {
+			continue
+		}
+		verification.Checked++
+		if _, err := currentOffer(policy.PublicModel, policy.PrimaryChannelID, now); err == nil {
+			if policy.MissingSince != 0 || policy.MissingChecks != 0 {
+				if err := model.DB.Model(&model.ModelPricePolicy{}).Where("id = ?", policy.ID).
+					Updates(map[string]any{"missing_since": 0, "missing_checks": 0, "updated_at": now}).Error; err != nil {
+					verification.Error = err.Error()
+					return verification
+				}
+				verification.Recovered = append(verification.Recovered, policy.PublicModel)
+			}
+			continue
+		}
+		offerChannels, err := model.ChannelsWithCurrentOffer(policy.PublicModel, now)
+		if err != nil {
+			verification.Error = err.Error()
+			return verification
+		}
+		if len(offerChannels) > 0 {
+			// Another channel still carries the model: the policy channel
+			// binding is stale, not the model. Leave disabling to the operator.
+			continue
+		}
+		checks := policy.MissingChecks + 1
+		missingSince := policy.MissingSince
+		if missingSince == 0 {
+			missingSince = now
+		}
+		updates := map[string]any{"missing_since": missingSince, "missing_checks": checks, "updated_at": now}
+		if checks >= threshold {
+			updates["enabled"] = false
+			updates["missing_since"] = 0
+			updates["missing_checks"] = 0
+			verification.AutoDisabled = append(verification.AutoDisabled, policy.PublicModel)
+		}
+		if err := model.DB.Model(&model.ModelPricePolicy{}).Where("id = ?", policy.ID).Updates(updates).Error; err != nil {
+			verification.Error = err.Error()
+			return verification
+		}
+		verification.MissingNow++
+	}
+	if len(verification.AutoDisabled) > 0 {
+		logger.LogWarn(ctx, fmt.Sprintf("pricing: auto-disabled %d policy(-ies) after %d verified missing-offer checks: %s",
+			len(verification.AutoDisabled), threshold, strings.Join(verification.AutoDisabled, ", ")))
+	}
+	return verification
+}
+
 func PublishPricingProposal(id int64) error {
 	var proposal model.ModelPriceProposal
 	if err := model.DB.Where("id = ? AND status = ?", id, model.PricingProposalApproved).First(&proposal).Error; err != nil {
@@ -570,6 +744,26 @@ func channelPricingRisks(policy *model.ModelPricePolicy, role string, channelID 
 			risk["last_collected_at"] = latest.CollectedAt
 			risk["expires_at"] = latest.ExpiresAt
 			risk["upstream_group"] = latest.UpstreamGroup
+		}
+		// Post-sync verification state: how many consecutive sweeps verified
+		// the model missing everywhere, and whether some other channel still
+		// offers it (meaning the binding is stale, not the model gone).
+		risk["missing_checks"] = policy.MissingChecks
+		risk["missing_disable_after"] = pricingOfferMissingDisableChecks()
+		if otherChannels, err := model.ChannelsWithCurrentOffer(policy.PublicModel, now); err == nil {
+			known := map[int]struct{}{policy.PrimaryChannelID: {}}
+			if policy.BackupChannelID > 0 {
+				known[policy.BackupChannelID] = struct{}{}
+			}
+			others := make([]int, 0, len(otherChannels))
+			for _, id := range otherChannels {
+				if _, ok := known[id]; !ok {
+					others = append(others, id)
+				}
+			}
+			if len(others) > 0 {
+				risk["other_channels"] = others
+			}
 		}
 		return []map[string]any{risk}
 	}

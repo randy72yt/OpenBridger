@@ -1,9 +1,9 @@
 {
   "translation": {
-    "0 keeps manual approval. A positive value publishes increases within that many basis points.": "0 表示仍需人工审批。大于 0 时，涨幅在该基点以内会自动发布。",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
+    "0 keeps manual approval. A positive value publishes increases within that many basis points.": "0 表示仍需人工审批。大于 0 时，涨幅在该基点以内会自动发布。",
     "_copy": "_复制",
     "，": "，",
     ", and": "，和",
@@ -63,7 +63,7 @@
     "{{count}} months ago": "{{count}} 个月前",
     "{{count}} override": "{{count}} 个覆盖",
     "{{count}} records selected. Bulk actions are available.": "已选择 {{count}} 条记录，可执行批量操作。",
-    "{{count}} selected": "已选择 {{count}} 条",
+    "{{count}} selected": "已选 {{count}} 项",
     "{{count}} selected models": "已选 {{count}} 个模型",
     "{{count}} selected outside the current filters": "另有 {{count}} 个已选模型不在当前筛选范围内",
     "{{count}} selected targets available for bulk copy.": "已选择 {{count}} 个目标，可用于批量复制。",
@@ -2335,7 +2335,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "相关项目",
     "footer.defaultCopyright": "版权所有。",
-    "footer.newapi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
+    "footer.new\u0061pi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "对于 2025 年 5 月 10 日之后添加的渠道，在部署时无需从模型名称中移除 \".\"",
     "For developers and teams": "为开发者与团队而建",
     "For private deployments, format: https://fastgpt.run/api/openapi": "对于私有部署，格式为：https://fastgpt.run/api/openapi",
@@ -6225,6 +6225,17 @@
     "Collapse rate list": "收起费率明细",
     "Every standard-pool model bills at 60% of its official list price — the struck-through number is what you would pay the official API, the bold number is what you pay here. Models marked with ◆ have no upstream channel discount and are offered at cost + service fee.": "标准池模型一律按官方挂牌价 6 折计费——划线价是你在官方 API 要付的价格，加粗价是你在本站实付的价格。标 ◆ 的模型上游未提供渠道折扣，按原价 + 服务费提供。",
     "per 1M tokens": "每百万 token",
-    "Monthly plans come with credits for the whole month; semi-annual plans release a fresh batch of credits every week. Base-pool models are available on every plan; the full model pool unlocks from the All-You-Can-Eat tier up.": "月付套餐的积分整月可用；半年付套餐每周发放一批新积分。基础池模型全档位可用，吃到饱及以上解锁全部模型。"
+    "Monthly plans come with credits for the whole month; semi-annual plans release a fresh batch of credits every week. Base-pool models are available on every plan; the full model pool unlocks from the All-You-Can-Eat tier up.": "月付套餐的积分整月可用；半年付套餐每周发放一批新积分。基础池模型全档位可用，吃到饱及以上解锁全部模型。",
+    "Approve selected": "批量通过",
+    "Reject selected": "批量驳回",
+    "{{done}} proposals {{action}}d, {{failed}} failed": "{{done}} 条提案已{{action}}，{{failed}} 条失败",
+    "{{count}} proposals {{action}}d": "{{count}} 条提案已{{action}}",
+    "Model pricing policy disabled": "该模型已移出自动定价",
+    "Still offered by channel {{channels}}": "其他渠道仍有报价：{{channels}}",
+    "Verified missing {{checks}}/{{threshold}} sweeps — auto-disables after the last one": "已连续 {{checks}}/{{threshold}} 次验证缺失——最后一次后自动停售",
+    "Remove model": "移除该模型",
+    "Each successful sync verifies missing models across every channel. After {{threshold}} verified sweeps with no offer anywhere, the model is taken out of repricing automatically.": "每次成功同步都会跨所有渠道验证缺失的模型。连续 {{threshold}} 次验证全无报价后，该模型自动退出自动定价。",
+    "approve": "通过",
+    "reject": "驳回"
   }
 }

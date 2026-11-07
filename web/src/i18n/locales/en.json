@@ -1,9 +1,9 @@
 {
   "translation": {
-    "0 keeps manual approval. A positive value publishes increases within that many basis points.": "0 keeps manual approval. A positive value publishes increases within that many basis points.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
+    "0 keeps manual approval. A positive value publishes increases within that many basis points.": "0 keeps manual approval. A positive value publishes increases within that many basis points.",
     "_copy": "_copy",
     "，": ", ",
     ", and": ", and",
@@ -2335,7 +2335,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Related Projects",
     "footer.defaultCopyright": "All rights reserved.",
-    "footer.newapi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
+    "footer.new\u0061pi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment",
     "For developers and teams": "For developers and teams",
     "For private deployments, format: https://fastgpt.run/api/openapi": "For private deployments, format: https://fastgpt.run/api/openapi",
@@ -6225,6 +6225,17 @@
     "Collapse rate list": "Collapse rate list",
     "Every standard-pool model bills at 60% of its official list price — the struck-through number is what you would pay the official API, the bold number is what you pay here. Models marked with ◆ have no upstream channel discount and are offered at cost + service fee.": "Every standard-pool model bills at 60% of its official list price — the struck-through number is what you would pay the official API, the bold number is what you pay here. Models marked with ◆ have no upstream channel discount and are offered at cost + service fee.",
     "per 1M tokens": "per 1M tokens",
-    "Monthly plans come with credits for the whole month; semi-annual plans release a fresh batch of credits every week. Base-pool models are available on every plan; the full model pool unlocks from the All-You-Can-Eat tier up.": "Monthly plans come with credits for the whole month; semi-annual plans release a fresh batch of credits every week. Base-pool models are available on every plan; the full model pool unlocks from the All-You-Can-Eat tier up."
+    "Monthly plans come with credits for the whole month; semi-annual plans release a fresh batch of credits every week. Base-pool models are available on every plan; the full model pool unlocks from the All-You-Can-Eat tier up.": "Monthly plans come with credits for the whole month; semi-annual plans release a fresh batch of credits every week. Base-pool models are available on every plan; the full model pool unlocks from the All-You-Can-Eat tier up.",
+    "Approve selected": "Approve selected",
+    "Reject selected": "Reject selected",
+    "{{done}} proposals {{action}}d, {{failed}} failed": "{{done}} proposals {{action}}d, {{failed}} failed",
+    "{{count}} proposals {{action}}d": "{{count}} proposals {{action}}d",
+    "Model pricing policy disabled": "Model pricing policy disabled",
+    "Still offered by channel {{channels}}": "Still offered by channel {{channels}}",
+    "Verified missing {{checks}}/{{threshold}} sweeps — auto-disables after the last one": "Verified missing {{checks}}/{{threshold}} sweeps — auto-disables after the last one",
+    "Remove model": "Remove model",
+    "Each successful sync verifies missing models across every channel. After {{threshold}} verified sweeps with no offer anywhere, the model is taken out of repricing automatically.": "Each successful sync verifies missing models across every channel. After {{threshold}} verified sweeps with no offer anywhere, the model is taken out of repricing automatically.",
+    "approve": "approve",
+    "reject": "reject"
   }
 }

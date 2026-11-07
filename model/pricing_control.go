@@ -99,8 +99,13 @@ type ModelPricePolicy struct {
 	AutoPublishChangeBPS   int    `json:"auto_publish_change_bps"`
 	PriceLocked            bool   `json:"price_locked"`
 	Enabled                bool   `json:"enabled"`
-	CreatedAt              int64  `json:"created_at" gorm:"bigint"`
-	UpdatedAt              int64  `json:"updated_at" gorm:"bigint"`
+	// Missing-offer tracking: MissingSince is the first successful sync that
+	// found no current offer anywhere, MissingChecks counts consecutive
+	// verified misses. A valid offer on any channel resets both to zero.
+	MissingSince  int64 `json:"missing_since" gorm:"bigint"`
+	MissingChecks int   `json:"missing_checks"`
+	CreatedAt     int64 `json:"created_at" gorm:"bigint"`
+	UpdatedAt     int64 `json:"updated_at" gorm:"bigint"`
 }
 
 // IsGlobal reports whether this row is the default policy. Older rows have an
@@ -512,6 +517,55 @@ func RejectOtherApprovedPriceProposals(tx *gorm.DB, publicModel string, exceptID
 	return tx.Model(&ModelPriceProposal{}).
 		Where("public_model = ? AND status = ? AND id <> ?", publicModel, PricingProposalApproved, exceptID).
 		Updates(map[string]any{"status": PricingProposalRejected, "updated_at": common.GetTimestamp()}).Error
+}
+
+// LatestPendingModelPriceProposal returns the newest pending proposal for a
+// model+tier. Recalculation uses it to skip inserting a duplicate when neither
+// the expected costs nor the proposed prices moved.
+func LatestPendingModelPriceProposal(publicModel, serviceTier string) (*ModelPriceProposal, bool) {
+	var proposal ModelPriceProposal
+	err := DB.Where("public_model = ? AND service_tier = ? AND status = ?", publicModel, serviceTier, PricingProposalPending).
+		Order("id desc").First(&proposal).Error
+	if err != nil {
+		return nil, false
+	}
+	return &proposal, true
+}
+
+// PruneModelPriceProposals deletes proposals with the given statuses whose
+// updated_at precedes the cutoff. Rejected rows are pure churn history, so the
+// retention job bounds them by time; approved/published rows are the pricing
+// audit trail and are pruned only by an explicit caller.
+func PruneModelPriceProposals(statuses []string, cutoff int64) (int64, error) {
+	if len(statuses) == 0 || cutoff <= 0 {
+		return 0, errors.New("proposal prune requires statuses and a cutoff")
+	}
+	result := DB.Where("status IN ? AND updated_at < ?", statuses, cutoff).Delete(&ModelPriceProposal{})
+	return result.RowsAffected, result.Error
+}
+
+// DisableModelPricePolicy disables the model-scoped pricing policy so the
+// model stops being repriced. It reports whether a row was actually disabled.
+func DisableModelPricePolicy(publicModel, serviceTier string) (bool, error) {
+	if publicModel == GlobalPricePolicyModel || serviceTier == PricePolicyScopeGlobal {
+		return false, errors.New("the global pricing policy cannot be disabled here")
+	}
+	result := DB.Model(&ModelPricePolicy{}).
+		Where("public_model = ? AND service_tier = ? AND enabled = ?", publicModel, serviceTier, true).
+		Updates(map[string]any{"enabled": false, "missing_since": 0, "missing_checks": 0, "updated_at": common.GetTimestamp()})
+	return result.RowsAffected > 0, result.Error
+}
+
+// ChannelsWithCurrentOffer lists channel IDs that currently hold an unexpired
+// offer for the model. Missing-offer verification cross-checks every channel
+// before concluding that the model is gone upstream.
+func ChannelsWithCurrentOffer(publicModel string, now int64) ([]int, error) {
+	channelIDs := make([]int, 0)
+	err := DB.Model(&UpstreamModelOffer{}).
+		Where("public_model = ? AND enabled = ? AND expires_at > ?", publicModel, true, now).
+		Distinct("channel_id").
+		Pluck("channel_id", &channelIDs).Error
+	return channelIDs, err
 }
 
 func ReplacePendingModelPriceProposal(proposal *ModelPriceProposal) error {

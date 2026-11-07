@@ -48,6 +48,8 @@ import {
   getPricingSyncRuns,
   importPricingOffers,
   pinPricingCalibration,
+  batchUpdatePricingProposals,
+  disablePricingPolicy,
   recalculatePricing,
   savePricingPolicy,
   syncPricingCalibrations,
@@ -221,6 +223,42 @@ export function PricingControlSection() {
         t('Pricing proposal {{action}}', { action: request.action })
       )
       setPublishTarget(null)
+      await refresh()
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+
+  const proposalBatchMutation = useMutation({
+    mutationFn: (request: { ids: number[]; action: 'approve' | 'reject' }) =>
+      batchUpdatePricingProposals(request.ids, request.action),
+    onSuccess: async (response, request) => {
+      const data = response.data
+      const failed = data?.failed?.length ?? 0
+      if (failed > 0) {
+        toast.warning(
+          t('{{done}} proposals {{action}}d, {{failed}} failed', {
+            done: data.succeeded.length,
+            action: request.action,
+            failed,
+          })
+        )
+      } else {
+        toast.success(
+          t('{{count}} proposals {{action}}d', {
+            count: data.succeeded.length,
+            action: request.action,
+          })
+        )
+      }
+      await refresh()
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+  const policyDisableMutation = useMutation({
+    mutationFn: (request: { public_model: string; service_tier: string }) =>
+      disablePricingPolicy(request.public_model, request.service_tier),
+    onSuccess: async () => {
+      toast.success(t('Model pricing policy disabled'))
       await refresh()
     },
     onError: (error: Error) => toast.error(error.message),
@@ -545,6 +583,10 @@ export function PricingControlSection() {
             setIncludeExpired(true)
             setOfferOffset(0)
           }}
+          onRemoveModel={(model, tier) =>
+            policyDisableMutation.mutate({ public_model: model, service_tier: tier })
+          }
+          removing={policyDisableMutation.isPending}
         />
       </div>
 
@@ -562,6 +604,10 @@ export function PricingControlSection() {
           updating={proposalMutation.isPending}
           onRecalculate={() => recalculateMutation.mutate()}
           onAction={(id, action) => proposalMutation.mutate({ id, action })}
+          onBatchAction={(ids, action) =>
+            proposalBatchMutation.mutate({ ids, action })
+          }
+          batching={proposalBatchMutation.isPending}
           onPublish={setPublishTarget}
           onPageChange={setProposalOffset}
         />

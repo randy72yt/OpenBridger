@@ -56,6 +56,8 @@ export type ModelPricePolicy = {
   auto_publish_change_bps: number
   price_locked: boolean
   enabled: boolean
+  missing_since?: number
+  missing_checks?: number
 }
 
 export type ProposalStatus = 'pending' | 'approved' | 'published' | 'rejected'
@@ -98,6 +100,9 @@ export type PricingRisk = {
   last_collected_at?: number
   expires_at?: number
   upstream_group?: string
+  missing_checks?: number
+  missing_disable_after?: number
+  other_channels?: number[]
   suggested_action?: 'resync_offers' | 'import_manual_offer' | string
 }
 
@@ -112,6 +117,11 @@ export type PricingProposalPage = {
   total: number
   limit: number
   offset: number
+}
+
+export type PricingProposalBatchResult = {
+  succeeded: number[]
+  failed: { id: number; message: string }[]
 }
 
 export type PricingSyncRun = {

@@ -141,6 +141,27 @@ export async function updatePricingProposal(
   return response.data
 }
 
+export async function batchUpdatePricingProposals(
+  ids: number[],
+  action: 'approve' | 'reject'
+) {
+  const response = await api.post<
+    PricingApiResponse<PricingProposalBatchResult>
+  >('/api/pricing-control/proposals-batch', { ids, action })
+  return response.data
+}
+
+export async function disablePricingPolicy(
+  publicModel: string,
+  serviceTier: string
+) {
+  const response = await api.post('/api/pricing-control/policies/disable', {
+    public_model: publicModel,
+    service_tier: serviceTier,
+  })
+  return response.data
+}
+
 export async function getPricingCalibrations(
   params: { keyword?: string; limit?: number; offset?: number } = {}
 ) {

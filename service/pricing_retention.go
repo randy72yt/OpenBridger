@@ -53,6 +53,15 @@ func (pricingRetentionHandler) Run(ctx context.Context, task *model.SystemTask, 
 		failSystemTask(task, runnerID, err)
 		return
 	}
+	proposalDays := common.GetEnvOrDefault("PRICING_PROPOSAL_RETENTION_DAYS", 30)
+	if proposalDays < 1 {
+		proposalDays = 1
+	}
+	proposals, err := model.PruneModelPriceProposals([]string{model.PricingProposalRejected}, now-int64(proposalDays)*86400)
+	if err != nil {
+		failSystemTask(task, runnerID, err)
+		return
+	}
 	calibrationDays := common.GetEnvOrDefault("PRICING_CALIBRATION_RETENTION_DAYS", 30)
 	if calibrationDays < 1 {
 		calibrationDays = 1
@@ -65,9 +74,11 @@ func (pricingRetentionHandler) Run(ctx context.Context, task *model.SystemTask, 
 	result := map[string]any{
 		"deleted_snapshots":     snapshots,
 		"deleted_offers":        offers,
+		"deleted_proposals":     proposals,
 		"deleted_calibrations":  calibrations,
 		"snapshot_keep_days":    snapshotDays,
 		"offer_keep_days":       offerDays,
+		"proposal_keep_days":    proposalDays,
 		"calibration_keep_days": calibrationDays,
 	}
 	if err := model.FinishSystemTask(task.TaskID, runnerID, model.SystemTaskStatusSucceeded, result, ""); err != nil {
@@ -80,7 +91,8 @@ func init() { RegisterSystemTaskHandler(pricingRetentionHandler{}) }
 // DescribePricingRetention is used by the console to show what the cleanup job
 // will do before an operator trusts it.
 func DescribePricingRetention() string {
-	return fmt.Sprintf("snapshots kept %d days, expired offers kept %d days",
+	return fmt.Sprintf("snapshots kept %d days, expired offers kept %d days, rejected proposals kept %d days",
 		common.GetEnvOrDefault("PRICING_SNAPSHOT_RETENTION_DAYS", 30),
-		common.GetEnvOrDefault("PRICING_EXPIRED_OFFER_RETENTION_DAYS", 7))
+		common.GetEnvOrDefault("PRICING_EXPIRED_OFFER_RETENTION_DAYS", 7),
+		common.GetEnvOrDefault("PRICING_PROPOSAL_RETENTION_DAYS", 30))
 }

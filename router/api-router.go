@@ -262,6 +262,8 @@ func SetApiRouter(router *gin.Engine) {
 			pricingControlRoute.POST("/proposals/:id/approve", controller.ApprovePricingProposal)
 			pricingControlRoute.POST("/proposals/:id/reject", controller.RejectPricingProposal)
 			pricingControlRoute.POST("/proposals/:id/publish", controller.PublishPricingProposal)
+			pricingControlRoute.POST("/proposals-batch", controller.BatchUpdatePricingProposals)
+			pricingControlRoute.POST("/policies/disable", controller.DisablePricingPolicy)
 			pricingControlRoute.GET("/risk", controller.GetPricingRisks)
 		}
 		taskPluginRoute := apiRouter.Group("/plugin/task")

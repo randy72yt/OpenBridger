@@ -44,6 +44,8 @@ import type { PricingRisk, UpstreamModelOffer } from './pricing-control-types'
 
 type PricingControlInventoryProps = {
   offers: UpstreamModelOffer[]
+  removing: boolean
+  onRemoveModel: (model: string, tier: string) => void
   total: number
   limit: number
   offset: number
@@ -112,6 +114,15 @@ export function PricingControlInventory(props: PricingControlInventoryProps) {
                   </span>
                   <Badge variant='outline'>{risk.service_tier}</Badge>
                   <Badge variant='destructive'>{riskLabel(risk)}</Badge>
+                  {risk.other_channels && risk.other_channels.length > 0 && (
+                    <Badge variant='secondary'>
+                      {t('Still offered by channel {{channels}}', {
+                        channels: risk.other_channels
+                          .map((id) => `#${id}`)
+                          .join(', '),
+                      })}
+                    </Badge>
+                  )}
                   <span className='text-xs'>
                     {t('Channel')} #{risk.channel_id ?? '—'}
                     {risk.channel_role
@@ -125,17 +136,53 @@ export function PricingControlInventory(props: PricingControlInventoryProps) {
                         ).toLocaleString()}`
                       : ''}
                   </span>
-                  <Button
-                    size='sm'
-                    variant='ghost'
-                    className='h-6 px-2 text-xs'
-                    onClick={() => props.onFocusModel(risk.public_model)}
-                  >
-                    {t('Show offer')}
-                  </Button>
+                  {risk.code.endsWith('_offer_missing_or_expired') &&
+                    typeof risk.missing_checks === 'number' &&
+                    risk.missing_checks > 0 && (
+                      <span className='text-warning text-xs font-medium'>
+                        {t(
+                          'Verified missing {{checks}}/{{threshold}} sweeps — auto-disables after the last one',
+                          {
+                            checks: risk.missing_checks,
+                            threshold: risk.missing_disable_after,
+                          }
+                        )}
+                      </span>
+                    )}
+                  <span className='ml-auto flex items-center gap-1'>
+                    <Button
+                      size='sm'
+                      variant='ghost'
+                      className='h-6 px-2 text-xs'
+                      onClick={() => props.onFocusModel(risk.public_model)}
+                    >
+                      {t('Show offer')}
+                    </Button>
+                    <Button
+                      size='sm'
+                      variant='ghost'
+                      className='text-destructive h-6 px-2 text-xs'
+                      disabled={props.removing}
+                      onClick={() =>
+                        props.onRemoveModel(risk.public_model, risk.service_tier)
+                      }
+                    >
+                      {t('Remove model')}
+                    </Button>
+                  </span>
                 </li>
               ))}
             </ul>
+            <p className='text-muted-foreground mt-3 text-xs'>
+              {t(
+                'Each successful sync verifies missing models across every channel. After {{threshold}} verified sweeps with no offer anywhere, the model is taken out of repricing automatically.',
+                {
+                  threshold:
+                    props.risks.find((r) => r.missing_disable_after)
+                      ?.missing_disable_after ?? 3,
+                }
+              )}
+            </p>
           </div>
         )}
 

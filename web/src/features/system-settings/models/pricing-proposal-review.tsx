@@ -16,10 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Table,
   TableBody,
@@ -42,6 +44,8 @@ type PricingProposalReviewProps = {
   updating: boolean
   onRecalculate: () => void
   onAction: (id: number, action: 'approve' | 'reject') => void
+  onBatchAction: (ids: number[], action: 'approve' | 'reject') => void
+  batching: boolean
   onPublish: (proposal: ModelPriceProposal) => void
   onPageChange: (offset: number) => void
 }
@@ -64,6 +68,36 @@ function changeVariant(value: number | null) {
 
 export function PricingProposalReview(props: PricingProposalReviewProps) {
   const { t } = useTranslation()
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+
+  // Selection only covers the rows on screen; refresh/page resets it.
+  useEffect(() => {
+    setSelected(new Set())
+  }, [props.proposals, props.offset])
+
+  const selectableIds = useMemo(
+    () =>
+      props.proposals
+        .filter((p) => p.status === 'pending' || p.status === 'approved')
+        .map((p) => p.id),
+    [props.proposals]
+  )
+  const toggleOne = (id: number, checked: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+  const toggleAll = (checked: boolean) => {
+    setSelected(checked ? new Set(selectableIds) : new Set())
+  }
+  const runBatch = (action: 'approve' | 'reject') => {
+    if (selected.size === 0) return
+    props.onBatchAction([...selected], action)
+    setSelected(new Set())
+  }
 
   return (
     <SettingsCard
@@ -76,14 +110,48 @@ export function PricingProposalReview(props: PricingProposalReviewProps) {
         <p className='text-muted-foreground text-sm'>
           {t('Prices and costs are USD per million tokens.')}
         </p>
-        <Button onClick={props.onRecalculate} disabled={props.recalculating}>
-          {t('Recalculate now')}
-        </Button>
+        <div className='flex flex-wrap items-center gap-2'>
+          {selected.size > 0 && (
+            <>
+              <span className='text-muted-foreground text-sm'>
+                {t('{{count}} selected', { count: selected.size })}
+              </span>
+              <Button
+                size='sm'
+                disabled={props.batching}
+                onClick={() => runBatch('approve')}
+              >
+                {t('Approve selected')}
+              </Button>
+              <Button
+                size='sm'
+                variant='ghost'
+                disabled={props.batching}
+                onClick={() => runBatch('reject')}
+              >
+                {t('Reject selected')}
+              </Button>
+            </>
+          )}
+          <Button onClick={props.onRecalculate} disabled={props.recalculating}>
+            {t('Recalculate now')}
+          </Button>
+        </div>
       </div>
       <div className='overflow-x-auto'>
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className='w-10'>
+                <Checkbox
+                  checked={
+                    selectableIds.length > 0 &&
+                    selectableIds.every((id) => selected.has(id))
+                  }
+                  onCheckedChange={(checked) => toggleAll(checked === true)}
+                  aria-label={t('Select all')}
+                />
+              </TableHead>
               <TableHead>{t('Model and channels')}</TableHead>
               <TableHead>{t('Quote freshness')}</TableHead>
               <TableHead>{t('Current price')}</TableHead>
@@ -98,7 +166,7 @@ export function PricingProposalReview(props: PricingProposalReviewProps) {
             {props.proposals.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className='text-muted-foreground py-10 text-center'
                 >
                   {t(
@@ -111,6 +179,18 @@ export function PricingProposalReview(props: PricingProposalReviewProps) {
               const expired = proposal.primary_expires_at * 1000 <= Date.now()
               return (
                 <TableRow key={proposal.id}>
+                  <TableCell>
+                    {(proposal.status === 'pending' ||
+                      proposal.status === 'approved') && (
+                      <Checkbox
+                        checked={selected.has(proposal.id)}
+                        onCheckedChange={(checked) =>
+                          toggleOne(proposal.id, checked === true)
+                        }
+                        aria-label={proposal.public_model}
+                      />
+                    )}
+                  </TableCell>
                   <TableCell className='min-w-48'>
                     <p className='font-medium'>{proposal.public_model}</p>
                     <p className='text-muted-foreground mt-1 text-xs'>

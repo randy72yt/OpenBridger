@@ -34,13 +34,14 @@ type PricingOfferSyncChannelResult struct {
 }
 
 type PricingOfferSyncResult struct {
-	Imported         int                             `json:"imported"`
-	Kept             int                             `json:"kept,omitempty"`
-	Skipped          int                             `json:"skipped"`
-	CreatedProposals int                             `json:"created_proposals,omitempty"`
-	AutoPublish      *PricingAutoPublishStats        `json:"auto_publish,omitempty"`
-	Channels         []PricingOfferSyncChannelResult `json:"channels"`
-	Trigger          string                          `json:"trigger,omitempty"`
+	Imported          int                             `json:"imported"`
+	Kept              int                             `json:"kept,omitempty"`
+	Skipped           int                             `json:"skipped"`
+	CreatedProposals  int                             `json:"created_proposals,omitempty"`
+	AutoPublish       *PricingAutoPublishStats        `json:"auto_publish,omitempty"`
+	Channels          []PricingOfferSyncChannelResult `json:"channels"`
+	Trigger           string                          `json:"trigger,omitempty"`
+	OfferVerification *MissingOfferVerification       `json:"offer_verification,omitempty"`
 }
 
 type upstreamPricingResponse struct {
@@ -560,6 +561,13 @@ func CompletePricingOfferSync(ctx context.Context, result *PricingOfferSyncResul
 		return err
 	}
 	result.CreatedProposals = created
+	// One successful collection = one verified look at the offer inventory.
+	// Policies whose model vanished everywhere accumulate misses here and are
+	// auto-disabled after PRICING_OFFER_MISSING_DISABLE_CHECKS sweeps.
+	result.OfferVerification = VerifyMissingOffers(ctx)
+	if result.OfferVerification.Error != "" {
+		logger.LogWarn(ctx, "pricing: missing-offer verification failed: "+result.OfferVerification.Error)
+	}
 	if !pricingAutoPublishEnabled() {
 		return nil
 	}
