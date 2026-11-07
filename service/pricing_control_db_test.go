@@ -327,3 +327,99 @@ func qaRunSQLite(t *testing.T) qaDBResult {
 		PublishErr:   publishErr,
 	}
 }
+
+// TestPricingProposalGateAndMissingOffer 覆盖两条回归路径：
+//  1. 内容闸门——上游报价未变时重复重算不得产生新提案（曾导致 6 万条 rejected 垃圾）；
+//  2. 缺失验证——模型在所有渠道连续 N 次无有效报价后策略自动停售，
+//     其他渠道仍有报价时不误停。
+func TestPricingProposalGateAndMissingOffer(t *testing.T) {
+	truncate(t)
+	require.NoError(t, model.DB.AutoMigrate(&model.Channel{}, &model.Ability{}, &model.Model{}, &model.Vendor{}))
+	now := common.GetTimestamp()
+
+	t.Run("content_gate_skips_unchanged_proposals", func(t *testing.T) {
+		groupRatio := 1.0
+		qaSeedOffers(t, qaOfferWithModel(301, "gate-model", 1.0, 2.0))
+		require.NoError(t, ValidateAndUpsertPricePolicy(&model.ModelPricePolicy{
+			PublicModel: "gate-model", ServiceTier: "default", PrimaryChannelID: 301,
+			TargetMarginBPS: 3500, MinimumMarginBPS: 2000, Enabled: true,
+		}))
+		_ = groupRatio
+
+		created1, err := RecalculatePricingProposals(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, 1, created1)
+
+		created2, err := RecalculatePricingProposals(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, 0, created2, "上游未变时第二次重算不得新增提案")
+
+		var pending int64
+		require.NoError(t, model.DB.Model(&model.ModelPriceProposal{}).
+			Where("public_model = ? AND status = ?", "gate-model", model.PricingProposalPending).Count(&pending).Error)
+		require.Equal(t, int64(1), pending, "应始终只保留一条 pending 提案")
+	})
+
+	t.Run("missing_offer_auto_disables_after_verified_sweeps", func(t *testing.T) {
+		qaSeedOffers(t, qaOfferWithModel(401, "gone-model", 1.0, 2.0))
+		require.NoError(t, ValidateAndUpsertPricePolicy(&model.ModelPricePolicy{
+			PublicModel: "gone-model", ServiceTier: "default", PrimaryChannelID: 401,
+			TargetMarginBPS: 3500, MinimumMarginBPS: 2000, Enabled: true,
+		}))
+		// 同渠道另一模型仍活着，作为对照组。
+		qaSeedOffers(t, qaOfferWithModel(401, "alive-model", 1.0, 2.0))
+		require.NoError(t, ValidateAndUpsertPricePolicy(&model.ModelPricePolicy{
+			PublicModel: "alive-model", ServiceTier: "default", PrimaryChannelID: 401,
+			TargetMarginBPS: 3500, MinimumMarginBPS: 2000, Enabled: true,
+		}))
+
+		// 让 gone-model 的报价过期（alive-model 不动）。
+		require.NoError(t, model.DB.Model(&model.UpstreamModelOffer{}).
+			Where("public_model = ?", "gone-model").
+			Updates(map[string]any{"expires_at": now - 10, "enabled": false}).Error)
+
+		for i := 1; i < pricingOfferMissingDisableChecks(); i++ {
+			result := VerifyMissingOffers(context.Background())
+			require.Empty(t, result.Error)
+			var policy model.ModelPricePolicy
+			require.NoError(t, model.DB.Where("public_model = ? AND service_tier = ?", "gone-model", "default").First(&policy).Error)
+			require.True(t, policy.Enabled, "未达阈值前不应停售")
+			require.Equal(t, i, policy.MissingChecks)
+		}
+		result := VerifyMissingOffers(context.Background())
+		require.Empty(t, result.Error)
+		require.Equal(t, []string{"gone-model"}, result.AutoDisabled)
+
+		var disabled model.ModelPricePolicy
+		require.NoError(t, model.DB.Where("public_model = ? AND service_tier = ?", "gone-model", "default").First(&disabled).Error)
+		require.False(t, disabled.Enabled, "达到验证次数后应自动停售")
+		require.Equal(t, 0, disabled.MissingChecks)
+
+		// alive-model 有有效报价，全程不受影响。
+		var alive model.ModelPricePolicy
+		require.NoError(t, model.DB.Where("public_model = ? AND service_tier = ?", "alive-model", "default").First(&alive).Error)
+		require.True(t, alive.Enabled)
+		require.Equal(t, 0, alive.MissingChecks)
+	})
+
+	t.Run("valid_offer_on_other_channel_blocks_auto_disable", func(t *testing.T) {
+		qaSeedOffers(t,
+			qaOfferWithModel(501, "moved-model", 1.0, 2.0),
+			qaOfferWithModel(502, "moved-model", 1.5, 3.0),
+		)
+		require.NoError(t, ValidateAndUpsertPricePolicy(&model.ModelPricePolicy{
+			PublicModel: "moved-model", ServiceTier: "default", PrimaryChannelID: 501,
+			TargetMarginBPS: 3500, MinimumMarginBPS: 2000, Enabled: true,
+		}))
+		require.NoError(t, model.DB.Model(&model.UpstreamModelOffer{}).
+			Where("public_model = ? AND channel_id = ?", "moved-model", 501).
+			Updates(map[string]any{"expires_at": now - 10, "enabled": false}).Error)
+
+		result := VerifyMissingOffers(context.Background())
+		require.Empty(t, result.Error)
+		var policy model.ModelPricePolicy
+		require.NoError(t, model.DB.Where("public_model = ? AND service_tier = ?", "moved-model", "default").First(&policy).Error)
+		require.True(t, policy.Enabled, "其他渠道仍有报价时不应停售")
+		require.Equal(t, 0, policy.MissingChecks)
+	})
+}
