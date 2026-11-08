@@ -9,6 +9,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -220,6 +221,9 @@ func (channel *Channel) AddAbilities(tx *gorm.DB) error {
 	abilities := make([]Ability, 0, len(models_))
 	for _, model := range models_ {
 		for _, group := range groups_ {
+			if !ratio_setting.ModelPoolAllows(group, model) {
+				continue
+			}
 			key := group + "|" + model
 			if _, exists := abilitySet[key]; exists {
 				continue
@@ -292,6 +296,9 @@ func (channel *Channel) UpdateAbilities(tx *gorm.DB) error {
 	abilities := make([]Ability, 0, len(models_))
 	for _, model := range models_ {
 		for _, group := range groups_ {
+			if !ratio_setting.ModelPoolAllows(group, model) {
+				continue
+			}
 			key := group + "|" + model
 			if _, exists := abilitySet[key]; exists {
 				continue
