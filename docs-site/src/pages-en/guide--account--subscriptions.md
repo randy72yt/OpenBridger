@@ -1,30 +1,38 @@
 # Subscriptions
 
-Plan names, prices, credits, validity, concurrency, and renewal rules are defined by the console. A plan that is not displayed is not an offer.
+Terms v1.1 on the main site say **plan purchase and auto-renewal are not open yet.** If the wallet or the [subscriptions page]({{CONSOLE_URL}}/subscriptions) shows nothing you can buy, there is no plan for sale. Do not pay against a price list from somewhere else.
 
-A plan may provide a separate credit pool or entitlement for a fixed period. Its validity, eligible models, and charge order can differ from wallet credit.
+The gateway code already has subscription credit, plan records, and a billing preference. Those apply to buyers only after an operator publishes plans and the terms are updated. This page lists no plan names and no prices.
 
-## Check before purchasing
+## Billing preference, when the wallet shows it
 
-- Supported models, protocols, and account groups.
-- Included credits, validity, and behavior after they are exhausted.
-- Concurrency, rate, or other usage limits.
-- Automatic renewal, cancellation, and refund rules.
-- Charge priority between plan credits and wallet balance.
-- Whether unused credit can roll over, be shared, transferred, or stacked.
-- What happens to unused credit at expiry.
+With no subscription credit, calls use the wallet. Once the account has an active subscription, the default is Subscription First.
 
-<div class="grid"><div class="card"><h3>Learning</h3><p>Use a small amount to validate models and tools.</p></div><div class="card"><h3>Development</h3><p>Estimate from call frequency, context size, and model price.</p></div><div class="card"><h3>Teams</h3><p>Separate keys by member and environment, and check concurrency needs.</p></div></div>
+| Preference | Meaning |
+| --- | --- |
+| Subscription First (default) | With no active subscription, the wallet is charged. With one, subscription credit is used first. The wallet is used afterward only when that subscription allows wallet overflow. Otherwise the error is insufficient subscription credit. |
+| Wallet First | The wallet is charged first. If wallet credit is insufficient, the gateway tries the subscription. |
+| Subscription Only | Subscription credit only. If it is not enough, HTTP `403` and a message that subscription credit is insufficient or no subscription is configured. |
+| Wallet Only | Wallet only. |
 
-## Purchase, renewal, and cancellation
+If the wallet lets you switch, the selected option applies to later requests.
 
-- Recheck the plan, amount, currency, validity, and entitlement start time on the confirmation page.
-- Treat a plan as automatically renewing only when the page explicitly says so and shows the renewal terms.
-- Manage or cancel renewal through the console entry provided for that plan.
-- Confirm the order under Wallet, Plans, or Orders. Do not submit a duplicate while processing.
+## If purchases open later
 
-## A plan is not being used
+Trust the confirmation page and the terms in force. At least check:
 
-Confirm that it is active, has remaining credit, includes the target model, and matches the account and group used by the client. Then inspect the actual model and error in Usage Logs.
+- Price, currency, validity, and included credit
+- Models and groups that are included
+- Whether the wallet is charged after the plan credit runs out
+- Whether renewal is automatic, and where to cancel
+- What happens to unused credit at expiry
 
-<div class="callout"><strong>Before purchase</strong><p>The purchase confirmation page defines the final price, entitlements, renewal, cancellation, and refund rules.</p></div>
+Do not pay twice while an order is processing. If a purchase fails, Usage Logs show whether the problem is credit or a model outside the plan.
+
+<div class="callout"><strong>Do not assume auto-renewal today</strong><p>The terms say auto-renewal is not open. If the page does not say auto-renewal, you will not be charged on a cycle.</p></div>
+
+## Related
+
+- [Credits and billing](/guide/billing/)
+- [Top up and redeem](/guide/account/redeem/)
+- [Terms of service](/legal/terms/)

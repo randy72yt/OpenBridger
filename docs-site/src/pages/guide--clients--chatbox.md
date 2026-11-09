@@ -1,11 +1,24 @@
 # 在 Chatbox 中使用 OpenBridger
 
-在 Chatbox 的模型服务设置中选择 OpenAI API 或 OpenAI Compatible 自定义服务。
+在 Chatbox 的模型提供方里选择 OpenAI API 或 OpenAI Compatible，不要选择「用网页账号登录」。
 
-<div class="config-card"><div><span>API Host / Base URL</span><code>{{API_BASE_URL}}</code></div><div><span>API Key</span><code>YOUR_API_KEY</code></div><div><span>Model</span><code>控制台中的完整模型 ID</code></div></div>
+<div class="config-card"><div><span>API Host / Base URL</span><code>{{API_BASE_URL}}</code></div><div><span>API Key</span><code>sk-...</code></div><div><span>Model</span><code>模型广场中的完整 ID</code></div></div>
 
-## 配置步骤
+## 步骤
 
-<div class="steps"><div class="step"><strong>打开模型设置</strong><p>在 Settings 中找到 Model Provider、AI Provider 或 API 设置。</p></div><div class="step"><strong>选择兼容服务</strong><p>选择 OpenAI API 或自定义 OpenAI Compatible 服务，不要选择网页账号登录。</p></div><div class="step"><strong>填写地址、密钥和模型</strong><p>使用上面的配置；自动模型列表为空时，从控制台手动添加完整模型 ID。</p></div><div class="step"><strong>新建对话验证</strong><p>选择 OpenBridger 模型发送短消息，并在使用日志中核对请求。</p></div></div>
+<div class="steps"><div class="step"><strong>打开设置里的模型提供方</strong><p>名称可能是 Model Provider、AI Provider 或 API。</p></div><div class="step"><strong>选择 OpenAI 兼容</strong><p>填写上面三项。Host 不要包含 <code>/chat/completions</code>，除非这一栏的说明写明要完整 Endpoint。</p></div><div class="step"><strong>模型列表为空就手工填</strong><p>从 <a href="{{CONSOLE_URL}}/pricing">模型广场</a> 复制。</p></div><div class="step"><strong>新建对话</strong><p>旧对话可能仍绑着上一个提供方。新建一条再选 OpenBridger，然后到使用日志核对。</p></div></div>
 
-无需退出 Chatbox 账号。出现 404 时检查是否把 `/chat/completions` 重复追加到 Base URL；旧对话仍使用原模型时，新建对话并重新选择 Provider。
+不需要退出 Chatbox 账号。
+
+## 常见问题
+
+| 现象 | 处理 |
+| --- | --- |
+| 404，路径里出现两次 chat/completions 或 /v1 | Host 多写了路径。改回 `{{API_BASE_URL}}` |
+| 401 | 重新粘贴密钥 |
+| 日志没有记录 | 当前对话还在用内置模型。新建对话并重新选择提供方 |
+
+## 相关
+
+- [Cherry Studio](/guide/clients/cherry-studio/)
+- [OpenAI 兼容调用](/guide/clients/openai-compatible/)

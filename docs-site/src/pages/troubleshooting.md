@@ -1,26 +1,47 @@
 # 故障排查
 
-无法调用或消耗异常时，按照下面的顺序检查，通常比反复更换配置更快。
+先用 curl 把网关和客户端分开。curl 成功、客户端失败，就查客户端的地址和缓存。curl 也失败，就查密钥、额度和模型 ID。
 
-<div class="steps"><div class="step"><strong>检查 Base URL</strong><p>OpenAI 兼容客户端填写 <code>{{API_BASE_URL}}</code>，不要重复追加 <code>/v1</code>。</p></div><div class="step"><strong>检查 API Key</strong><p>确认 Key 未禁用，复制时没有空格、换行或重复的 Bearer 前缀。</p></div><div class="step"><strong>检查模型与权限</strong><p>从控制台复制完整模型 ID，并确认当前分组可以使用。</p></div><div class="step"><strong>检查用量</strong><p>查看余额、调用日志、状态码和请求时间。</p></div></div>
-
-| 异常 | 常见原因 | 处理方式 |
-| --- | --- | --- |
-| 401 | Key 错误、禁用或格式错误 | 重新复制或创建测试 Key |
-| 403 | 分组、模型或线路权限不匹配 | 检查模型广场和账户分组 |
-| 404 / model not found | 模型名称错误 | 复制完整模型 ID，注意大小写和版本号 |
-| 429 | 频率、并发或上游限流 | 降低并发，稍后重试 |
-| 请求超时 | 网络、上游响应慢或上下文过长 | 用短问题测试，降低输出长度 |
-| 流式输出中断 | 网络或客户端兼容性 | 暂时关闭 stream，对比同一模型 |
-| 消耗偏高 | 上下文重复、Agent 工具调用 | 清理历史并在日志中核对实际模型 |
-| 一直显示旧配置 | 客户端缓存或环境变量未刷新 | 重启客户端与终端，检查当前 Provider 和环境变量 |
-| 模型列表无法刷新 | 客户端没有调用模型列表或地址格式不兼容 | 手动填写模型 ID，并核对客户端需要根地址还是 `/v1` |
-
-## 快速自检
+## 自检
 
 ```bash
-curl {{API_BASE_URL}}/models \
-  -H "Authorization: Bearer YOUR_API_KEY"
+curl -i "{{API_BASE_URL}}/models" \
+  -H "Authorization: Bearer ${OPENBRIDGER_API_KEY}"
 ```
 
-能返回模型列表，说明网络和 Key 基本正常；客户端仍失败时，继续检查客户端地址格式、模型名和本地缓存。
+- HTTP 200 且有模型列表：密钥和地址可用。
+- 401：密钥本身不可用。见 [错误码](/guide/errors/)。
+- 403 且提到额度：去 [钱包]({{CONSOLE_URL}}/wallet)。
+- 连接不上：确认主机名是 `openbridger.com` 或 `api.openbridger.com`，路径不要写成 `/v1/v1/models`。
+
+然后再发一条 [快速开始](/guide/quickstart/) 里的短对话，到 [使用日志]({{CONSOLE_URL}}/usage-logs) 对请求 ID。
+
+## 对照表
+
+| 现象 | 常见原因 | 处理 |
+| --- | --- | --- |
+| 401「无效的令牌」 | 密钥错、禁用、过期，或密钥额度用尽；多写了 `Bearer` | 从 API 密钥页重新复制，检查该密钥剩余额度和过期时间 |
+| 403 额度不足 | 钱包或订阅不够预扣 | 充值，或缩短输入后再试 |
+| 403 分组 / IP | 密钥分组不可用，或 IP 白名单不含当前出口 | 改分组或白名单 |
+| 503 无可用渠道 | 模型 ID 不属于当前分组 | 从模型广场复制完整 ID |
+| 上游 404 / model not found | 上游不认识这个名字，或客户端改写了 ID | 换广场里的另一个 ID，并看日志里实际提交的名字 |
+| 429 | 本地频率限制或上游限流 | 看文案是否包含「您已达到请求数限制」。是则等窗口；否则是上游，稍后重试 |
+| 超时 | 上下文很长或上游慢 | 用一句短提示、减小输出长度再对比 |
+| 流式中断 | 网络或客户端对流的处理 | 同一模型先发 `"stream": false` |
+| 扣费偏高 | 历史消息重复、工具调用多 | 在日志里看 token，而不是只看客户端气泡 |
+| 改了配置仍走旧地址 | 环境变量或另一个配置文件还在 | 新开终端，检查 `OPENAI_*` 和 `ANTHROPIC_*` |
+| 模型列表拉不下来 | 客户端要的不是 `/v1/models`，或它过滤了 ID | 手工填模型 ID |
+
+## 地址填法
+
+| 客户端类型 | 填写 |
+| --- | --- |
+| OpenAI SDK、Chatbox、Cherry Studio、LobeChat、Cursor 的 OpenAI Base URL、Open WebUI | `{{API_BASE_URL}}` |
+| 只有「完整 Endpoint」一栏 | `{{API_BASE_URL}}/chat/completions` |
+| Claude Code、Anthropic SDK | `{{CONSOLE_URL}}`（不要加 `/v1`） |
+| Codex | Base URL `{{API_BASE_URL}}`，协议 Responses |
+
+## 相关
+
+- [错误码](/guide/errors/)
+- [联系与故障申报](/guide/support/)

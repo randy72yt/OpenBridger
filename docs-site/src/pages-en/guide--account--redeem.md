@@ -1,24 +1,45 @@
-# Top-ups and payments
+# Top up and redeem
 
-OpenBridger can add account credit through the online checkout or redeem-code entry offered in Wallet. Availability can vary by region, currency, device, and browser; the checkout page is the source of truth.
+The wallet is [{{CONSOLE_URL}}/wallet]({{CONSOLE_URL}}/wallet). Two ways add credit: the checkout the wallet itself opens, or a redemption code. A payment button that is not on the page is not enabled. Do not pay through a link from a chat message.
 
-<div class="config-card"><div><span>Online top-up</span><code>Wallet → Amount → Secure checkout</code></div><div><span>Redeem code</span><code>Wallet → Enter code → Confirm</code></div><div><span>Confirmation</span><code>Balance and transaction history</code></div></div>
+<div class="callout"><strong>Screenshot to add</strong><p>Wallet balance, amount choices, Alipay and WeChat buttons, the redemption entry, and the balance after a successful payment. Replace this note with the current UI.</p></div>
 
-<div class="steps"><div class="step"><strong>Open Wallet</strong><p>Sign in, open Wallet, and confirm that you are using the intended account.</p></div><div class="step"><strong>Review the order</strong><p>Check the currency, amount charged, credit received, and order details.</p></div><div class="step"><strong>Open secure checkout</strong><p>Use only the checkout opened directly from OpenBridger Wallet.</p></div><div class="step"><strong>Choose a displayed method</strong><p>Some wallet methods appear only on compatible devices and browsers.</p></div><div class="step"><strong>Confirm the balance</strong><p>Return to Wallet and inspect the balance and transaction history. Do not pay twice while an order is processing.</p></div></div>
+## Before you start
 
-## Redeem codes
+- You are signed in to the account you want to fund.
+- You use only the checkout opened from the wallet.
+- You can pay with Alipay or WeChat. The code defaults include Alipay (`alipay`) and WeChat (`wxpay`). Any extra button is an additional configured method. Use only the buttons the wallet shows.
 
-<div class="steps"><div class="step"><strong>Get a valid code</strong><p>Use only a code from an official or recognized OpenBridger channel.</p></div><div class="step"><strong>Enter and confirm</strong><p>Submit the complete code in Wallet after confirming the account.</p></div><div class="step"><strong>Check the result</strong><p>Verify the updated credit and record. Do not expose the complete code when asking for help.</p></div></div>
+When online payment is enabled, the wallet shows top-up. When it is disabled, only redemption remains and creating an order is rejected.
 
-## Payment completed but credit is missing
+## Pay online
 
-1. Confirm that checkout shows success rather than processing, canceled, or failed.
-2. Refresh Wallet and allow time for the payment status to synchronize.
-3. Do not create duplicate orders while the first order is still processing.
-4. If credit is still missing, send the order number, payment time, amount, currency, and account email through the official support channel.
+<div class="steps"><div class="step"><strong>Open the wallet</strong><p>Confirm the account. When top-up is available the card title is Add Funds.</p></div><div class="step"><strong>Pick an amount</strong><p>The minimum follows the wallet's display currency. The program default is 10: ¥10 when the display is yuan, $10 when it is dollars. If the page shows another floor, use that floor. A smaller order fails with a message that the amount is below the minimum.</p></div><div class="step"><strong>Read the confirmation</strong><p>The amount on the confirmation page is what Alipay or WeChat will charge. In yuan display, the face amount is credited 1:1. The order stores the credit to grant so it is not rounded down to fewer dollars. Do not multiply by an exchange rate yourself.</p></div><div class="step"><strong>Finish payment</strong><p>You return to <code>/wallet?pay=success</code>. Refresh the balance and the top-up history. Do not pay the same order again while it is still processing.</p></div></div>
 
-## Refunds and disputes
+Payment uses the epay protocol to the Alipay or WeChat checkout you see. Support will not ask for a payment password, an SMS code, or a full card number.
 
-Eligibility, return method, processing time, and fees follow the rules displayed at purchase and the official Terms. An order number and issue description are sufficient for the initial request.
+## Redemption codes
 
-<div class="callout warning"><strong>Payment security</strong><p>OpenBridger support will never ask for a payment password, verification code, full card number, wallet password, or complete API key.</p></div>
+<div class="steps"><div class="step"><strong>Use a code OpenBridger issued</strong><p>Ignore codes from unknown sources.</p></div><div class="step"><strong>Redeem in the wallet</strong><p>Submit the whole code from the Redeem action.</p></div><div class="step"><strong>Check the result</strong><p>A success increases the balance and the history. On failure, do not send the full code to anyone, and do not hammer the button.</p></div></div>
+
+## Paid, but the balance did not move
+
+1. See whether the checkout says success, processing, cancelled, or failed.
+2. Return to the wallet and refresh. The notification can arrive after the page.
+3. Do not pay again just to refresh the balance.
+4. If it is still missing, email [support@openbridger.com](mailto:support@openbridger.com) with the account email, time, amount, method, and any order id you can see. Do not include a payment password or verification code.
+
+## Refunds
+
+The [terms]({{CONSOLE_URL}}/user-agreement) on the main site control this. Version 1.1 says:
+
+- A top-up becomes credit. Credit you already spent is not refunded.
+- Unused top-up balance can be requested by email. After review it is returned on the original payment path.
+- Fees the payment channel already kept are not refunded.
+- You get a result within 7 business days.
+
+## Related
+
+- [Credits and billing](/guide/billing/)
+- [Terms of service](/legal/terms/)
+- [Contact and incidents](/guide/support/)

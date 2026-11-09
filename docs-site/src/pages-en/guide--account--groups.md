@@ -1,10 +1,26 @@
 # Groups and routes
 
-Groups determine the models, routes, and pricing rules available to an account. You only need to use the models shown as available in the console.
+A group decides which models this key can call, which kind of route it uses, and which ratio is billed. You do not need the upstream channel's name. Pick model IDs that Model Square shows for the current group.
 
-- Choose client models from the current group's available list.
-- Routes for the same model can differ in protocol, speed, and reliability.
-- For a 403 or unavailable model, check group access before replacing the key.
-- Teams should record the group and model used by each project.
+## The group on a key
 
-<div class="callout warning"><strong>Do not guess route tiers</strong><p>Actual group names and rules are defined in the OpenBridger console.</p></div>
+| Value | Result |
+| --- | --- |
+| Empty | Uses the account group. |
+| A named group | That group must be one you can use. Otherwise `403`. A retired group is also `403`. |
+| `auto` | Tries groups in the order you saved. With cross-group retry, a failure in the current group continues with the next one. |
+
+Names and ratios are operator settings. This guide does not define product names such as Standard or Premium. The names on Model Square and on the key form are the real ones.
+
+## While you use it
+
+- A client's model list should come from what this key can access. `GET /v1/models` is that set.
+- The same model ID can differ in price and stability across groups. Changing the group changes the price. Check Model Square first.
+- A `503` that says no channel is available is a model or group mismatch. Do not rotate keys to fix it.
+- In a team, write down the group and model ID each project uses.
+
+## Related
+
+- [Create an API key](/guide/api-key/)
+- [Models and pricing](/guide/models-pricing/)
+- [Error codes](/guide/errors/)
