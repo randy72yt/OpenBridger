@@ -14,7 +14,7 @@
 
 ## 步骤
 
-<div class="steps"><div class="step"><strong>注册并登录</strong><p>打开 <a href="{{CONSOLE_URL}}">{{CONSOLE_URL}}</a>，完成注册后进入控制台。登录失败次数过多会被临时限制，等一会儿再试，不要连续撞密码。</p></div><div class="step"><strong>看钱包余额</strong><p>打开 <a href="{{CONSOLE_URL}}/wallet">钱包</a>。余额够一次短对话才能继续。余额为 0 时，用页面上的在线充值或兑换码，见 <a href="/guide/account/redeem/">充值与兑换</a>。是否有注册赠送额度，以钱包里多出来的那一笔为准，文档不另写一个固定数字。</p></div><div class="step"><strong>复制模型 ID</strong><p>打开 <a href="{{CONSOLE_URL}}/pricing">模型广场</a>，选一个你的分组能用的对话模型，复制完整模型 ID。不要自己缩短版本号。</p></div><div class="step"><strong>创建 API Key</strong><p>打开 <a href="{{CONSOLE_URL}}/keys">API 密钥</a>，新建一把名为 <code>curl-test</code> 的密钥。复制出来的值以 <code>sk-</code> 开头。细节见 <a href="/guide/api-key/">创建 API Key</a>。</p></div><div class="step"><strong>发送一条短请求</strong><p>把下面命令里的密钥和模型 ID 换成你自己的，然后执行。</p></div></div>
+<div class="steps"><div class="step"><strong>注册并登录</strong><p>打开 <a href="{{CONSOLE_URL}}">{{CONSOLE_URL}}</a>，完成注册后进入控制台。登录失败次数过多会被临时限制，等一会儿再试，不要连续撞密码。</p></div><div class="step"><strong>看钱包余额</strong><p>打开 <a href="{{CONSOLE_URL}}/wallet">钱包</a>。余额以人民币显示。注册不赠送额度，新用户余额是 0。要先用页面上的在线充值或兑换码，见 <a href="/guide/account/redeem/">充值与兑换</a>，余额够一次短对话再继续。</p></div><div class="step"><strong>复制模型 ID</strong><p>打开 <a href="{{CONSOLE_URL}}/pricing">模型广场</a>，选一个你的分组能用的对话模型，复制完整模型 ID。不要自己缩短版本号。</p></div><div class="step"><strong>创建 API Key</strong><p>打开 <a href="{{CONSOLE_URL}}/keys">API 密钥</a>，新建一把名为 <code>curl-test</code> 的密钥。复制出来的值以 <code>sk-</code> 开头。细节见 <a href="/guide/api-key/">创建 API Key</a>。</p></div><div class="step"><strong>发送一条短请求</strong><p>把下面命令里的密钥和模型 ID 换成你自己的，然后执行。</p></div></div>
 
 ```bash
 export OPENBRIDGER_API_KEY="sk-把控制台复制的密钥贴在这里"

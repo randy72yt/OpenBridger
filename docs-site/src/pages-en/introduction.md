@@ -12,7 +12,7 @@ This is a developer API: register, add credits, create a key, and read logs. Whi
 
 <div class="config-card"><div><span>Console</span><code>{{CONSOLE_URL}}</code></div><div><span>OpenAI-compatible Base URL</span><code>{{API_BASE_URL}}</code></div><div><span>API key</span>Starts with <code>sk-</code>. Create it under API Keys.</div></div>
 
-`https://api.openbridger.com` and `https://openbridger.com` serve the same gateway. Examples use `{{API_BASE_URL}}`. Anthropic clients append `/v1/messages` themselves, so those clients use `{{CONSOLE_URL}}` with no `/v1`. See [Claude Code](/guide/clients/claude-code/).
+Examples use `{{API_BASE_URL}}`. Anthropic clients append `/v1/messages` themselves, so those clients use `{{CONSOLE_URL}}` with no `/v1`. See [Claude Code](/guide/clients/claude-code/).
 
 ## What the gateway actually routes
 

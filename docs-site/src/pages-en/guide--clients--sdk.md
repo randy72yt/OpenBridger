@@ -51,7 +51,7 @@ const response = await model.invoke("Hello OpenBridger");
 console.log(response.content);
 ```
 
-This `baseURL` is also `{{API_BASE_URL}}`. If a package version moved the field to a top-level `baseURL`, follow that version. The finished request host should be `openbridger.com` (or `api.openbridger.com`) and the path should end in `/v1/chat/completions` with a single `/v1`.
+This `baseURL` is also `{{API_BASE_URL}}`. If a package version moved the field to a top-level `baseURL`, follow that version. The finished request host should be `openbridger.com` and the path should end in `/v1/chat/completions` with a single `/v1`.
 
 ## Common problems
 

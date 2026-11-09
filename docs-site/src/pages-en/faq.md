@@ -6,7 +6,7 @@ OpenAI-compatible clients use `{{API_BASE_URL}}`. Add `/chat/completions` only w
 
 Claude Code and the Anthropic SDK use `{{CONSOLE_URL}}` without `/v1`. See [Claude Code](/guide/clients/claude-code/).
 
-`https://api.openbridger.com/v1` and `{{API_BASE_URL}}` are the same gateway. Examples use the latter.
+Examples use `{{API_BASE_URL}}`.
 
 ## Do I add Bearer to the key?
 
@@ -36,7 +36,7 @@ Whether a model supports tools, images, or the protocol that client requires is 
 
 ## Which balance is charged first, wallet or plan?
 
-The default is Subscription First. With no subscription credit, the wallet is charged. The four preferences are on [Subscriptions](/guide/account/subscriptions/). Under terms v1.1, plan purchase is not open yet.
+The default is Subscription First. With no subscription credit, the wallet is charged. The four preferences and the purchase entry are on [Subscriptions](/guide/account/subscriptions/).
 
 ## How can I add credit?
 
@@ -44,7 +44,7 @@ Use the online methods the wallet shows (Alipay and WeChat by default) or a rede
 
 ## Does registration include free credit?
 
-The program default is none (new-user credit is 0). An operator can configure a gift. After you register, look at the wallet. An extra credit row means a gift is configured. No row means there is no gift right now.
+No. A new wallet balance is 0. Add credit with a top-up or a redemption code before you call the API.
 
 ## Should I retry a failed request?
 

@@ -12,7 +12,7 @@ curl -i "{{API_BASE_URL}}/models" \
 - HTTP 200 且有模型列表：密钥和地址可用。
 - 401：密钥本身不可用。见 [错误码](/guide/errors/)。
 - 403 且提到额度：去 [钱包]({{CONSOLE_URL}}/wallet)。
-- 连接不上：确认主机名是 `openbridger.com` 或 `api.openbridger.com`，路径不要写成 `/v1/v1/models`。
+- 连接不上：确认主机名是 `openbridger.com`，路径不要写成 `/v1/v1/models`。
 
 然后再发一条 [快速开始](/guide/quickstart/) 里的短对话，到 [使用日志]({{CONSOLE_URL}}/usage-logs) 对请求 ID。
 

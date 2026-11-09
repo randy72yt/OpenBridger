@@ -6,7 +6,7 @@ OpenAI 兼容客户端填 `{{API_BASE_URL}}`。只有单独一个「完整 Endpo
 
 Claude Code 和 Anthropic SDK 填 `{{CONSOLE_URL}}`，不带 `/v1`。说明见 [Claude Code](/guide/clients/claude-code/)。
 
-`https://api.openbridger.com/v1` 与 `{{API_BASE_URL}}` 是同一套网关。文档示例用后者。
+文档示例的 Base URL 是 `{{API_BASE_URL}}`。
 
 ## 密钥要不要加 Bearer？
 
@@ -36,7 +36,7 @@ Claude Code 和 Anthropic SDK 填 `{{CONSOLE_URL}}`，不带 `/v1`。说明见 [
 
 ## 钱包和套餐哪个先扣？
 
-默认是「优先订阅」。没有订阅额度时扣钱包。四种偏好见 [订阅套餐](/guide/account/subscriptions/)。协议 v1.1 下套餐购买还未开放。
+默认是「优先订阅」。没有订阅额度时扣钱包。四种偏好和购买入口见 [订阅套餐](/guide/account/subscriptions/)。
 
 ## 可以怎样充值？
 
@@ -44,7 +44,7 @@ Claude Code 和 Anthropic SDK 填 `{{CONSOLE_URL}}`，不带 `/v1`。说明见 [
 
 ## 注册会送额度吗？
 
-程序默认不送（新用户额度为 0）。运营可以另行配置赠送。注册后看钱包里的余额，有一笔入账就是当前的赠送，没有就说明当前没有。
+不赠送。新用户钱包余额是 0。调用前需要充值或使用兑换码。
 
 ## 请求失败要不要一直重试？
 

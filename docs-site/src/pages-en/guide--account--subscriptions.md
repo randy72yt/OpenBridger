@@ -1,12 +1,16 @@
 # Subscriptions
 
-Terms v1.1 on the main site say **plan purchase and auto-renewal are not open yet.** If the wallet or the [subscriptions page]({{CONSOLE_URL}}/subscriptions) shows nothing you can buy, there is no plan for sale. Do not pay against a price list from somewhere else.
+Plans are for sale. The list is on the [wallet]({{CONSOLE_URL}}/wallet) and the [subscriptions page]({{CONSOLE_URL}}/subscriptions). The name, price, validity, and credit on each card are what you buy. This page does not list prices.
 
-The gateway code already has subscription credit, plan records, and a billing preference. Those apply to buyers only after an operator publishes plans and the terms are updated. This page lists no plan names and no prices.
+## Buy one
 
-## Billing preference, when the wallet shows it
+<div class="steps"><div class="step"><strong>Open the plan list</strong><p>Use the wallet or the subscriptions page. Buy only a plan that is shown there.</p></div><div class="step"><strong>Read the confirmation</strong><p>After Subscribe Now, the dialog shows the plan name, validity period, plan quota, and amount due. A reset period or an upgraded group appears there when the plan has one.</p></div><div class="step"><strong>Choose how to pay</strong><p>When online payment is on, you can use the Alipay or WeChat method the wallet already enables. If the plan allows balance payment, the dialog has Pay with Balance. That button stays disabled when the balance is too low or the plan disallows it.</p></div><div class="step"><strong>Wait for the result</strong><p>Do not submit the same purchase again while payment is processing. After success, the wallet or subscriptions page shows the plan. If a plan sets a per-user purchase limit, you cannot buy it again once you reach that limit.</p></div></div>
 
-With no subscription credit, calls use the wallet. Once the account has an active subscription, the default is Subscription First.
+The amount due is the figure in the dialog. A plan priced in yuan shows ¥. Do not pay against a price list from another page or a chat message.
+
+## Billing preference
+
+With no active subscription, calls use the wallet. After you buy a plan, the default is Subscription First.
 
 | Preference | Meaning |
 | --- | --- |
@@ -17,19 +21,13 @@ With no subscription credit, calls use the wallet. Once the account has an activ
 
 If the wallet lets you switch, the selected option applies to later requests.
 
-## If purchases open later
+## Validity, credit, and reset
 
-Trust the confirmation page and the terms in force. At least check:
+The validity period in the dialog is the length of this purchase, such as a number of months or days. If the plan says it changes your group on purchase or on expiry, that note on the plan is the one to follow.
 
-- Price, currency, validity, and included credit
-- Models and groups that are included
-- Whether the wallet is charged after the plan credit runs out
-- Whether renewal is automatic, and where to cancel
-- What happens to unused credit at expiry
+A reset period other than no reset means the plan credit is restored on that schedule. It is not another charge. The dialog has no "charge again at expiry" line. The code has no switch that bills Alipay or WeChat again when the period ends.
 
-Do not pay twice while an order is processing. If a purchase fails, Usage Logs show whether the problem is credit or a model outside the plan.
-
-<div class="callout"><strong>Do not assume auto-renewal today</strong><p>The terms say auto-renewal is not open. If the page does not say auto-renewal, you will not be charged on a cycle.</p></div>
+What happens when plan credit runs out depends on the billing preference and on whether that plan allows wallet overflow. See the table above.
 
 ## Related
 

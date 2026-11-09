@@ -12,7 +12,7 @@ curl -i "{{API_BASE_URL}}/models" \
 - HTTP 200 and a model list: the key and the URL work.
 - 401: the key itself is unusable. See [Error codes](/guide/errors/).
 - 403 that mentions quota: open the [wallet]({{CONSOLE_URL}}/wallet).
-- Cannot connect: the host is `openbridger.com` or `api.openbridger.com`. The path must not be `/v1/v1/models`.
+- Cannot connect: the host is `openbridger.com`. The path must not be `/v1/v1/models`.
 
 Then send the short chat from [Quick start](/guide/quickstart/) and match the request id in [Usage Logs]({{CONSOLE_URL}}/usage-logs).
 

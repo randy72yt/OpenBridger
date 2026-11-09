@@ -4,15 +4,13 @@ The wallet balance is the credit used for calls. Model Square prices decide how 
 
 ## The credit unit
 
-The ledger stores an integer. The code default is **500000 credits = 1 US dollar** (`QuotaPerUnit`). The console can display that as dollars, yuan, or the raw integer. The currency symbol you see in the wallet and the logs is the current display. You do not multiply by this factor yourself.
-
-When the display is yuan, balances are converted with the configured USD exchange rate. That rate and the top-up unit price are operator settings. The amount on the confirmation page is the amount you pay. Do not recompute it from a default in this guide.
+The wallet, Usage Logs, and Model Square show amounts in yuan (¥). The ledger still stores an integer credit. The code default is **500000 credits = 1 US dollar**, and the page converts that into yuan. Pay, balance, and per-call charges are the yuan figures on the page. Do not multiply by an exchange rate yourself.
 
 ## How one request is charged
 
 <div class="steps"><div class="step"><strong>Reserve</strong><p>The gateway estimates the credit for this call. If the wallet or subscription cannot cover it, the call fails with HTTP <code>403</code>, <code>code</code> <code>insufficient_user_quota</code>, and a message about insufficient user quota or a failed pre-charge. Upstream is not called.</p></div><div class="step"><strong>Forward</strong><p>The request is sent only after the reserve succeeds. A failed request refunds the reserve.</p></div><div class="step"><strong>Settle</strong><p>On success the gateway charges actual usage. It debits more if the reserve was low and refunds the difference if the reserve was high. Usage Logs show the settled amount.</p></div></div>
 
-The default preference is Subscription First (`subscription_first`). With no active subscription, the wallet is charged. With one, subscription credit is used first, and a shortfall falls back to the wallet only when that subscription allows it. See [Subscriptions](/guide/account/subscriptions/). The wallet can also switch to Wallet First, Subscription Only, or Wallet Only. The current terms say plan purchases are not open yet.
+The default preference is Subscription First (`subscription_first`). With no active subscription, the wallet is charged. With one, subscription credit is used first, and a shortfall falls back to the wallet only when that subscription allows it. See [Subscriptions](/guide/account/subscriptions/). The wallet can also switch to Wallet First, Subscription Only, or Wallet Only.
 
 A key can also have its own remaining credit. When that key balance is used up the result is `401` and an invalid-token message, which is not the wallet's `403`.
 
@@ -34,7 +32,7 @@ If a charge looks high, check whether the full history was sent again or whether
 
 Online top-ups and redemption codes both add wallet credit. Minimums and refunds are on [Top up and redeem](/guide/account/redeem/).
 
-<div class="callout warning"><strong>Do not reconcile against numbers in this guide</strong><p>Unit prices, exchange rates, welcome credit, and the minimum top-up can be changed in the admin settings. Reconcile against Model Square, the confirmation page, and Usage Logs.</p></div>
+<div class="callout warning"><strong>Do not reconcile against numbers in this guide</strong><p>Model prices are on Model Square. Registration does not include a credit gift. The minimum top-up is whatever the wallet shows. Reconcile against the confirmation page and the yuan amounts in Usage Logs.</p></div>
 
 ## Related
 

@@ -51,7 +51,7 @@ const response = await model.invoke("Hello OpenBridger");
 console.log(response.content);
 ```
 
-这里的 `baseURL` 也是 `{{API_BASE_URL}}`。如果某个版本的包把参数改成了顶层 `baseURL` 而不是 `configuration.baseURL`，以该版本文档为准，只要最终请求主机是 `openbridger.com`（或 `api.openbridger.com`）且路径以 `/v1/chat/completions` 结尾即可。
+这里的 `baseURL` 也是 `{{API_BASE_URL}}`。如果某个版本的包把参数改成了顶层 `baseURL` 而不是 `configuration.baseURL`，以该版本文档为准，只要最终请求主机是 `openbridger.com` 且路径以 `/v1/chat/completions` 结尾即可。
 
 ## 常见问题
 

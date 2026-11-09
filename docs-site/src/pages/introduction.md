@@ -12,7 +12,7 @@ OpenBridger 把多家模型服务放到同一套账号、API Key 和额度下面
 
 <div class="config-card"><div><span>控制台</span><code>{{CONSOLE_URL}}</code></div><div><span>OpenAI 兼容 Base URL</span><code>{{API_BASE_URL}}</code></div><div><span>API Key</span><code>sk-</code> 开头，在「API 密钥」里创建</div></div>
 
-`https://api.openbridger.com` 与 `https://openbridger.com` 指向同一套网关。文档里的示例统一用 `{{API_BASE_URL}}`。Anthropic 客户端会自己在主机名后面加 `/v1/messages`，那种情况只填 `{{CONSOLE_URL}}`，不要再加 `/v1`。详见 [Claude Code](/guide/clients/claude-code/)。
+文档里的示例统一用 `{{API_BASE_URL}}`。Anthropic 客户端会自己在主机名后面加 `/v1/messages`，那种情况只填 `{{CONSOLE_URL}}`，不要再加 `/v1`。详见 [Claude Code](/guide/clients/claude-code/)。
 
 ## 网关实际提供的调用面
 
