@@ -135,6 +135,9 @@ export function RechargeFormCard({
   // In CNY display mode the recharge amount the customer enters (and the
   // backend expects) IS whole RMB — a ¥100 preset charges exactly ¥100.
   const isCNYInput = currency?.quotaDisplayType === "CNY";
+  const amountPresets: PresetAmount[] = isCNYInput
+    ? CNY_PRESET_AMOUNTS
+    : presetAmounts;
   const fromDisplayAmount = (display: number) => Math.round(display);
   const [localAmount, setLocalAmount] = useState(topupAmount.toString());
 
@@ -264,7 +267,7 @@ export function RechargeFormCard({
                     {t("Amount")}
                   </Label>
                   <div className="grid grid-cols-2 gap-1.5 sm:gap-3 md:grid-cols-4">
-                    {(isCNYInput ? CNY_PRESET_AMOUNTS : presetAmounts).map(
+                    {amountPresets.map(
                       (preset) => {
                         // CNY presets are round RMB amounts charged 1:1; USD
                         // presets go through the price/exchange-rate math.

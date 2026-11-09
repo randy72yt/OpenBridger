@@ -60,6 +60,7 @@ export const PLAN_FORM_DEFAULTS: PlanFormValues = {
   title: '',
   subtitle: '',
   price_amount: 0,
+  currency: 'USD',
   duration_unit: 'month',
   duration_value: 1,
   custom_seconds: 0,

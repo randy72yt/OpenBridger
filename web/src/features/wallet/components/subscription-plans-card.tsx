@@ -27,6 +27,7 @@ import {
   ArrowRightLeft,
   CreditCard,
   ReceiptText,
+  ChevronDown,
 } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
@@ -84,7 +85,6 @@ import {
   getDynamicPricingSummary,
 } from "@/features/pricing/lib/dynamic-price";
 import type { PricingModel } from "@/features/pricing/types";
-import { ChevronDown } from "lucide-react";
 
 import type { PaymentMethod, TopupInfo } from "../types";
 
@@ -116,7 +116,7 @@ function getEpayMethods(payMethods: PaymentMethod[] = []): PaymentMethod[] {
 type RateCell = {
   label: string;
   price: number;
-  currency: string | undefined;
+  currency: string;
   months: number;
 };
 
@@ -207,7 +207,7 @@ export function SubscriptionPlansCard({
         let outputUsd = Number.NaN;
         if (isDynamic) {
           const summary = getDynamicPricingSummary(m, {
-            tokenUnit: "1M",
+            tokenUnit: "M",
             usdExchangeRate,
           });
           const entries = summary?.entries || [];
@@ -380,10 +380,12 @@ export function SubscriptionPlansCard({
       map.set(key, list);
     }
     const monthlyPlans = map.get("month:1") || [];
-    const groups = Array.from(map.entries())
-      .sort(([a], [b]) =>
-        a === "month:1" ? -1 : b === "month:1" ? 1 : a.localeCompare(b),
-      )
+    const groups = [...map.entries()]
+      .sort(([a], [b]) => {
+        if (a === "month:1") return -1;
+        if (b === "month:1") return 1;
+        return a.localeCompare(b);
+      })
       .map(([key, groupPlans]) => {
         const [unit, valueStr] = key.split(":");
         const value = Number(valueStr);
@@ -429,7 +431,7 @@ export function SubscriptionPlansCard({
     const monthly = monthlyGroup?.groupPlans || [];
     const others = periodGroups.filter((g) => g.key !== "month:1");
     const base = monthly.length > 0 ? monthly : periodGroups[0].groupPlans;
-    const rows = base.map((m) => {
+    const rows = base.map((m): RateRow | null => {
       const plan = m?.plan;
       if (!plan) return null;
       const total = Number(plan.total_amount || 0);
@@ -456,7 +458,7 @@ export function SubscriptionPlansCard({
       return { title: plan.title || "", total, cells };
     });
     return rows.filter((r): r is RateRow => !!r && r.total > 0);
-  }, [periodGroups]);
+  }, [periodGroups, matchTier]);
 
   const getRemainingDays = (sub: UserSubscriptionRecord) => {
     const endTime = sub?.subscription?.end_time || 0;
@@ -1115,7 +1117,7 @@ export function SubscriptionPlansCard({
                       <tbody>
                         {modelRateRows.map((row) => {
                           const priceOpts = {
-                            tokenUnit: "1M" as const,
+                            tokenUnit: "M" as const,
                             usdExchangeRate,
                           };
                           return (

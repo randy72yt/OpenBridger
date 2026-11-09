@@ -27,6 +27,7 @@ import type {
   PricingCalibrationResult,
   PricingOfferPage,
   PricingOfferSyncResult,
+  PricingProposalBatchResult,
   PricingProposalPage,
   PricingRisk,
   PricingSyncRunsResponse,

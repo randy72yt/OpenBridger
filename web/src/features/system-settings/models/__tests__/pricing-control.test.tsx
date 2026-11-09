@@ -151,6 +151,8 @@ describe('pricing proposal review', () => {
         updating={false}
         onRecalculate={vi.fn()}
         onAction={onAction}
+        onBatchAction={vi.fn()}
+        batching={false}
         onPublish={vi.fn()}
       />
     )
@@ -177,6 +179,8 @@ describe('pricing proposal review', () => {
         updating={false}
         onRecalculate={vi.fn()}
         onAction={vi.fn()}
+        onBatchAction={vi.fn()}
+        batching={false}
         onPublish={vi.fn()}
       />
     )
