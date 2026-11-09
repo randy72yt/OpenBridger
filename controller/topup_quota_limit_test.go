@@ -126,9 +126,13 @@ func TestRequestAmountRejectsTopUpThatCannotBeSettled(t *testing.T) {
 func TestRequestAmountRejectsTopUpThatWouldOverflowWallet(t *testing.T) {
 	oldQuotaPerUnit := common.QuotaPerUnit
 	oldDisplayType := operation_setting.GetGeneralSetting().QuotaDisplayType
+	oldMinTopUp := operation_setting.MinTopUp
 	oldDB := model.DB
 	common.QuotaPerUnit = 500000
 	operation_setting.GetGeneralSetting().QuotaDisplayType = operation_setting.QuotaDisplayTypeUSD
+	// MinTopUp is a face-value minimum (default 10). An amount below it is
+	// rejected before the wallet ceiling, so this case uses the minimum.
+	operation_setting.MinTopUp = 10
 
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
@@ -137,6 +141,7 @@ func TestRequestAmountRejectsTopUpThatWouldOverflowWallet(t *testing.T) {
 	t.Cleanup(func() {
 		common.QuotaPerUnit = oldQuotaPerUnit
 		operation_setting.GetGeneralSetting().QuotaDisplayType = oldDisplayType
+		operation_setting.MinTopUp = oldMinTopUp
 		model.DB = oldDB
 		sqlDB, dbErr := db.DB()
 		if dbErr == nil {
@@ -158,7 +163,7 @@ func TestRequestAmountRejectsTopUpThatWouldOverflowWallet(t *testing.T) {
 	ctx.Request = httptest.NewRequest(
 		http.MethodPost,
 		"/api/user/amount",
-		strings.NewReader(`{"amount":1}`),
+		strings.NewReader(`{"amount":10}`),
 	)
 	ctx.Request.Header.Set("Content-Type", "application/json")
 

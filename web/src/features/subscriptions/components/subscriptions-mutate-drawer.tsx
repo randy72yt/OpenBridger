@@ -322,7 +322,7 @@ export function SubscriptionsMutateDrawer({
                         <FormField
                           control={form.control}
                           name='currency'
-                          render={({ currencyField }) => (
+                          render={({ field: currencyField }) => (
                             <FormItem className='w-[110px] shrink-0'>
                               <FormControl>
                                 <Select
