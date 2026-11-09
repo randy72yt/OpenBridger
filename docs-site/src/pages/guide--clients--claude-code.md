@@ -1,45 +1,72 @@
 # 在 Claude Code 中使用 OpenBridger
 
-支持 Anthropic 兼容协议的线路可以通过环境变量连接 Claude Code。请先在控制台确认目标模型和线路可用。
+Claude Code 使用 Anthropic Messages 协议。网关对应的路径是 `POST /v1/messages`。密钥可以放在 `x-api-key`（Claude Code 会这么做），网关在这条路径上接受它。
 
-## 临时配置
+模型名必须是 [模型广场]({{CONSOLE_URL}}/pricing) 里的完整 ID，而且当前分组要有能处理 Messages 请求的线路。只在广场里看得到名字还不够，需要实际发一条短请求并用 [使用日志]({{CONSOLE_URL}}/usage-logs) 确认。
+
+## 开始之前
+
+- 已安装 `claude` 命令。
+- 一把名为 `claude-code` 的 API Key。
+- 知道你要使用的模型 ID。
+
+## 当前终端临时生效
 
 ```bash
 export ANTHROPIC_BASE_URL="{{CONSOLE_URL}}"
-export ANTHROPIC_AUTH_TOKEN="YOUR_API_KEY"
+export ANTHROPIC_AUTH_TOKEN="sk-你的密钥"
 
 cd /path/to/your/project
 claude
 ```
 
-关闭当前终端后，这组临时变量会失效。要恢复官方服务，运行：
+`ANTHROPIC_BASE_URL` 是站点根，**不要**写成 `{{API_BASE_URL}}`。Claude Code 会自己请求 `{BASE}/v1/messages`。写成带 `/v1` 的地址会变成 `/v1/v1/messages`。
+
+关掉这个终端后变量就没了。恢复官方服务：
 
 ```bash
 unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN
 ```
 
-## 常见问题
+然后新开终端再运行 `claude`。
 
-| 现象 | 检查方式 |
-| --- | --- |
-| 仍然要求登录 | 重新打开终端，确认两个 `ANTHROPIC_` 环境变量已生效 |
-| 401 / unauthorized | 重新复制 API Key，避免空格、换行和重复的 Bearer 前缀 |
-| model not found | 确认当前分组拥有 Claude Code 请求模型的权限 |
-| 请求立即失败 | 在 AI 体验台测试模型，并检查余额与使用日志 |
+## 写进 Claude Code 的配置
 
-<div class="callout warning"><strong>兼容性说明</strong><p>平台支持的模型不等于都支持 Claude Code。模型、线路和 Anthropic 协议三者需要同时匹配。</p></div>
-
-## 持久化配置
-
-也可以把环境变量写入 `~/.claude/settings.json`：
+`~/.claude/settings.json`：
 
 ```json
 {
   "env": {
     "ANTHROPIC_BASE_URL": "{{CONSOLE_URL}}",
-    "ANTHROPIC_AUTH_TOKEN": "YOUR_API_KEY"
+    "ANTHROPIC_AUTH_TOKEN": "sk-你的密钥"
   }
 }
 ```
 
-该文件包含 API Key，不要提交到仓库或分享截图。团队项目不要把真实密钥写入项目级配置。可使用 `env | grep ANTHROPIC` 检查当前终端实际生效的变量。
+这个文件里有密钥，不要提交，不要截图。项目目录里的 `.claude/settings.json` 同样不要写入真实密钥。
+
+如果客户端允许指定模型，把值设成广场上的完整 ID。Claude Code 默认发出的模型名如果和广场不一致，会得到 `503`「无可用渠道」或上游的 model not found。以日志里记录的模型 ID 为准。
+
+检查当前终端实际生效的变量：
+
+```bash
+env | grep ANTHROPIC_
+```
+
+只确认变量在不在，不要把输出贴到聊天或工单。
+
+## 常见问题
+
+| 现象 | 处理 |
+| --- | --- |
+| 仍要求登录官方账号 | 新开终端，确认两个 `ANTHROPIC_` 变量已导出，再启动 `claude` |
+| 401 | 重新复制密钥。不要在 token 前面再加 `Bearer` |
+| 503 无可用渠道 | 广场中的模型 ID 与 Claude Code 发出的名字不一致，或该分组没有 Messages 线路 |
+| 请求没进使用日志 | Base URL 还指着官方主机。用 `env | grep ANTHROPIC_BASE_URL` 核对 |
+
+<div class="callout warning"><strong>协议要对上</strong><p>Chat Completions 可用，不等于 Claude Code 可用。需要模型、分组和 <code>/v1/messages</code> 同时成立。</p></div>
+
+## 相关
+
+- [CC Switch](/guide/clients/cc-switch/)
+- [错误码](/guide/errors/)

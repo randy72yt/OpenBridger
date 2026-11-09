@@ -1,30 +1,36 @@
 # Subscriptions
 
-Plan names, prices, credits, validity, concurrency, and renewal rules are defined by the console. A plan that is not displayed is not an offer.
+Plans are for sale. The list is on the [wallet]({{CONSOLE_URL}}/wallet) and the [subscriptions page]({{CONSOLE_URL}}/subscriptions). The name, price, validity, and credit on each card are what you buy. This page does not list prices.
 
-A plan may provide a separate credit pool or entitlement for a fixed period. Its validity, eligible models, and charge order can differ from wallet credit.
+## Buy one
 
-## Check before purchasing
+<div class="steps"><div class="step"><strong>Open the plan list</strong><p>Use the wallet or the subscriptions page. Buy only a plan that is shown there.</p></div><div class="step"><strong>Read the confirmation</strong><p>After Subscribe Now, the dialog shows the plan name, validity period, plan quota, and amount due. A reset period or an upgraded group appears there when the plan has one.</p></div><div class="step"><strong>Choose how to pay</strong><p>When online payment is on, you can use the Alipay or WeChat method the wallet already enables. If the plan allows balance payment, the dialog has Pay with Balance. That button stays disabled when the balance is too low or the plan disallows it.</p></div><div class="step"><strong>Wait for the result</strong><p>Do not submit the same purchase again while payment is processing. After success, the wallet or subscriptions page shows the plan. If a plan sets a per-user purchase limit, you cannot buy it again once you reach that limit.</p></div></div>
 
-- Supported models, protocols, and account groups.
-- Included credits, validity, and behavior after they are exhausted.
-- Concurrency, rate, or other usage limits.
-- Automatic renewal, cancellation, and refund rules.
-- Charge priority between plan credits and wallet balance.
-- Whether unused credit can roll over, be shared, transferred, or stacked.
-- What happens to unused credit at expiry.
+The amount due is the figure in the dialog. A plan priced in yuan shows ¥. Do not pay against a price list from another page or a chat message.
 
-<div class="grid"><div class="card"><h3>Learning</h3><p>Use a small amount to validate models and tools.</p></div><div class="card"><h3>Development</h3><p>Estimate from call frequency, context size, and model price.</p></div><div class="card"><h3>Teams</h3><p>Separate keys by member and environment, and check concurrency needs.</p></div></div>
+## Billing preference
 
-## Purchase, renewal, and cancellation
+With no active subscription, calls use the wallet. After you buy a plan, the default is Subscription First.
 
-- Recheck the plan, amount, currency, validity, and entitlement start time on the confirmation page.
-- Treat a plan as automatically renewing only when the page explicitly says so and shows the renewal terms.
-- Manage or cancel renewal through the console entry provided for that plan.
-- Confirm the order under Wallet, Plans, or Orders. Do not submit a duplicate while processing.
+| Preference | Meaning |
+| --- | --- |
+| Subscription First (default) | With no active subscription, the wallet is charged. With one, subscription credit is used first. The wallet is used afterward only when that subscription allows wallet overflow. Otherwise the error is insufficient subscription credit. |
+| Wallet First | The wallet is charged first. If wallet credit is insufficient, the gateway tries the subscription. |
+| Subscription Only | Subscription credit only. If it is not enough, HTTP `403` and a message that subscription credit is insufficient or no subscription is configured. |
+| Wallet Only | Wallet only. |
 
-## A plan is not being used
+If the wallet lets you switch, the selected option applies to later requests.
 
-Confirm that it is active, has remaining credit, includes the target model, and matches the account and group used by the client. Then inspect the actual model and error in Usage Logs.
+## Validity, credit, and reset
 
-<div class="callout"><strong>Before purchase</strong><p>The purchase confirmation page defines the final price, entitlements, renewal, cancellation, and refund rules.</p></div>
+The validity period in the dialog is the length of this purchase, such as a number of months or days. If the plan says it changes your group on purchase or on expiry, that note on the plan is the one to follow.
+
+A reset period other than no reset means the plan credit is restored on that schedule. It is not another charge. The dialog has no "charge again at expiry" line. The code has no switch that bills Alipay or WeChat again when the period ends.
+
+What happens when plan credit runs out depends on the billing preference and on whether that plan allows wallet overflow. See the table above.
+
+## Related
+
+- [Credits and billing](/guide/billing/)
+- [Top up and redeem](/guide/account/redeem/)
+- [Terms of service](/legal/terms/)

@@ -1,16 +1,20 @@
 # 在 Codex 中使用 OpenBridger
 
-Codex 可以通过自定义模型供应商连接 OpenBridger。API Key 使用环境变量保存，配置文件只引用环境变量名。
+Codex 通过自定义模型供应商调用 Responses 协议。网关路径是 `POST /v1/responses`。密钥放在环境变量，配置文件只写变量名。
 
-## 配置 API Key
+## 开始之前
+
+- 已安装 Codex CLI。
+- 一把名为 `codex` 的 API Key。
+- 模型广场中的完整模型 ID。该模型需要能被 Responses 路径选到线路，否则会 `503`「无可用渠道」。
+
+## 配置
 
 ```bash
-export OPENBRIDGER_API_KEY="YOUR_API_KEY"
+export OPENBRIDGER_API_KEY="sk-你的密钥"
 ```
 
-## 配置自定义供应商
-
-编辑 `~/.codex/config.toml`：
+`~/.codex/config.toml`：
 
 ```toml
 model = "MODEL_ID_FROM_CONSOLE"
@@ -23,24 +27,36 @@ env_key = "OPENBRIDGER_API_KEY"
 wire_api = "responses"
 ```
 
-<div class="callout"><strong>模型与协议</strong><p>模型名称必须与控制台展示的完整 ID 一致。Codex 使用 Responses 协议，因此所选模型和线路也必须支持该协议。</p></div>
+`base_url` 含 `/v1`。`wire_api` 必须是 `responses`，这样客户端才会走 `/v1/responses`，而不是 Chat Completions。
 
-## 启动与验证
+不要把 `sk-` 密钥写进 `config.toml`。
+
+## 启动
 
 ```bash
 cd /path/to/your/project
 codex
 ```
 
-- `401`：检查环境变量是否为空、Key 是否有效。
-- `model not found`：从控制台重新复制完整模型 ID。
-- 请求无法完成：先在 AI 体验台测试同一模型，再查看使用日志。
+到 [使用日志]({{CONSOLE_URL}}/usage-logs) 核对模型和密钥名 `codex`。
 
-<div class="callout warning"><strong>不要把密钥写进项目</strong><p>不要把真实 API Key 写进 config.toml 或代码仓库。需要恢复官方服务时，切回原模型供应商并重新启动 Codex。</p></div>
+恢复官方供应商时，把 `model_provider` 改回原来的值，或删掉这段供应商，然后重启 Codex。不需要退出 ChatGPT 账号。
 
-## 配置检查
+## 检查
 
-- 启动后确认界面显示的模型与 `config.toml` 一致。
-- 使用 `echo $OPENBRIDGER_API_KEY` 只检查变量是否为空，不要把输出复制到聊天或工单。
-- 长期使用时可在个人 shell 配置中设置变量，但不要写进项目目录。
-- 不需要退出 ChatGPT 账号；切换 `model_provider` 后重启 Codex 即可切换服务。
+- 界面上的模型名与 `config.toml` 的 `model` 一致。
+- `echo "$OPENBRIDGER_API_KEY" >/dev/null` 只用来看变量是否为空。不要把密钥打到屏幕上再复制。
+- 变量写在个人 shell 配置里可以，不要写进项目仓库。
+
+## 常见问题
+
+| 现象 | 处理 |
+| --- | --- |
+| 401 | 环境变量为空，或密钥已禁用 |
+| 503 无可用渠道 | 模型 ID 不是广场上的完整 ID，或当前分组没有 Responses 线路 |
+| 请求去了别的供应商 | `model_provider` 没有改成 `openbridger`，或旧进程还在 |
+
+## 相关
+
+- [CC Switch](/guide/clients/cc-switch/)
+- [OpenAI 兼容调用](/guide/clients/openai-compatible/)

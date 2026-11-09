@@ -1,24 +1,37 @@
 # 在 Cursor 中使用 OpenBridger
 
-如果当前 Cursor 版本提供自定义 OpenAI 兼容服务入口，可以填写 OpenBridger 的 Base URL、API Key 和模型 ID。
+Cursor 在提供「自定义 OpenAI Base URL」或 OpenAI Compatible 供应商时，可以让 Chat 或 Agent 走 OpenBridger。菜单名字会随版本变化。找不到 Base URL 一项时，该版本不能按本页接入。
 
-<div class="steps"><div class="step"><strong>打开模型设置</strong><p>在 Cursor Settings 中查找 Models、API Keys 或自定义 Provider。</p></div><div class="step"><strong>添加兼容服务</strong><p>选择 OpenAI Compatible，或使用允许覆盖 Base URL 的 OpenAI 配置。</p></div><div class="step"><strong>填写模型</strong><p>Base URL 使用 <code>{{API_BASE_URL}}</code>，并从控制台复制完整模型 ID。</p></div><div class="step"><strong>发送短请求</strong><p>保存后在 Chat 或 Agent 中测试，并在 OpenBridger 使用日志中核对。</p></div></div>
+## 开始之前
 
-<div class="callout"><strong>版本差异</strong><p>Cursor 的菜单和自带 API Key 能力可能随版本或套餐变化。Tab Completion 等专用功能也可能继续使用 Cursor 自有服务。</p></div>
+- 一把只给 Cursor 用的 API Key，见 [创建 API Key](/guide/api-key/)。
+- 从 [模型广场]({{CONSOLE_URL}}/pricing) 复制的完整模型 ID。
+- 确认你的 Cursor 版本允许使用自带 API Key。这个范围由 Cursor 的版本和套餐决定，OpenBridger 不能代替这项许可。
 
-## 账号、内置模型与切换
+## 配置
 
-- 不需要退出 Cursor 账号；账号同步和编辑器功能与自定义模型配置相互独立。
-- 如果启用了全局 `Override OpenAI Base URL`，切回官方模型前先关闭该开关。
-- Chat、Agent 与 Tab Completion 可能使用不同模型入口，应分别检查。
-- Cursor 对自带 API Key 的使用范围可能受当前版本或套餐限制。
+<div class="steps"><div class="step"><strong>打开 Cursor Settings</strong><p>找到 Models、API Keys 或自定义 Provider。</p></div><div class="step"><strong>填写 OpenAI 兼容项</strong><p>Override OpenAI Base URL 或同类开关打开后，Base URL 填 <code>{{API_BASE_URL}}</code>，Key 填 <code>sk-</code> 开头的密钥。</p></div><div class="step"><strong>添加模型 ID</strong><p>使用广场上的完整 ID。不要只写厂商家族名。</p></div><div class="step"><strong>发一句短消息</strong><p>在 Chat 里发送，然后到 <a href="{{CONSOLE_URL}}/usage-logs">使用日志</a> 按这把密钥核对。</p></div></div>
+
+<div class="config-card"><div><span>Base URL</span><code>{{API_BASE_URL}}</code></div><div><span>API Key</span><code>sk-...</code></div><div><span>Model</span><code>模型广场中的完整 ID</code></div></div>
+
+## 和 Cursor 自己的功能分开
+
+- 不需要退出 Cursor 账号。账号同步和自定义模型是两件事。
+- Tab Completion 等由 Cursor 提供的补全，可能仍然走 Cursor 自己的服务，不会出现在 OpenBridger 日志里。
+- Chat、Agent、补全要分别看各自的模型设置。
+- 全局 Override 打开时，官方模型也会被带到这个 Base URL。切回官方模型前先关掉它，再重启 Cursor。
 
 ## 常见问题
 
-| 现象 | 处理方式 |
+| 现象 | 处理 |
 | --- | --- |
-| 没有 Verify 按钮 | 保存后直接发送短消息，并在 OpenBridger 使用日志确认 |
-| model not found | 重新复制完整模型 ID，并核对分组权限 |
-| 官方模型也报错 | 关闭全局 Base URL 覆盖并重启 Cursor |
-| Network / TLS 错误 | 检查地址与网络；客户端支持时尝试 HTTP/1.1 兼容模式 |
-| Tab 没有走 OpenBridger | Tab Completion 可能仍使用 Cursor 自有服务 |
+| 没有 Verify 按钮 | 保存后直接发短消息，用使用日志确认 |
+| model not found 或 503 无可用渠道 | 重新复制模型 ID，核对密钥分组 |
+| 官方模型也失败 | 关闭 Base URL 覆盖并重启 |
+| 日志里没有请求 | 当前功能没有走自定义 Base URL，或仍在使用 Cursor 自有模型 |
+| 401 | 密钥多了空格或写了两次 `Bearer` |
+
+## 相关
+
+- [OpenAI 兼容调用](/guide/clients/openai-compatible/)
+- [故障排查](/troubleshooting/)

@@ -1,16 +1,25 @@
 # 在 Open WebUI 中使用 OpenBridger
 
-通过界面添加全局连接通常需要 Open WebUI 管理员权限。普通用户只能使用管理员已经启用的模型。
+添加全局 OpenAI 连接需要 Open WebUI 的管理员。普通用户只能使用管理员已经启用的模型。
 
-<div class="steps"><div class="step"><strong>进入 Connections</strong><p>在 Admin Panel / Settings 中打开 OpenAI API 连接设置。</p></div><div class="step"><strong>添加连接</strong><p>名称填写 OpenBridger，URL 使用 <code>{{API_BASE_URL}}</code>，Key 使用独立 API Key。</p></div><div class="step"><strong>刷新模型</strong><p>保存后刷新列表；无法自动发现时手动限制或填写模型 ID。</p></div><div class="step"><strong>核对日志</strong><p>发送短消息，并在 OpenBridger 使用日志中确认请求。</p></div></div>
+## 在管理界面添加
 
-<div class="callout warning"><strong>共享范围</strong><p>管理员保存的连接可能供多个 Open WebUI 用户使用。请设置适当的模型、额度和访问限制。</p></div>
+<div class="steps"><div class="step"><strong>打开连接设置</strong><p>Admin Panel 或 Settings 里的 OpenAI API Connections。</p></div><div class="step"><strong>新增一条</strong><p>名称 OpenBridger，URL 填 <code>{{API_BASE_URL}}</code>，密钥用单独创建的 API Key。</p></div><div class="step"><strong>刷新模型</strong><p>保存后刷新。自动发现失败时，按 Open WebUI 的模型过滤规则手工填入模型广场中的 ID。</p></div><div class="step"><strong>用短消息核对</strong><p>在 OpenBridger <a href="{{CONSOLE_URL}}/usage-logs">使用日志</a> 里应出现这把密钥。</p></div></div>
 
-## 容器环境变量方式
+<div class="callout warning"><strong>一把密钥会被实例上的用户共用</strong><p>管理员保存的连接对多个 Open WebUI 用户生效时，用量都记在这把密钥上。按实例或团队分开建密钥，并在密钥上设置额度上限。</p></div>
+
+## 用环境变量
 
 ```bash
 OPENAI_API_BASE_URL={{API_BASE_URL}}
-OPENAI_API_KEY=YOUR_API_KEY
+OPENAI_API_KEY=sk-你的密钥
 ```
 
-修改 Docker Compose 或容器环境变量后，需要重新创建或重启 Open WebUI 容器；只刷新浏览器不会加载新值。多人共享同一个全局 Key 时，用量会汇总到该 Key，建议按实例或团队单独创建。
+改的是容器环境，不是浏览器。修改 Docker Compose 后要重新创建或重启 Open WebUI 容器。只刷新网页不会读到新值。
+
+若你使用的 Open WebUI 版本把变量名写成 `OPENAI_API_BASE_URLS`（带 S）或要求 URL 列表，以该版本文档为准，值仍然是 `{{API_BASE_URL}}`。
+
+## 相关
+
+- [创建 API Key](/guide/api-key/)
+- [用量与日志](/guide/account/usage/)

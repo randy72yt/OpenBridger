@@ -1,16 +1,14 @@
 # 在 Trae 中使用 OpenBridger
 
-如果当前 Trae 版本支持自定义模型或 OpenAI Compatible Provider，可按通用方式接入。
+Trae 的版本如果提供自定义模型或 OpenAI Compatible 供应商，就用下面的值。菜单里没有 Base URL 或自定义供应商时，这个版本不能按本页接入。
 
-<div class="config-card"><div><span>Provider</span><code>OpenAI Compatible</code></div><div><span>Base URL</span><code>{{API_BASE_URL}}</code></div><div><span>API Key</span><code>YOUR_API_KEY</code></div><div><span>Model</span><code>控制台中的完整模型 ID</code></div></div>
+<div class="config-card"><div><span>Provider</span><code>OpenAI Compatible</code></div><div><span>Base URL</span><code>{{API_BASE_URL}}</code></div><div><span>API Key</span><code>sk-...</code></div><div><span>Model</span><code>模型广场中的完整 ID</code></div></div>
 
-保存后先发送一条短消息，再到使用日志确认请求。若客户端要求填写完整 Endpoint，才追加 `/chat/completions`。
+<div class="steps"><div class="step"><strong>打开模型或供应商设置</strong><p>找到自定义 OpenAI 或 Base URL。</p></div><div class="step"><strong>填入上面四项</strong><p>只有字段写明要完整 Endpoint 时，才使用 <code>{{API_BASE_URL}}/chat/completions</code>。</p></div><div class="step"><strong>分别检查 Chat、Agent 和补全</strong><p>它们可能各有一个模型入口。补全不可用时，不代表对话也没有走网关。</p></div><div class="step"><strong>用使用日志确认</strong><p>短消息应出现在对应密钥下。</p></div></div>
 
-<div class="callout warning"><strong>版本差异</strong><p>菜单名称和自定义模型能力以当前客户端为准。内置模型与自定义 Provider 可以并存，切换时注意当前选中的供应商。</p></div>
+不需要退出 Trae 账号。恢复内置服务时切回官方供应商并关掉 OpenBridger 这一项。
 
-## 使用与切换
+## 相关
 
-- 无需退出 Trae 账号；编辑器账号与自定义 Provider 是不同配置。
-- 如果只有聊天可用而代码补全不可用，分别检查 Chat、Agent 和 Completion 的模型入口。
-- 只有字段明确要求完整 Endpoint 时，才在地址后追加 `/chat/completions`。
-- 恢复内置服务时切回官方模型并停用 OpenBridger Provider。
+- [Cursor](/guide/clients/cursor/)
+- [故障排查](/troubleshooting/)

@@ -26,6 +26,10 @@ function resolveSiteVariables(value) {
     .replaceAll('{{API_BASE_URL}}', `${mainSiteUrl}/v1`)
 }
 
+function prefixInternalLinks(html, language) {
+  return html.replace(/href="\/(?![a-z]{2}\/)/g, `href="/${language}/`)
+}
+
 function renderNavigation(activeSlug, language, currentSite) {
   return currentSite.groups.map((group) => `
     <section class="nav-group">
@@ -39,8 +43,8 @@ function renderDocument({ slug, title, markdown, language, currentSite }) {
     ? { guide: '实用教程', menu: '打开目录', search: '搜索教程', console: '进入控制台', theme: '切换主题', nav: '文档目录', help: '需要帮助？', contact: '联系我们', placeholder: '搜索教程、配置和错误码…', startSearch: '输入关键词开始搜索', close: '关闭搜索' }
     : { guide: 'Guides', menu: 'Open navigation', search: 'Search guides', console: 'Open console', theme: 'Toggle theme', nav: 'Documentation', help: 'Need help?', contact: 'Contact us', placeholder: 'Search guides, configuration, and errors…', startSearch: 'Type to search', close: 'Close search' }
   const alternateLanguage = language === 'zh' ? 'en' : 'zh'
-  const source = resolveSiteVariables(markdown).replaceAll('href="/', `href="/${language}/`)
-  const content = marked.parse(source, { gfm: true })
+  const source = resolveSiteVariables(markdown)
+  const content = prefixInternalLinks(marked.parse(source, { gfm: true }), language)
   const description = `${title}｜${currentSite.description}`
   return `<!doctype html>
 <html lang="${language === 'zh' ? 'zh-CN' : 'en'}">
