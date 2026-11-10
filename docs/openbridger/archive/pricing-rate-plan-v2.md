@@ -1,12 +1,16 @@
 # 费率方案 v2：成本对齐定价 + 积分制套餐
 
+> **已废弃，只作历史草稿。** 本文是 2026-11-05 的 v2 草案（文末 §10 改称 v2.2），当时写成「方案待确认，未执行」。现网已经是 v2.3，记录在 [`../pricing-plan-v2.3.md`](../pricing-plan-v2.3.md)。以那一份为准：套餐 1–4 月付 ¥19/¥39/¥69/¥129，套餐 5–8 半年付且每周重置 ¥89/¥185/¥330/¥619，`GroupRatio` 为 `{"default":1,"pro":1}`，49 个模型的 `billing_expr` 中有 20 个含 cache-read（`cr`）。
+>
+> 本文以及已删除的 `scripts/pricing-v2-apply.sql` 都不要执行。那份 SQL 会把 `GroupRatio` 写成 `default`/`vip`/`svip`（丢掉 `pro`），把套餐 5–8 改成月付 1–4 的每月重置副本，并去掉现网 `billing_expr` 里的 `cr` 项。不要从 git 历史、服务器 `/tmp` 或备份里找回它。
+
 | 项 | 值 |
 |---|---|
 | 编制日期 | 2026-11-05 |
 | 数据窗口 | 2026-09-24 04:14 ~ 2026-11-01 23:50（全部 436 次成功调用） |
 | 数据来源 | 生产库 `logs` / `upstream_model_offers` / `options` / `subscription_plans` |
-| 状态 | **方案待确认，未执行**；落地 SQL 见 `scripts/pricing-v2-apply.sql` |
-| 影响面 | 计费表达式（48 模型）、分组倍率、8 个套餐额度与文案 |
+| 状态 | **已废弃**。现网记录见 [`../pricing-plan-v2.3.md`](../pricing-plan-v2.3.md)。下文数字是草稿，与现网不一致。 |
+| 影响面 | 历史草稿：计费表达式（48 模型）、分组倍率、8 个套餐额度与文案 |
 
 ---
 
@@ -191,26 +195,22 @@ GroupRatio = 1
 
 ---
 
-## 7. 落地
+## 7. 落地（草稿，已作废）
 
 ### 7.1 变更清单
 
 | # | 对象 | 变更 | 方式 |
 |---|---|---|---|
-| 1 | `options.billing_setting.billing_expr` | 48 模型重写为成本对齐表达式 | `scripts/pricing-v2-apply.sql` |
-| 2 | `options.GroupRatio` | `2 → 1` | 同上 |
-| 3 | `subscription_plans` | 8 条 `total_amount` + `subtitle` | 同上 |
+| 1 | `options.billing_setting.billing_expr` | 48 模型重写为成本对齐表达式 | 草稿，未采用。不要执行任何费率 SQL |
+| 2 | `options.GroupRatio` | `2 → 1` | 草稿。现网是 `{"default":1,"pro":1}`，见 v2.3 记录 |
+| 3 | `subscription_plans` | 8 条 `total_amount` + `subtitle` | 草稿。现网套餐 5–8 为每周重置，见 v2.3 记录 |
 | 4 | 钱包页文案 | 额度 → 积分 / 次数 | 前端 |
 | 5 | `QuotaForNewUser` | `0 → 69,444`（100 积分） | 后台配置 |
 | 6 | 单次请求上限 | 128K token 硬上限、单次计费封顶 30 积分 | 后台配置 |
 
 ### 7.2 执行顺序
 
-1. 备份 `options` / `subscription_plans`（`mysqldump` 单表）；
-2. 跑 `scripts/pricing-v2-apply.sql`；
-3. 用一个测试账号打 3 次不同模型，核对 `logs.other` 里 `expr` 与 `quota` 是否符合新价；
-4. 打开钱包页核对套餐卡片与积分换算；
-5. 出问题按 SQL 文件末尾 ROLLBACK 段落回滚。
+本节原步骤要求执行 `scripts/pricing-v2-apply.sql`。该文件已从仓库删除，步骤作废。现网费率以 [`../pricing-plan-v2.3.md`](../pricing-plan-v2.3.md) 为准，不要按本节改生产数据。
 
 ### 7.3 第二阶段（工程）
 
@@ -327,6 +327,8 @@ GroupRatio = 1
 ---
 
 ## 10. 决策定稿（2026-11-05 09:00，v2.2）
+
+本节是当天的草稿结论，后来被 v2.3 现网记录取代。套餐重置、`GroupRatio` 与 `cr` 以 [`../pricing-plan-v2.3.md`](../pricing-plan-v2.3.md) 为准。不要按本节改生产数据。
 
 | 待定项 | 用户决定 | 落地 |
 |---|---|---|

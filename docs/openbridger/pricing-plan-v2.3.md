@@ -1,15 +1,28 @@
-# OpenBridger 费率与积分体系方案
+# OpenBridger 费率与积分体系方案 v2.3
 
 | 项 | 值 |
 |---|---|
-| 版本 | v2.3（定稿） |
-| 日期 | 2026-11-05 |
+| 版本 | v2.3（定稿，现网记录） |
+| 日期 | 2026-11-05 定稿；2026-11-10 按现网改为记录 |
 | 编制依据 | 生产库 `logs` / `upstream_model_offers` / `options` / `subscription_plans` 实测数据 |
-| 数据窗口 | 2026-09-24 04:14 ~ 2026-11-01 23:50，436 次成功调用 |
-| 状态 | **待执行**。落地脚本：`scripts/pricing-v2-apply.sql` |
-| 影响面 | 49 个模型的计费表达式（模板保形缩放，保留分档）、分组倍率、8 个套餐的额度与文案 |
+| 数据窗口 | 2026-09-24 04:14 ~ 2026-11-01 23:50，436 次成功调用（定价测算）；套餐、`GroupRatio`、`cr` 以 2026-11-10 现网核对为准 |
+| 状态 | **已上线**。本文记录现网 v2.3，不是待执行方案。仓库里没有可执行的费率 SQL。 |
+| 影响面 | 49 个模型的计费表达式（模板保形缩放，保留分档与 cache-read）、分组倍率、8 个套餐的额度与文案 |
 
-> v2.3 修订（相对 v2.2）：① 重写方式从「整键覆写为单一 standard 档」改为**模板保形缩放**——以现网表达式为模板，只缩放各 tier 分支内的系数，保留 long_context / 0_200k / peak-off_peak 分档与 service_tier 倍率（v2.2 会重蹈 §2.4 断点二的覆辙）；② 模型清单修正为 49：现网 `billing_expr` 实为 47 个（含不在报价表的 `deepseek-v4-flash`，维持现价），新增 `gemini-3-pro`、`gemini-3.1-pro`；③ 缓存价规则修正为「随折扣因子同比例缩放」（v2.2 写的 ×0.1 规则与实际数据不符）；④ 术语修正：「标准池」一词两义（定价分组 42 vs 售卖池 26）改为「折扣池 / 渠道价池」与「基础池 / 全量池」；⑤ §12.3 赠送测算数字勘误。
+> v2.3 修订（相对 v2.2）：① 重写方式从「整键覆写为单一 standard 档」改为**模板保形缩放**——以当时现网表达式为模板，只缩放各 tier 分支内的系数，保留 long_context / 0_200k / peak-off_peak 分档与 service_tier 倍率（v2.2 会重蹈 §2.4 断点二的覆辙）；② 模型清单修正为 49：当时 `billing_expr` 实为 47 个（含不在报价表的 `deepseek-v4-flash`，维持现价），新增 `gemini-3-pro`、`gemini-3.1-pro`；③ 缓存价规则修正为「随折扣因子同比例缩放」（v2.2 写的 ×0.1 规则与实际数据不符）；④ 术语修正：「标准池」一词两义（定价分组 42 vs 售卖池 26）改为「折扣池 / 渠道价池」与「基础池 / 全量池」；⑤ §12.3 赠送测算数字勘误。
+>
+> 2026-11-10 文档订正：文件名从 `pricing-plan-v2.2.md` 改为 `pricing-plan-v2.3.md`。状态从「待执行」改为「已上线」。`GroupRatio` 现网是 `{"default":1,"pro":1}`。套餐 5–8 是半年付、每周重置。49 个模型的 `billing_expr` 里有 20 个含 cache-read（`cr`）。已删除 `scripts/pricing-v2-apply.sql`（见 §10）。
+
+## 0. 现网快照（2026-11-10）
+
+生产已经是 v2.3。下面四行是核对现网时用的值；后文 §1–§9 保留定价依据，§10 是同一组现网值的展开。
+
+| 项 | 现网 |
+|---|---|
+| 套餐 1–4 | 月付 ¥19 / ¥39 / ¥69 / ¥129 |
+| 套餐 5–8 | 半年付 ¥89 / ¥185 / ¥330 / ¥619，`quota_reset_period='weekly'`（每周重置，额度是每周额度） |
+| `GroupRatio` | `{"default":1,"pro":1}` |
+| `billing_expr` | 49 个模型；其中 20 个表达式含 cache-read（`cr`）项 |
 
 ---
 
@@ -75,7 +88,7 @@
 | 计费表达式用价 | $0.200/M（官方挂牌） | 未跟随成本 |
 | 用户实测支付 | **$1.318/M** | 是真实成本的 80 倍 |
 
-`GroupRatio = {"default":2,"svip":2,"vip":2}` 是历史遗留：所有分组在挂牌价上统统一倍，没有任何业务依据。
+上线前 `GroupRatio = {"default":2,"svip":2,"vip":2}` 是历史遗留：所有分组在挂牌价上统统一倍，没有任何业务依据。这组键已经不在现网。现网是 `{"default":1,"pro":1}`（§10.2）。
 
 ### 2.3 各模型加价倍数失衡
 
@@ -107,7 +120,7 @@
 
 **断点二（P2）**：`pricingChangeForProposal` 把表达式重建成两段式 `tier("base", p*x + c*y)`，**丢掉缓存价、长上下文分档、service_tier 倍率**。现在 `PRICING_AUTO_PUBLISH=false` 所以没爆，一旦打开，全部模型会同时降级。
 
-本方案执行的是"人工定稿的一次性价格重写"，不依赖上述自动链路；链路补丁另列于 §12.2。
+v2.3 已按"人工定稿的一次性价格重写"上线，不依赖上述自动链路；链路补丁另列于 §12.2。现网值见 §0 与 §10。
 
 ---
 
@@ -122,7 +135,7 @@
 
 - **官方 6 折**是对用户最易讲清的一句话；折扣池内若上游涨价使成本超过售价的 40%（毛利率击穿 60%），该模型转入渠道价池按成本重新定价；
 - 渠道价池 6 个模型按成本 × 1.15 定价（毛利 13%），是 §1 约束 3 的显式例外；
-- `GroupRatio` 归 1，取消无依据的翻倍。
+- `GroupRatio` 为 `{"default":1,"pro":1}`。键是 `default` 与 `pro`，倍率都是 1。现网没有 `vip` / `svip`。
 
 ### 3.2 积分制：对外只有一个数字
 
@@ -160,7 +173,9 @@
 
 ### 4.2 全量 49 个模型
 
-> 落地实现为**模板保形缩放**：以现网 `billing_expr` 为模板，各 `tier(...)` 分支内的全部系数（p/c/cr/cc/img/ai）按统一折扣因子缩放。因此各模型缓存价保留上游各自的缓存结构（如 `gemini-3.1-flash-lite` 缓存读为输入的 5%、`grok-4.6` 为 25%），并非统一 ×0.1；`doubao` 系列上游无缓存价，`cr` 维持 0。`deepseek-v4-flash` 无上游报价，表达式原样保留。
+> 落地实现为**模板保形缩放**：以当时的 `billing_expr` 为模板，各 `tier(...)` 分支内的全部系数（p/c/cr/cc/img/ai）按统一折扣因子缩放。因此各模型缓存价保留上游各自的缓存结构（如 `gemini-3.1-flash-lite` 缓存读为输入的 5%、`grok-4.6` 为 25%），并非统一 ×0.1；`doubao` 系列上游无缓存价，`cr` 维持 0。`deepseek-v4-flash` 无上游报价，表达式原样保留。
+>
+> 2026-11-10 现网：49 个模型的 `billing_expr` 里，**20 个含 cache-read（`cr`）项**。这些 `cr` 项是现网计费的一部分。改价时保留它们，不要整键覆写把 `cr` 去掉。
 
 | 模型 | 挂牌入 | 挂牌出 | 真实成本入 | 真实成本出 | 新售价入 | 新售价出 | 对挂牌 | 定价方式 |
 |---|---|---|---|---|---|---|---|---|
@@ -314,7 +329,9 @@
 
 ## 7. 套餐设计
 
-### 7.1 四档月付
+本节价格与重置周期就是现网（2026-11-10）。套餐 id 1–4 为月付；套餐 id 5–8 为半年付，且 `quota_reset_period='weekly'`。5–8 的每周额度见 §7.2，与 1–4 的每月额度不是同一组数字。
+
+### 7.1 四档月付（套餐 1–4，现网）
 
 | 档位 | 售价 | 积分/月 | 面值 | 加赠 | 次数/月 | 毛利 | RPM | 并发 | 模型池 |
 |---|---|---|---|---|---|---|---|---|---|
@@ -325,7 +342,7 @@
 
 毛利按全站平均成本占比 16.2% 计算（$0.0533 / $0.3295）。注意这是**均值口径**：吃到饱/专业档的全量池含 6 个 13% 毛利的渠道价模型，若用户流量集中在这些模型上，该档实际毛利会被拉低；按 §4.3 实测流量结构（渠道价模型占 5% 调用、2.2% 收入）影响约 −0.9pp。
 
-### 7.2 半年付
+### 7.2 半年付（套餐 5–8，现网，每周重置）
 
 | 档位 | 售价 | 积分/周 | ×26 周总面值 | 毛利 |
 |---|---|---|---|---|
@@ -405,71 +422,52 @@ DDD 的日卡 ¥9.99 / 周卡 ¥59 针对个人短期尝鲜。当前用户是团
 
 ---
 
-## 10. 落地步骤
+## 10. 现网状态（已上线）
 
-### 10.1 前置
+v2.3 已在生产生效。本文是记录。仓库里没有费率落地脚本，也不要再准备一份。
 
-```bash
-ssh ob-prod
-docker exec openbridger-mysql-1 sh -c \
-  'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" openbridger options subscription_plans' \
-  > /srv/openbridger/backup-pricing-$(date +%F-%H%M).sql
-ls -lh /srv/openbridger/backup-pricing-*.sql
-```
+`docs/openbridger/scripts/pricing-v2-apply.sql` 已从仓库删除。同一份内容曾出现在服务器 `/tmp`（另行删除）。它和现网不一致，不能从 git 历史、`/tmp` 或备份里捞回来执行。执行它会同时做这三件事：
 
-### 10.2 执行
+1. 把 `GroupRatio` 写成 `{"default":1,"vip":1,"svip":1}`，丢掉现网的 `pro`；
+2. 把套餐 5–8 改成套餐 1–4 的每月重置副本（同样的 `total_amount`，文案写成每月重置），覆盖现网的每周重置；
+3. 用一份旧的 `billing_expr` 整键覆写，去掉现网 20 个模型上的 cache-read（`cr`）项。
 
-```bash
-cd /Users/yuntao/code/OpenBridger
-scp docs/openbridger/scripts/pricing-v2-apply.sql ob-prod:/tmp/
-ssh ob-prod "docker exec -i openbridger-mysql-1 \
-  mysql -uroot -p\"\$MYSQL_ROOT_PASSWORD\" openbridger" < /tmp/pricing-v2-apply.sql
-```
+### 10.1 现网套餐
 
-脚本内容（`START TRANSACTION` 包裹，失败自动回滚）：
+| id | 周期 | 售价 | 重置 |
+|---|---|---|---|
+| 1 体验 / 2 畅享 / 3 吃到饱 / 4 专业 | 月付 | ¥19 / ¥39 / ¥69 / ¥129 | 见 §7.1 的每月积分 |
+| 5 体验 / 6 畅享 / 7 吃到饱 / 8 专业 | 半年付 | ¥89 / ¥185 / ¥330 / ¥619 | `quota_reset_period='weekly'`，`total_amount` 为每周额度，见 §7.2 |
 
-1. `billing_setting.billing_expr` 模板保形重写 49 个模型的表达式（现网 47 个全部缩放 + 新增 `gemini-3-pro`、`gemini-3.1-pro`；`deepseek-v4-flash` 原样保留）；
-2. `GroupRatio` 归一为 `{"default":1,"vip":1,"svip":1}`；
-3. 8 个套餐的 `total_amount` 与 `subtitle`。
+### 10.2 现网分组倍率
 
-### 10.3 生效
+`GroupRatio = {"default":1,"pro":1}`。
 
-计费表达式有内存缓存，执行后需要让进程重载：
+键是 `default` 与 `pro`，倍率都是 1。现网没有 `vip`，也没有 `svip`。
 
-```bash
-ssh ob-prod 'docker restart repo-openbridger-1'
-```
+### 10.3 现网计费表达式
 
-### 10.4 验收
+`billing_setting.billing_expr` 覆盖 49 个模型。其中 20 个模型的表达式含 cache-read（`cr`）项。`cr` 留在现网计费里。分档（long_context / 0_200k / peak-off_peak）与 service_tier 倍率同样留在表达式里，见 §4.2。
 
-| 检查项 | 期望 |
+### 10.4 对照现网时看这些值
+
+| 检查项 | 现网 |
 |---|---|
-| `billing_expr` 模型数 | 49（含 deepseek-v4-flash 原表达式） |
+| `billing_expr` 模型数 | 49，其中 20 个含 `cr` |
 | `gpt-5.6-luna` standard 输入系数 | 0.12，long_context 档 0.24（分档保留） |
 | `gemini-3.1-pro-preview` | 0_200k 档 1.2 / 200k_plus 档 2.4（分档保留） |
 | `deepseek-v4.1-flash` | peak 0.345 / off_peak 0.1725（分时保留） |
-| `GroupRatio` | default/vip/svip 全为 1 |
-| 套餐 1 积分 | 2,200（`total_amount` 1,527,778） |
-| 套餐 4 积分 | 24,000（`total_amount` 16,666,667） |
-| 试算 ¥10 充值 | 入账 1,000 积分（694,444 额度） |
-| 试算一次 2,256 token 调用 | 扣 0.54 积分（约 375 额度） |
-| 页面 | 钱包显示积分，不显示 694,444 |
+| `GroupRatio` | `{"default":1,"pro":1}` |
+| 套餐 1–4 | 月付 ¥19 / ¥39 / ¥69 / ¥129；积分 2,200 / 4,800 / 9,600 / 24,000 |
+| 套餐 5–8 | 半年付 ¥89 / ¥185 / ¥330 / ¥619，每周重置；每周积分 500 / 1,100 / 2,200 / 5,500 |
 
 ---
 
-## 11. 回滚
+## 11. 回退
 
-```sql
-UPDATE options SET value='{"default":2,"svip":2,"vip":2}' WHERE `key`='GroupRatio';
-UPDATE subscription_plans SET total_amount=2638889 WHERE id IN (1,5);   -- 旧面值 ¥38（生产快照实测）
-UPDATE subscription_plans SET total_amount=5416667 WHERE id IN (2,6);   -- 旧面值 ¥78
-UPDATE subscription_plans SET total_amount=9583333 WHERE id IN (3,7);   -- 旧面值 ¥138
-UPDATE subscription_plans SET total_amount=17916667 WHERE id IN (4,8);  -- 旧面值 ¥258
--- billing_expr 与 subtitle 从 mysqldump 备份恢复（备份含全量 options）：
---   mysql openbridger < /srv/openbridger/backup-pricing-*.sql
-```
+回退生产费率时，用动手前新打的 `mysqldump` 恢复，并核对恢复结果仍与 §10 一致：`GroupRatio` 为 `{"default":1,"pro":1}`，套餐 5–8 为每周重置，`billing_expr` 仍有那 20 个模型的 `cr` 项。
 
-回滚后需再次 `docker restart`。
+已删除的 `pricing-v2-apply.sql` 不是回退脚本。本文旧稿里把 `GroupRatio` 写回 `default`/`vip`/`svip`、或把套餐 5–8 写成月付副本的语句，同样不能拿来执行。计费表达式在进程内有缓存，恢复数据库之后需要让进程重新加载该配置。
 
 ---
 
@@ -489,7 +487,7 @@ UPDATE subscription_plans SET total_amount=17916667 WHERE id IN (4,8);  -- 旧�
 
 | # | 事项 | 优先级 |
 |---|---|---|
-| 1 | 执行本方案 SQL 并验收 | P0 |
+| 1 | 费率 v2.3 已在现网（§10）。`scripts/pricing-v2-apply.sql` 已删除，不要再执行 | 完成 |
 | 2 | `PublishPricingProposal` 增加发布后回读校验（P1） | P0 |
 | 3 | `pricingChangeForProposal` 改为按模板替换系数（P2） | P1 |
 | 4 | 每日价目巡检报表（P3） | P1 |
@@ -498,7 +496,7 @@ UPDATE subscription_plans SET total_amount=17916667 WHERE id IN (4,8);  -- 旧�
 | 7 | 首充满 ¥10 送 300 积分 | P1 |
 | 8 | 清理 `model_price_proposals` 6 万条 rejected | P2 |
 | 9 | 日卡 / 周卡 | P3 |
-| 10 | `claude-fable-5-1` 现网表达式缺 `cr/cc` 项，缓存读按输入全价计费；补齐缓存项 | P2 |
+| 10 | 2026-11-05 草案记过 `claude-fable-5-1` 缺 `cr/cc`。2026-11-10 只核对「49 个模型里 20 个含 `cr`」，没有逐模型复核这一条；改这个模型前先对现网表达式，不要用已删除的 SQL 补 | P2 |
 | 11 | `deepseek-v4-flash` 无上游报价，核实成本后纳入定价 | P2 |
 
 ### 12.3 新用户赠送
@@ -551,5 +549,5 @@ UPDATE subscription_plans SET total_amount=17916667 WHERE id IN (4,8);  -- 旧�
 | 额度（quota） | 内部整数记账单位，`500,000 额度 = $1` |
 | 积分 | 对外单位，`1 积分 = ¥0.01 = 694.444 额度` |
 | `billing_expr` | 按 token 计费的表达式，支持 `tier` / `param` 等函数 |
-| `GroupRatio` | 分组倍率，在表达式结果上再乘，本方案归 1 |
+| `GroupRatio` | 分组倍率，在表达式结果上再乘。现网 `{"default":1,"pro":1}` |
 | RPM | 每分钟请求数上限 |
