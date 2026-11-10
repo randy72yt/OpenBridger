@@ -21,6 +21,7 @@ const (
 	SystemTaskTypeModelUpdate        = "model_update"
 	SystemTaskTypeMidjourneyPoll     = "midjourney_poll"
 	SystemTaskTypeAsyncTaskPoll      = "async_task_poll"
+	SystemTaskTypeModelProbe         = "model_probe"
 	SystemTaskTypePricingRecalculate = "pricing_recalculate"
 	SystemTaskTypePricingOfferSync   = "pricing_offer_sync"
 	SystemTaskTypePricingRetention   = "pricing_retention"

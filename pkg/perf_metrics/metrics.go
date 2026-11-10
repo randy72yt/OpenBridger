@@ -131,6 +131,27 @@ func Record(sample Sample) {
 	recordRedis(key, sample)
 }
 
+// RealRequestCountSince returns how many real (public-caliber) requests the
+// model has seen since the given unix timestamp, merging persisted buckets
+// with the still-hot in-memory ones. The probe scheduler uses it to leave
+// models with fresh real traffic alone.
+func RealRequestCountSince(modelName string, sinceTs int64) int64 {
+	total := int64(0)
+	if rows, err := model.GetPerfMetrics(modelName, "", sinceTs, time.Now().Unix()); err == nil {
+		for _, row := range rows {
+			total += row.RequestCount
+		}
+	}
+	hotBuckets.Range(func(key, value any) bool {
+		k := key.(bucketKey)
+		if k.source == SourceReal && k.model == modelName && k.bucketTs >= sinceTs {
+			total += value.(*atomicBucket).snapshot().requestCount
+		}
+		return true
+	})
+	return total
+}
+
 func Query(params QueryParams) (QueryResult, error) {
 	if params.Hours <= 0 {
 		params.Hours = 24

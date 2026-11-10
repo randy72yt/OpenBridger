@@ -277,6 +277,18 @@ func GetTokenById(id int) (*Token, error) {
 	return &token, err
 }
 
+func GetTokenByName(name string) (*Token, error) {
+	if name == "" {
+		return nil, errors.New("name 为空！")
+	}
+	token := Token{}
+	err := DB.Where("name = ?", name).First(&token).Error
+	if err != nil {
+		return nil, err
+	}
+	return &token, nil
+}
+
 func GetTokenByKey(key string, fromDB bool) (token *Token, err error) {
 	if !fromDB && common.RedisEnabled {
 		// Try Redis first
