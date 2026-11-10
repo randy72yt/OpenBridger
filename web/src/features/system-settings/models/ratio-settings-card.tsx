@@ -32,6 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   buildPricingChanges,
   useModelPricing,
+  usePricingControlEnabled,
   useSaveModelPricing,
   type ModelPricingConfig,
 } from '@/features/model-pricing/api'
@@ -172,6 +173,7 @@ export function RatioSettingsCard({
 }: RatioSettingsCardProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
+  const sellPricesLocked = usePricingControlEnabled()
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   const pricingQuery = useModelPricing()
@@ -445,6 +447,9 @@ export function RatioSettingsCard({
     resetMutate()
   }, [resetMutate])
 
+  const renderedTabs = visibleTabs.filter(
+    (tab) => tab !== 'upstream-sync' || !sellPricesLocked
+  )
   const tabLabels: Record<RatioTabId, string> = {
     models: 'Model prices',
     'unset-models': 'Unset price models',
@@ -459,8 +464,8 @@ export function RatioSettingsCard({
       3: 'grid-cols-3',
       4: 'grid-cols-4',
       5: 'grid-cols-5',
-    }[visibleTabs.length] ?? 'grid-cols-4'
-  const defaultTab = visibleTabs[0] ?? 'models'
+    }[renderedTabs.length] ?? 'grid-cols-4'
+  const defaultTab = renderedTabs[0] ?? 'models'
 
   const renderTabContent = (tab: RatioTabId) => {
     if (tab === 'models' || tab === 'unset-models') {
@@ -493,8 +498,19 @@ export function RatioSettingsCard({
             savedValues={savedModelValues}
             onSave={saveModelRatios}
             onReset={handleResetRatios}
+            onExposeRatioChange={async (enabled) => {
+              try {
+                await updateOption.mutateAsync({
+                  key: 'ExposeRatioEnabled',
+                  value: enabled,
+                })
+              } catch {
+                // useUpdateOption reports the failure.
+              }
+            }}
             isSaving={updateOption.isPending || savePricing.isPending}
             isResetting={resetMutation.isPending}
+            readOnly={sellPricesLocked}
             variant={tab === 'unset-models' ? 'unset' : 'default'}
           />
         </>
@@ -517,7 +533,7 @@ export function RatioSettingsCard({
 
   const renderTabSwitcher = () => (
     <TabsList className={`grid w-fit max-w-full ${tabsGridClass}`}>
-      {visibleTabs.map((tab) => (
+      {renderedTabs.map((tab) => (
         <TabsTrigger key={tab} value={tab}>
           {t(tabLabels[tab])}
         </TabsTrigger>
@@ -527,7 +543,7 @@ export function RatioSettingsCard({
 
   return (
     <>
-      {visibleTabs.length === 1 ? (
+      {renderedTabs.length === 1 ? (
         <SettingsSection title={t(titleKey)}>
           {renderTabContent(defaultTab)}
         </SettingsSection>
@@ -538,7 +554,7 @@ export function RatioSettingsCard({
           </SettingsPageTitleStatusPortal>
 
           <SettingsSection title={t(titleKey)} className='min-h-0 flex-1'>
-            {visibleTabs.map((tab) => (
+            {renderedTabs.map((tab) => (
               <TabsContent key={tab} value={tab} className='min-h-0'>
                 {renderTabContent(tab)}
               </TabsContent>

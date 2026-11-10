@@ -99,6 +99,7 @@ type ModelPricingSheetProps = {
   editData?: ModelRatioData | null
   onSave?: () => void | Promise<void>
   isSaving?: boolean
+  readOnly?: boolean
   usageSchema?: BillingUsageSchema
   onDirtyChange?: (dirty: boolean) => void
 }
@@ -126,6 +127,7 @@ export const ModelPricingSheet = forwardRef<
     editData,
     onSave,
     isSaving,
+    readOnly = false,
     usageSchema,
     onDirtyChange,
   },
@@ -151,6 +153,7 @@ export const ModelPricingSheet = forwardRef<
           usageSchema={usageSchema}
           onDirtyChange={onDirtyChange}
           onSave={onSave}
+          readOnly={readOnly}
           isSaving={isSaving}
           className='h-full rounded-none border-0'
         />
@@ -163,7 +166,15 @@ export const ModelPricingEditorPanel = forwardRef<
   ModelPricingEditorPanelHandle,
   ModelPricingEditorPanelProps
 >(function ModelPricingEditorPanel(
-  { editData, className, onSave, isSaving, usageSchema, onDirtyChange },
+  {
+    editData,
+    className,
+    onSave,
+    isSaving,
+    readOnly = false,
+    usageSchema,
+    onDirtyChange,
+  },
   ref
 ) {
   const { t } = useTranslation()
@@ -588,7 +599,13 @@ export const ModelPricingEditorPanel = forwardRef<
     [form, validatePricingValues, buildSubmitData]
   )
 
-  const showActions = Boolean(onSave)
+  const showActions = Boolean(onSave) && !readOnly
+  let pricingTitle = t('Add model pricing')
+  if (readOnly) {
+    pricingTitle = t('Model prices')
+  } else if (isEditMode) {
+    pricingTitle = t('Edit model pricing')
+  }
 
   return (
     <div
@@ -600,9 +617,7 @@ export const ModelPricingEditorPanel = forwardRef<
       <div className='border-b p-4'>
         <div className='flex flex-wrap items-start justify-between gap-3'>
           <div className='min-w-0'>
-            <h3 className='truncate text-base font-medium'>
-              {isEditMode ? t('Edit model pricing') : t('Add model pricing')}
-            </h3>
+            <h3 className='truncate text-base font-medium'>{pricingTitle}</h3>
           </div>
         </div>
       </div>
@@ -615,6 +630,10 @@ export const ModelPricingEditorPanel = forwardRef<
         >
           <div className='min-h-0 flex-1 overflow-y-auto p-4 pb-6'>
             <div className='grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(220px,260px)]'>
+              <fieldset
+                disabled={readOnly}
+                className='m-0 min-w-0 border-0 p-0'
+              >
               <FieldGroup>
                 {warnings.length > 0 && (
                   <Alert variant='destructive'>
@@ -804,6 +823,7 @@ export const ModelPricingEditorPanel = forwardRef<
                   </TabsContent>
                 </Tabs>
               </FieldGroup>
+              </fieldset>
 
               <aside className='bg-muted/20 sticky top-0 rounded-lg border'>
                 <div className='border-b px-3 py-2'>

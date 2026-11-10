@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/form'
 import { Switch } from '@/components/ui/switch'
 import { getEnabledModels } from '@/features/channels/api'
+import { SellPriceLockNotice } from '@/features/model-pricing/sell-price-lock-notice'
 
 import {
   SettingsForm,
@@ -66,8 +67,10 @@ type ModelRatioFormProps = {
   savedValues: ModelFormValues
   onSave: (values: ModelFormValues) => Promise<void>
   onReset: () => void
+  onExposeRatioChange?: (enabled: boolean) => Promise<void>
   isSaving: boolean
   isResetting: boolean
+  readOnly?: boolean
   variant?: 'default' | 'unset'
 }
 
@@ -137,6 +140,7 @@ function ModelJsonTextareaField(props: {
   name: ModelJsonFieldName
   label: string
   description: string
+  disabled?: boolean
 }) {
   return (
     <FormField
@@ -152,6 +156,7 @@ function ModelJsonTextareaField(props: {
               name={field.name}
               onBlur={field.onBlur}
               textareaRef={field.ref}
+              disabled={props.disabled}
             />
           </FormControl>
           <FormDescription className='text-xs leading-5'>
@@ -169,8 +174,10 @@ export const ModelRatioForm = memo(function ModelRatioForm({
   savedValues,
   onSave,
   onReset,
+  onExposeRatioChange,
   isSaving,
   isResetting,
+  readOnly = false,
   variant = 'default',
 }: ModelRatioFormProps) {
   const { t } = useTranslation()
@@ -210,6 +217,16 @@ export const ModelRatioForm = memo(function ModelRatioForm({
     setEditMode((prev) => (prev === 'visual' ? 'json' : 'visual'))
   }, [])
 
+  const handleExposeRatioChange = useCallback(
+    (checked: boolean, fieldOnChange: (value: boolean) => void) => {
+      fieldOnChange(checked)
+      if (readOnly && onExposeRatioChange) {
+        void onExposeRatioChange(checked)
+      }
+    },
+    [onExposeRatioChange, readOnly]
+  )
+
   const handleSave = useCallback(async () => {
     if (editMode === 'visual') {
       const committed = await visualEditorRef.current?.commitOpenEditor()
@@ -221,19 +238,22 @@ export const ModelRatioForm = memo(function ModelRatioForm({
 
   return (
     <div className='space-y-6'>
+      {readOnly && <SellPriceLockNotice />}
       {!isUnsetVariant && (
         <div className='flex flex-wrap justify-end gap-2'>
-          <Button
-            type='button'
-            variant='destructive'
-            size='sm'
-            onClick={onReset}
-            disabled={isResetting}
-          >
-            <RotateCcw data-icon='inline-start' />
-            {t('Reset prices')}
-          </Button>
-          {editMode === 'json' && (
+          {!readOnly && (
+            <Button
+              type='button'
+              variant='destructive'
+              size='sm'
+              onClick={onReset}
+              disabled={isResetting}
+            >
+              <RotateCcw data-icon='inline-start' />
+              {t('Reset prices')}
+            </Button>
+          )}
+          {editMode === 'json' && !readOnly && (
             <Button
               type='button'
               size='sm'
@@ -294,6 +314,7 @@ export const ModelRatioForm = memo(function ModelRatioForm({
               filterMode={isUnsetVariant ? 'unset' : 'all'}
               onSave={handleSave}
               isSaving={isSaving}
+              readOnly={readOnly}
               onChange={(field, value) => {
                 const fieldMap: Record<string, keyof ModelFormValues> = {
                   'billing_setting.billing_mode': 'BillingMode',
@@ -322,7 +343,9 @@ export const ModelRatioForm = memo(function ModelRatioForm({
                     <FormControl>
                       <Switch
                         checked={field.value}
-                        onCheckedChange={field.onChange}
+                        onCheckedChange={(checked) =>
+                          handleExposeRatioChange(checked, field.onChange)
+                        }
                       />
                     </FormControl>
                   </SettingsSwitchItem>
@@ -331,7 +354,13 @@ export const ModelRatioForm = memo(function ModelRatioForm({
             )}
           </div>
         ) : (
-          <SettingsForm onSubmit={form.handleSubmit(onSave)}>
+          <SettingsForm
+            onSubmit={
+              readOnly
+                ? (event) => event.preventDefault()
+                : form.handleSubmit(onSave)
+            }
+          >
             <div className='grid min-w-0 gap-x-5 gap-y-8 lg:grid-cols-2 2xl:grid-cols-3'>
               {modelJsonFields.map((config) => (
                 <ModelJsonTextareaField
@@ -340,6 +369,7 @@ export const ModelRatioForm = memo(function ModelRatioForm({
                   name={config.name}
                   label={t(config.labelKey)}
                   description={t(config.descriptionKey)}
+                  disabled={readOnly}
                 />
               ))}
             </div>
@@ -360,7 +390,9 @@ export const ModelRatioForm = memo(function ModelRatioForm({
                   <FormControl>
                     <Switch
                       checked={field.value}
-                      onCheckedChange={field.onChange}
+                      onCheckedChange={(checked) =>
+                        handleExposeRatioChange(checked, field.onChange)
+                      }
                     />
                   </FormControl>
                 </SettingsSwitchItem>

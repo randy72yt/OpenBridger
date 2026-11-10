@@ -37,10 +37,12 @@ import { handleServerError } from '@/lib/handle-server-error'
 import {
   useCanEditModelPricing,
   useModelPricing,
+  usePricingControlEnabled,
   useSaveModelPricing,
   type ModelPricingEntry,
 } from './api'
 import { pricingFromDraft, pricingRow } from './pricing'
+import { SellPriceLockNotice } from './sell-price-lock-notice'
 
 export function ModelPricingPanel(props: {
   modelName: string
@@ -48,6 +50,7 @@ export function ModelPricingPanel(props: {
 }) {
   const { t } = useTranslation()
   const canEdit = useCanEditModelPricing()
+  const sellPricesLocked = usePricingControlEnabled()
   const query = useModelPricing([props.modelName], Boolean(props.modelName))
   const save = useSaveModelPricing()
   const [entry, setEntry] = useState<ModelPricingEntry | null>(null)
@@ -122,6 +125,11 @@ export function ModelPricingPanel(props: {
 
   return (
     <div className='flex min-h-0 flex-1 flex-col gap-3'>
+      {sellPricesLocked && (
+        <div className='px-4 pt-3'>
+          <SellPriceLockNotice />
+        </div>
+      )}
       <div className='flex flex-wrap items-center justify-between gap-2 px-4 pt-3'>
         <div>
           <p className='text-muted-foreground text-xs'>
@@ -134,14 +142,16 @@ export function ModelPricingPanel(props: {
             {getPriceDetail(effectivePricing, t)}
           </p>
         </div>
-        <Button
-          variant='outline'
-          size='sm'
-          onClick={() => setResetOpen(true)}
-          disabled={save.isPending}
-        >
-          {t('Restore default pricing')}
-        </Button>
+        {!sellPricesLocked && (
+          <Button
+            variant='outline'
+            size='sm'
+            onClick={() => setResetOpen(true)}
+            disabled={save.isPending}
+          >
+            {t('Restore default pricing')}
+          </Button>
+        )}
       </div>
       {save.isError && (
         <div className='px-4'>
@@ -171,21 +181,24 @@ export function ModelPricingPanel(props: {
         editData={editData}
         usageSchema={entry.usage_schema}
         onDirtyChange={props.onDirtyChange}
-        onSave={() => persist()}
+        onSave={sellPricesLocked ? undefined : () => persist()}
+        readOnly={sellPricesLocked}
         isSaving={save.isPending}
         className='rounded-none border-0'
       />
-      <ConfirmDialog
-        open={resetOpen}
-        onOpenChange={setResetOpen}
-        title={t('Restore default pricing')}
-        desc={t(
-          'Remove this model’s custom pricing and use the built-in defaults. A model without a default may become unpriced.'
-        )}
-        confirmText={t('Restore defaults')}
-        isLoading={save.isPending}
-        handleConfirm={() => void persist(true)}
-      />
+      {!sellPricesLocked && (
+        <ConfirmDialog
+          open={resetOpen}
+          onOpenChange={setResetOpen}
+          title={t('Restore default pricing')}
+          desc={t(
+            'Remove this model’s custom pricing and use the built-in defaults. A model without a default may become unpriced.'
+          )}
+          confirmText={t('Restore defaults')}
+          isLoading={save.isPending}
+          handleConfirm={() => void persist(true)}
+        />
+      )}
     </div>
   )
 }

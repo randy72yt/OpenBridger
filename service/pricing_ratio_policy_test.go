@@ -213,15 +213,10 @@ func TestPricingGlobalPolicyDefaults(t *testing.T) {
 
 func TestPricingManualWriteGuard(t *testing.T) {
 	t.Setenv("PRICING_CONTROL_ENABLED", "false")
-	require.NoError(t, ValidateManualPricingWrite(10, false, ""))
+	require.NoError(t, ValidateManualPricingWrite())
 
 	t.Setenv("PRICING_CONTROL_ENABLED", "true")
-	assert.ErrorIs(t, ValidateManualPricingWrite(10, false, ""), ErrManualPricingWriteBlocked)
-	assert.ErrorIs(t, ValidateManualPricingWrite(10, true, "maintenance"), ErrManualPricingWriteBlocked,
-		"bulk writes stay blocked even with an override")
-	assert.ErrorIs(t, ValidateManualPricingWrite(1, true, ""), ErrManualPricingWriteBlocked,
-		"an override needs a reason")
-	assert.NoError(t, ValidateManualPricingWrite(1, true, "price correction after upstream outage"))
+	assert.ErrorIs(t, ValidateManualPricingWrite(), ErrManualPricingWriteBlocked)
 }
 
 // ---------------------------------------------------------------------------

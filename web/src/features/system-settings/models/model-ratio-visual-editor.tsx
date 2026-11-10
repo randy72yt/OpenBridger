@@ -101,6 +101,7 @@ type ModelRatioVisualEditorProps = {
   onChange: (field: string, value: string) => void
   onSave: () => void | Promise<void>
   isSaving: boolean
+  readOnly?: boolean
 }
 
 export type ModelRatioVisualEditorHandle = {
@@ -140,6 +141,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
     onChange,
     onSave,
     isSaving,
+    readOnly = false,
   },
   ref
 ) {
@@ -642,7 +644,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
               },
             ]}
             preActions={
-              filterMode === 'unset' ? undefined : (
+              filterMode === 'unset' || readOnly ? undefined : (
                 <Button onClick={handleAdd}>
                   <Plus data-icon='inline-start' />
                   {t('Add model')}
@@ -718,21 +720,28 @@ const ModelRatioVisualEditorComponent = forwardRef<
                   (entry) => entry.model_name === editData?.name
                 )?.usage_schema
               }
-              onSave={onSave}
+              onSave={readOnly ? undefined : onSave}
+              readOnly={readOnly}
               isSaving={isSaving}
               className='h-full min-h-0'
             />
           ) : (
             <div className='bg-card text-muted-foreground flex h-full min-h-0 flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-6 text-center'>
               <div className='text-foreground text-base font-medium'>
-                {t('Select a model to edit pricing')}
+                {readOnly
+                  ? t('Select a model to view pricing')
+                  : t('Select a model to edit pricing')}
               </div>
               <p className='max-w-sm text-sm'>
-                {t(
-                  'Use the full-width table to scan prices, then select a row to edit it here.'
-                )}
+                {readOnly
+                  ? t(
+                      'Sell prices on this page are read-only while dynamic pricing control is on.'
+                    )
+                  : t(
+                      'Use the full-width table to scan prices, then select a row to edit it here.'
+                    )}
               </p>
-              {filterMode !== 'unset' && (
+              {filterMode !== 'unset' && !readOnly && (
                 <Button variant='outline' onClick={handleAdd}>
                   <Plus data-icon='inline-start' />
                   {t('Add model')}
@@ -743,14 +752,16 @@ const ModelRatioVisualEditorComponent = forwardRef<
         </div>
       </div>
 
-      <DataTableBulkActions table={table} entityName={t('model')}>
-        <Button size='sm' disabled={!editData} onClick={handleBatchCopy}>
-          <Copy data-icon='inline-start' />
-          {editData
-            ? t('Copy {{name}} pricing', { name: editData.name })
-            : t('Open a source model first')}
-        </Button>
-      </DataTableBulkActions>
+      {!readOnly && (
+        <DataTableBulkActions table={table} entityName={t('model')}>
+          <Button size='sm' disabled={!editData} onClick={handleBatchCopy}>
+            <Copy data-icon='inline-start' />
+            {editData
+              ? t('Copy {{name}} pricing', { name: editData.name })
+              : t('Open a source model first')}
+          </Button>
+        </DataTableBulkActions>
+      )}
 
       {isMobile && (
         <ModelPricingSheet
@@ -763,7 +774,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
               (entry) => entry.model_name === editData?.name
             )?.usage_schema
           }
-          onSave={onSave}
+          onSave={readOnly ? undefined : onSave}
+          readOnly={readOnly}
           isSaving={isSaving}
         />
       )}
@@ -802,7 +814,8 @@ export const ModelRatioVisualEditor = memo(
       prevProps.filterMode === nextProps.filterMode &&
       prevProps.onChange === nextProps.onChange &&
       prevProps.onSave === nextProps.onSave &&
-      prevProps.isSaving === nextProps.isSaving
+      prevProps.isSaving === nextProps.isSaving &&
+      prevProps.readOnly === nextProps.readOnly
     )
   }
 )
