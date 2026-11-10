@@ -55,7 +55,7 @@
 1. Mac 上解包 config：`tar xzf ~/backups/openbridger/latest-config.tar.gz -C /tmp/ob-config`
 2. `scp /tmp/ob-config/.env /tmp/ob-config/compose.infra.yml 新机:/srv/openbridger/`，权限 600
 3. `git clone git@github.com:randy72yt/OpenBridger.git /srv/openbridger/repo`，`git checkout <config归档里的repo-head或v0.1.0>`
-4. 构建镜像（小内存机需先给 Dockerfile.dev 加 `ENV GOFLAGS=-p=1 GOMAXPROCS=1`，构建后还原）或按 compose.release.yml 构建；前端 dist 从本地构建产物 rsync 至 `web/dist/`
+4. 在运维 Mac 上构建镜像并 `docker load` 到新机（`scripts/release-image.sh <ref>`，平台 linux/amd64）。不要在新机或 ob-prod 上 `docker build` / `go build` / `compose build`。前端打进镜像，运行容器只挂载 `/data`，不要靠 rsync `web/dist`
 
 ### 5.3 数据恢复（约 15 分钟）
 1. 启动 infra：`cd /srv/openbridger && docker compose -f compose.infra.yml --env-file .env up -d`

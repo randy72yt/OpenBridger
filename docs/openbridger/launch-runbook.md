@@ -155,27 +155,16 @@ ls relaykit/go.mod                 # 必须存在，否则镜像构建会失败
 
 通过标准：`git rev-parse --short HEAD` 得到将要用作镜像 tag 的 sha；`relaykit` 目录存在。
 
-### S11 生成前端产物
+### S11–S12 在运维 Mac 上构建镜像并传入（不要在 ob-prod 上编译）
+
+ob-prod 是 2 vCPU / ~1.6GB。2026-11-10 在服务器上构建打挂整机。`obctl build` 默认拒绝。前端打进镜像，运行容器只挂载 `/data`，不要在服务器上 `bun run build`，也不要 `docker compose build`。
 
 ```bash
-cd /srv/openbridger/repo/web
-bun install --frozen-lockfile      # 无 bun 先安装：curl -fsSL https://bun.sh/install | bash
-bun run build
-test -f dist/index.html && echo OK
+# 运维 Mac（Intel x86_64，Docker Desktop），检出与 S10 相同的提交，工作区干净
+scripts/release-image.sh <发布 commit 的 sha>
 ```
 
-通过标准：`web/dist/index.html` 存在（`Dockerfile.dev` 会校验这个文件，缺失则构建失败）。
-
-### S12 构建发布镜像
-
-```bash
-cd /srv/openbridger/repo
-export OPENBRIDGER_IMAGE_TAG=$(git rev-parse --short HEAD)
-docker compose -f compose.release.yml build
-docker images | grep openbridger
-```
-
-通过标准：镜像 `openbridger:<sha>` 生成成功。
+通过标准：服务器上 `docker image inspect openbridger:<sha> --format '{{.Os}}/{{.Architecture}}'` 为 `linux/amd64`。脚本不执行 deploy。切换仍走后面的 `obctl deploy`（或当时的 compose up），且只使用已经 load 的镜像。
 
 ### S13 补全生产环境变量
 

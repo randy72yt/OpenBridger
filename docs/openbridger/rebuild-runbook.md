@@ -79,35 +79,24 @@ git checkout v0.1.0     # 或归档里记录的更新的 tag/SHA
 
 如果新机没配 GitHub SSH：用 `https://github.com/randy72yt/OpenBridger.git` 只读 clone 也行（fork 是私有的话需要 token）。
 
-### 3.2 前端构建（**在 Mac 上构建，不要在服务器上构建**）
+### 3.2 镜像构建（**在运维 Mac 上构建，禁止在 ob-prod 上编译**）
 
-> 原因：vite 构建吃内存，2C4G 小机会 OOM（生产事故实录）。
+> ob-prod 是 2 vCPU / ~1.6GB。2026-11-10 在服务器上 `obctl build`（`Dockerfile.dev` 里的 `go build`）打挂整机，只能强制重启。`obctl build` 默认拒绝。不要在服务器上打 GOFLAGS 补丁再 `docker compose build`。
+
+前端打进镜像。运行容器只挂载 `/data`。rsync `web/dist` 到服务器不会改变正在跑的镜像。
 
 ```bash
-# Mac 上（本地仓库与服务器同一代码版本）
+# 运维 Mac（Intel x86_64，Docker Desktop），仓库与要恢复的 tag 一致，工作区干净
 cd ~/code/OpenBridger
 git fetch --tags && git checkout v0.1.0
-cd web && NODE_OPTIONS= /Users/yuntao/.bun/bin/bun install
-NODE_OPTIONS= /Users/yuntao/.bun/bin/bun run build
-rsync -az --delete dist/ ob-prod:/srv/openbridger/repo/web/dist/
-ssh ob-prod 'ls /srv/openbridger/repo/web/dist/index.html'   # 必须存在
+scripts/release-image.sh v0.1.0
+# 脚本打印 openbridger:<sha>。它不执行 deploy。
 ```
 
-### 3.3 后端镜像构建（服务器上）
-
-> **2C4G 关键补丁**：Go 默认并行编译会把小机打崩（实录：sshd 都被压垮）。构建前打串行补丁，构建后还原。
+确认服务器上已有该镜像且平台是 linux/amd64：
 
 ```bash
-cd /srv/openbridger/repo
-cp Dockerfile.dev /tmp/Dockerfile.dev.orig
-sed -i "s|^RUN go build|ENV GOFLAGS=-p=1 GOMAXPROCS=1\nRUN go build|" Dockerfile.dev
-grep -A1 "GOFLAGS" Dockerfile.dev    # 确认补丁生效
-
-OPENBRIDGER_IMAGE_TAG=$(git rev-parse --short HEAD) \
-  docker compose -f compose.release.yml --env-file /srv/openbridger/.env build
-
-cp /tmp/Dockerfile.dev.orig Dockerfile.dev   # 还原
-docker images | grep openbridger             # 确认镜像生成
+ssh ob-prod "docker image inspect openbridger:<sha> --format '{{.Os}}/{{.Architecture}}'"
 ```
 
 ---
@@ -277,8 +266,8 @@ rsync -az <docs-site目录>/ ob-prod:/srv/openbridger/docs-site/
 
 ## 附录 C：已知坑位（全部实录）
 
-1. **2C4G 构建 OOM**：Go 并行编译打崩整机（sshd 无响应需控制台重启）→ 必须 GOFLAGS 串行补丁（§3.3）
-2. **前端在服务器构建必 OOM** → Mac 构建 + rsync（§3.2）
+1. **ob-prod 上编译会打挂整机**（sshd 无 banner，需控制台重启）。2026-11-04 与 2026-11-10 都发生过。禁止 `obctl build` / `docker build` / `go build` / `compose build`。镜像只在运维 Mac 构建后 `docker load`（§3.2）
+2. **rsync `web/dist` 不改变正在跑的镜像**。前端在 Mac 构建时打进镜像，运行容器只挂载 `/data`
 3. **nested heredoc 远程执行**：`ssh 'sh -s' <<EOF` 内层 `$VAR` 会被吃掉 → 脚本一律 scp 上传后执行
 4. **options 表直改有缓存延迟**：改 DB 后等约 1 分钟或走 API 写入（Turnstile 等）
 5. **model_price_policies 为空会导致每小时定价 sync 全败**：恢复数据后确认 42 条策略在（§5.2 抽查已含）

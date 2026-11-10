@@ -17,12 +17,12 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 | 备份灾备     | `dr-plan.md`（RPO≤24h / RTO≤2h）     | backup.sh、obctl backup/restore |
 | 应急响应     | 本文 §3                              | obctl diag/smoke/rollback      |
 | 恢复重建     | `rebuild-runbook.md`（L1-L4 四层验证）   | obctl restore/deploy           |
-| 发布       | 本文 §4（R0-R8 阶段）                    | obctl build/deploy/accept      |
+| 发布       | 本文 §4（R0-R8 阶段）                    | Mac `scripts/release-image.sh` + obctl deploy/accept |
 | 日常操作命令与坑 | WorkBuddy 技能 openbridger-ops-agent Part 2  | —                              |
 | 一键执行路由   | WorkBuddy 技能 openbridger-ops-agent | —                              |
 | 非敏台账     | `ops-inventory.md`                 | —                              |
 
-**obctl**：服务器 `/srv/openbridger/obctl`，`obctl help` 查看全部子命令。源码在 repo `docs/openbridger/scripts/obctl.sh`，改动后 scp 覆盖服务器副本。
+**obctl**：服务器 `/srv/openbridger/obctl`，`obctl help` 查看全部子命令。源码在 repo `docs/openbridger/scripts/obctl.sh`，改动后 scp 覆盖服务器副本。`obctl build` 的默认拒绝要这份新脚本在服务器上才生效。
 
 ## 1. 监控体系openbridger-ops-agent
 
@@ -94,11 +94,11 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 | 发版后异常               | `obctl rollback`                                                                   | ~8 秒切回旧镜像，再排查                          |
 | 数据误删/损坏             | `obctl restore <最近dump>`                                                           | 会停应用约 1-3 分钟；先 `obctl backup` 留现场      |
 | 磁盘 ≥85%             | `docker system prune -f`；`journalctl --vacuum-size=200M`                           | 日志已轮转，多为镜像/构建残留                        |
-| 内存耗尽/OOM            | `obctl status` 看 free；重启应用容器；**禁止在服务器上构建前端**                                       | 2C4G 构建必须走 GOFLAGS 补丁（obctl build 已内置） |
+| 内存耗尽/OOM            | `obctl status` 看 free；重启应用容器；**禁止在 ob-prod 上编译**（`obctl build` / `docker build` / `go build` / `compose build`） | 2026-11-10 服务器构建打挂整机。镜像只在运维 Mac 构建，见 §4。`OBCTL_ALLOW_SERVER_BUILD=YES` 仅紧急排障 |
 | 邮件发不出               | `obctl alert-test` 定位；查 DB options SMTP 凭据                                         | 改 SMTP 密码后最常见                          |
 | 定价 sync 失败          | 查 `model_price_policies` 是否非空（42 条）；v4 峰谷表达式是否被发布压平                                | 见 openbridger-ops-agent 技能 Part 2 定价章节   |
 | 模型下架仍可见             | DELETE abilities 行 + 等 60s 缓存                                                      | 同上                                     |
-| 服务器失联（ssh 无 banner） | 阿里云控制台看负载；大概率 OOM → 控制台重启                                                          | 历史实录：docker build 打崩 sshd              |
+| 服务器失联（ssh 无 banner） | 阿里云控制台看负载；大概率 OOM → 控制台重启                                                          | 历史实录：2026-11-04 与 2026-11-10，服务器上 docker build / `obctl build` 打崩 sshd |
 | 整机丢失（S1）            | `rebuild-runbook.md` 全流程                                                           | RTO ≤2h，前提是 Mac 异地备份在手                 |
 | 上游 A 故障         | 非本站故障，渠道层 503；等上游恢复，可公告用户                                                          | dr-plan L3                             |
 | 密钥泄露（S1）            | 立即轮换：DB options（Turnstile/SMTP）、.env（MySQL/Redis/Session）、用户令牌；全程命令见 openbridger-ops-agent 技能 Part 2 | 轮换后 `obctl alert-test` + `obctl smoke` |
@@ -121,14 +121,18 @@ monitor.py   §3.1    obctl diag  §3.2 速查表   obctl smoke   §3.4 postmort
 
 原则：**每次发布都可 8 秒回滚；发布即演练回滚**。任何阶段不满足出口条件就停，不带病进入下一阶段。
 
-| 阶段 | 名称   | 动作                                                                                                                                                                    | 出口条件                               |
-| -- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| R0 | 开发完成 | 本地：`go test ./...`；`cd web && NODE_OPTIONS= bun run build && vitest run`                                                                                              | 本地构建+测试全绿                          |
-| R1 | CI   | `env -u http_proxy -u https_proxy gh workflow run "CI" --repo randy72yt/OpenBridger --ref <分支>`（fork 不投递 push 事件，必须手动）                                                | 三 job（backend/database/frontend）全绿 |
-| R2 | 预检   | `obctl backup-check`；`obctl status` 看磁盘/内存；写变更说明（改了什么、影响面、回滚点）                                                                                                        | 备份新鲜、磁盘 <70%、变更说明成文                |
-| R3 | 冻结备份 | `obctl backup`                                                                                                                                                        | 新 dump 生成（发版专用现场）                  |
-| R4 | 构建   | 前端：Mac 构建 + `rsync -az --delete dist/ ob-prod:/srv/openbridger/repo/web/dist/`；后端：`obctl build <git-ref>` → `obctl build-status` 轮询                                   | 镜像 `openbridger:<sha>` 生成          |
-| R5 | 切换   | `obctl deploy <sha>`（自动记录回滚点、冒烟、失败自动回滚）                                                                                                                               | SMOKE PASS，版本号正确                   |
+**硬规则（2026-11-10）：** 不在生产机 ob-prod（2 vCPU / ~1.6GB）上编译。禁止在这台机器上跑 `obctl build`、`docker build`、`go build`、`docker compose build`。当日 `obctl build`（`Dockerfile.dev` 里的 `go build`）打挂服务器，只能强制重启。`obctl build` 默认拒绝并退出非 0。唯一开口是紧急环境变量 `OBCTL_ALLOW_SERVER_BUILD=YES`（emergency-only，接受再次打挂整机）。`obctl build-status` 只读，不会开始构建。镜像在运维 Mac（Intel x86_64，Docker Desktop）上构建，再 `docker load` 到服务器。前端 `web/dist` 在 Mac 的镜像构建时打进镜像；运行容器只挂载 `/data`。把 `web/dist` rsync 到服务器不会改变正在跑的镜像，发版不用这一步。
+
+执行顺序：R0 → R1 → R2 → R4 → R3 → R5 → R6 → R7 → R8。R3 冻结备份紧挨在 `obctl deploy` 之前（镜像已经 load 之后），与 2026-11-10 核对过的发版一致（commit `6657a90d8`）。
+
+| 阶段 | 名称 | 动作 | 出口条件 |
+| -- | -- | -- | -- |
+| R0 | 开发完成 | 本地：`go test ./...`；`cd web && NODE_OPTIONS= bun run build && vitest run` | 本地构建+测试全绿 |
+| R1 | CI | `env -u http_proxy -u https_proxy gh workflow run "CI" --repo randy72yt/OpenBridger --ref <分支>`（fork 不投递 push 事件，必须手动） | 三 job（backend/database/frontend）全绿 |
+| R2 | 预检 | `obctl backup-check`；`obctl status` 看磁盘/内存（磁盘 <70%）；写变更说明（改了什么、影响面、回滚点）。不要在服务器上构建 | 备份新鲜、磁盘 <70%、变更说明成文 |
+| R4 | 构建并传入 | 运维 Mac 仓库根目录：`scripts/release-image.sh [git-ref]`。工作区必须干净；传入 ref 时 HEAD 必须就是该提交（脚本不切换分支）。脚本执行 `cd web && NODE_OPTIONS= bun run build`，再 `docker buildx build --platform linux/amd64 -f Dockerfile.dev -t openbridger:<至少 9 位 sha> --load .`，确认 ob-prod 磁盘 <70% 后 `docker save openbridger:$TAG \| gzip \| ssh -o BatchMode=yes ob-prod 'gunzip \| docker load'`。脚本不 deploy，不打印密钥，结束时打印 tag | 服务器上已有 `openbridger:<sha>`，平台 linux/amd64 |
+| R3 | 冻结备份 | 镜像 load 成功后、切换前：`ssh ob-prod '/srv/openbridger/obctl backup'` | 新 dump 生成（发版专用现场） |
+| R5 | 切换 | `ssh ob-prod '/srv/openbridger/obctl deploy <sha>'`（自动记录 `.prev-tag`、L1 冒烟、失败自动回滚）。sha 用 R4 打印的 tag | SMOKE PASS，版本号正确 |
 | R6 | 验收   | `OB_API_KEY=sk-... obctl accept`（须 20/20）+ L4 抽验：计费一次真实调用对账、支付下单链接、Turnstile 注册页                                                                                      | 全部通过                               |
 | R7 | 收尾   | 更新 VERSION；`git tag vX.Y.Z && git push git@github.com:randy72yt/OpenBridger.git main --tags`（必须 SSH）；涉及定价则走定价管线重算+审批+发布+v4 表达式 PATCH；涉及协议则更新 legal 并 PUT /api/option/ | tag 落库、生产版本=tag                    |
 | R8 | 观察期  | 24h 内盯告警邮件；`obctl diag` 抽查两次                                                                                                                                          | 无 S2+ 异常                           |

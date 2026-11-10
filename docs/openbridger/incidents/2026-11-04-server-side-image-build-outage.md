@@ -47,3 +47,7 @@
 
 - [ ] 若要恢复"服务器自助构建"（例如脱离本机发版），必须先换 4GB 以上机型，并在 compose 构建里加 `--mount=type=cache` 与 `GOFLAGS=-p=1`；当前结论是**不做**。
 - [ ] 本机构建首次需下 Go 模块，依赖本机代理；CI 化时在构建机上常驻模块缓存。
+
+## 后续（2026-11-10）
+
+上面「防再发」写了服务器不再编译，但 `obctl build` 仍会在 ob-prod 上启动 `docker compose build`。当日再次执行把服务器打挂，只能强制重启。仓库里的 `obctl build` 现已默认拒绝（`OBCTL_ALLOW_SERVER_BUILD=YES` 仅 emergency-only），Mac 侧入口是 `scripts/release-image.sh`。前端在镜像内，运行容器只挂载 `/data`，rsync `web/dist` 不改变正在跑的镜像。

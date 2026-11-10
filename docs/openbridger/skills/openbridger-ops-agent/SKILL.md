@@ -17,8 +17,8 @@ agent_created: true
 ## 通用约定
 
 - 所有服务器操作：`ssh ob-prod '<cmd>'`，**必须 `dangerouslyDisableSandbox: true`**（沙箱内 SSH 不通）
-- 一键工具：服务器 `/srv/openbridger/obctl`（`obctl help` 查全部子命令）；本地源码 `docs/openbridger/scripts/obctl.sh`
-- 长任务（构建等）走服务器 nohup + 轮询，本地后台 Bash 任务拿不到沙箱豁免
+- 一键工具：服务器 `/srv/openbridger/obctl`（`obctl help` 查全部子命令）；本地源码 `docs/openbridger/scripts/obctl.sh`。改完源码要 scp 覆盖服务器副本，`obctl build` 的拒绝才会生效
+- **硬规则：不在 ob-prod（2 vCPU / ~1.6GB）上编译。** 禁止 `obctl build`、`docker build`、`go build`、`docker compose build`。2026-11-10 服务器构建打挂整机。`obctl build` 默认拒绝；`OBCTL_ALLOW_SERVER_BUILD=YES` 仅 emergency-only。镜像构建在运维 Mac 跑 `scripts/release-image.sh`，不要改到服务器 nohup
 - 总纲：`docs/openbridger/ops-handbook.md`（应急/Release/治理）
 - 禁止跨目录翻其他项目文件；禁止把密码写进命令行/磁盘
 
@@ -40,10 +40,10 @@ agent_created: true
 
 按 ops-handbook §4 的 R0-R8 逐阶段执行，每阶段出口条件不满足就停下报告：
 
-- R2 预检：`obctl backup-check` + `obctl status`
-- R3 冻结备份：`obctl backup`
-- R4 构建：前端 Mac 构建（`cd web && NODE_OPTIONS= /Users/yuntao/.bun/bin/bun run build`）+ rsync dist；后端 `obctl build <ref>` → 轮询 `obctl build-status`
-- R5 切换：`obctl deploy <sha>`（自带冒烟+失败自动回滚）
+- R2 预检：`obctl backup-check` + `obctl status`（磁盘 <70%）。不要在服务器上构建
+- R4 构建并传入：运维 Mac（Intel x86_64，Docker Desktop）仓库根目录 `scripts/release-image.sh [git-ref]`（干净工作区，或显式 ref 且 HEAD 就是该提交）。脚本做 `cd web && NODE_OPTIONS= bun run build`、`docker buildx build --platform linux/amd64`、磁盘 <70% 后 `docker load`。脚本不 deploy。前端打进镜像，运行容器只挂载 `/data`，不要 rsync `web/dist`
+- R3 冻结备份：镜像 load 成功后、切换前 `obctl backup`
+- R5 切换：`obctl deploy <R4 打印的 tag>`（自带冒烟+失败自动回滚）。不要跑 `obctl build`
 - R6 验收：`OB_API_KEY=<令牌> obctl accept` + L4 抽验（计费对账/支付/Turnstile，见 ops-handbook §4）
 - R7 收尾：VERSION + `git tag` + SSH 推送；涉及定价/协议走对应管线（见 Part 2）
 - R8 观察：告知用户 24h 观察期与回滚触发条件
@@ -83,9 +83,10 @@ agent_created: true
 - 服务器 DNS 走阿里云内网 100.100.2.x，新 DNS 记录最长滞后约 1 小时（公网 1.1.1.1 即时）；服务器上验证新记录可用 `curl --resolve <host>:443:104.21.57.189` 绕开
 
 ## 构建部署（小内存机器关键坑）
-- 前端本地构建：`cd web && NODE_OPTIONS= /Users/yuntao/.bun/bin/bun run build`（**必须清 NODE_OPTIONS**，WorkBuddy 注入的 shim 会让 vitest/bun worker 起不来），然后 `rsync -az --delete dist/ ob-prod:/srv/openbridger/repo/web/dist/`
-- 镜像在服务器构建，但 1.6GB 内存会被 go build 打爆导致 sshd 假死（TCP 通但无 banner）。`obctl build` 已内置 GOFLAGS 串行补丁；手工构建必须先在 Dockerfile.dev 的 `RUN go build` 前加 `ENV GOFLAGS=-p=1 GOMAXPROCS=1`，构建后恢复文件
-- 切换镜像：`obctl deploy <tag>`（自动记录回滚点 .prev-tag、冒烟、失败自动回滚）；回滚 `obctl rollback`
+- **硬规则：** ob-prod（2 vCPU / ~1.6GB）上禁止编译。`obctl build` 默认拒绝并退出非 0；`build-status` 只读。紧急开口只有 `OBCTL_ALLOW_SERVER_BUILD=YES`（emergency-only，2026-11-10 服务器 `obctl build` 打挂整机，只能强制重启）。不要在服务器上打 GOFLAGS 补丁再 `docker build` / `go build` / `compose build`
+- 发版构建在运维 Mac：`scripts/release-image.sh [git-ref]`。等价手工步骤是 `cd web && NODE_OPTIONS= bun run build`（**必须清 NODE_OPTIONS**，WorkBuddy 注入的 shim 会让 vitest/bun worker 起不来），然后 `TAG=$(git rev-parse --short=9 HEAD)`、`docker buildx build --platform linux/amd64 -f Dockerfile.dev -t openbridger:$TAG --load .`，磁盘 <70% 后 `docker save openbridger:$TAG | gzip | ssh -o BatchMode=yes ob-prod 'gunzip | docker load'`
+- 前端打进镜像。运行容器只挂载 `/data`。rsync `web/dist` 到服务器不会改变正在跑的镜像，发版不用
+- 脚本不 deploy、不打印密钥。load 之后：`obctl backup`，再 `obctl deploy <tag>`（自动记录回滚点 .prev-tag、冒烟、失败自动回滚）；回滚 `obctl rollback`
 - 验证：`obctl smoke`（L1+L2）；全量 `obctl accept`（需 OB_API_KEY）
 
 ## git 推送与 CI
@@ -129,4 +130,4 @@ agent_created: true
 
 ## 本机网络注意
 - 本机到 Cloudflare 直连可能断（1.1.1.1/openbridger.com 000），验证生产一律在服务器上 curl 公网域名
-- 后台 Bash 任务拿不到沙箱豁免会失败；长任务改服务器端 nohup + 轮询
+- 后台 Bash 任务拿不到沙箱豁免会失败。镜像构建不要改到服务器 nohup；只在运维 Mac 跑 `scripts/release-image.sh`

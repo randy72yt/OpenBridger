@@ -1,5 +1,9 @@
-# Build web/dist with `cd web && bun install --frozen-lockfile && bun run build`
-# before building this image. TLS terminates at the host reverse proxy.
+# Build on the ops Mac, never on ob-prod (2 vCPU / ~1.6GB; a server-side
+# docker build hung the host on 2026-11-10). From a clean checkout:
+#   cd web && NODE_OPTIONS= bun run build
+#   docker buildx build --platform linux/amd64 -f Dockerfile.dev --load .
+# The running container only mounts /data; web/dist is baked into the image.
+# TLS terminates at the host reverse proxy.
 # All secrets are supplied by the deployment environment; this file stores none.
 services:
   openbridger:

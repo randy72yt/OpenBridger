@@ -137,6 +137,32 @@ cmd_restore() {
 }
 
 cmd_build() {
+  # 生产机 2 vCPU / ~1.6GB。2026-11-10 obctl build（Dockerfile.dev 里的 docker build / go build）
+  # 打挂 ob-prod，只能强制重启。默认拒绝；OBCTL_ALLOW_SERVER_BUILD=YES 仅限紧急排障。
+  if [ "${OBCTL_ALLOW_SERVER_BUILD:-}" != "YES" ]; then
+    c_red "ERROR: 生产机禁止编译（obctl build 默认拒绝）。"
+    cat <<'EOF' >&2
+ob-prod 是 2 vCPU / ~1.6GB。2026-11-10 在这台机器上跑 obctl build（docker build Dockerfile.dev，里面是 go build）打挂服务器，只能强制重启。
+不要在 ob-prod 上执行 docker build、go build、docker compose build。build-status 只读，不会开始构建。
+
+在运维 Mac（Intel x86_64，Docker Desktop）上构建并传入镜像：
+  scripts/release-image.sh [git-ref]
+手工等价步骤：
+  1. cd web && NODE_OPTIONS= bun run build
+  2. TAG=$(git rev-parse --short=9 HEAD)
+     docker buildx build --platform linux/amd64 -f Dockerfile.dev -t openbridger:$TAG --load .
+  3. 确认服务器磁盘 <70% 后：
+     docker save openbridger:$TAG | gzip | ssh -o BatchMode=yes ob-prod 'gunzip | docker load'
+  4. ssh ob-prod '/srv/openbridger/obctl backup'
+     ssh ob-prod "/srv/openbridger/obctl deploy $TAG"
+前端打进镜像，运行容器只挂载 /data。rsync web/dist 到服务器不会改变正在跑的镜像。
+
+紧急且接受再次打挂整机的风险时才允许（emergency-only）：
+  OBCTL_ALLOW_SERVER_BUILD=YES obctl build <git-ref>
+EOF
+    exit 1
+  fi
+  c_ylw "EMERGENCY: OBCTL_ALLOW_SERVER_BUILD=YES，将在 ob-prod 上 docker build / go build。2 vCPU / ~1.6GB，2026-11-10 曾因此打挂服务器。仅限紧急排障。"
   local tag="${1:-}"
   [ -n "$tag" ] || die "用法: obctl build <git-ref>   （tag/分支/sha，例如 v0.1.1 或 main）"
   cd "$REPO" || die "repo 不存在"
@@ -201,9 +227,9 @@ smoke_l1() {
 
 cmd_deploy() {
   local tag="${1:-}"
-  [ -n "$tag" ] || die "用法: obctl deploy <image-tag>   （obctl build/pull 产物，docker images 可查）"
+  [ -n "$tag" ] || die "用法: obctl deploy <image-tag>   （Mac scripts/release-image.sh 或 obctl pull 的产物，docker images 可查）"
   docker image inspect "openbridger:$tag" >/dev/null 2>&1 || docker image inspect "repo-openbridger:$tag" >/dev/null 2>&1 \
-    || die "镜像不存在: $tag（先 obctl build）"
+    || die "镜像不存在: $tag（先在运维 Mac 上 scripts/release-image.sh 构建并 docker load，或 obctl pull）"
   local prev; prev=$(cur_tag)
   echo "$prev" > "$OB/.prev-tag"
   hdr "Deploy $prev → $tag"
@@ -299,9 +325,9 @@ obctl — OpenBridger 一键运维
   backup                    立即执行一次完整备份（MySQL+Redis+配置）
   backup-check              校验最新备份新鲜度（<26h）与大小
   restore <dump.sql.gz>     从备份恢复 MySQL（需 OBCTL_CONFIRM=YES）
-  build <git-ref>           后台构建镜像（自动 GOFLAGS+GOMEMLIMIT 补丁；优先改用 pull）
-  pull <sha|分支>            从 GHCR 拉离机构建镜像（推荐，生产机零编译）
-  build-status              查看构建进度/结果
+  build <git-ref>           默认拒绝。生产机禁止 docker/go build。发版用 Mac scripts/release-image.sh。紧急排障（emergency-only）：OBCTL_ALLOW_SERVER_BUILD=YES obctl build <git-ref>
+  pull <sha|分支>            从 GHCR 拉离机构建镜像（Mac 不可用时的备选；生产机零编译）
+  build-status              只读查看上次构建日志（不会开始构建）
   deploy <image-tag>        切换镜像 + 冒烟，失败自动回滚
   rollback [image-tag]      回滚（默认上一次 deploy 前的 tag）
   accept                    L3 验收（需 OB_API_KEY=sk-...）
