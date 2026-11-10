@@ -24,9 +24,16 @@ func Init() {
 	go flushLoop()
 }
 
-func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens int64) {
+// RecordRelayOutcome is the sampling entry point. It resolves the sample
+// source from the relay's token (probe > internal > real), reclassifies
+// client-excluded real traffic as client_error, and records the sample.
+func RecordRelayOutcome(info *relaycommon.RelayInfo, outcome Outcome, outputTokens int64, errCode string) {
 	if info == nil {
 		return
+	}
+	source := SourceForRelay(info, tokenNameResolver(info.TokenId))
+	if outcome == OutcomeClientExcluded && source == SourceReal {
+		source = SourceClientError
 	}
 	now := time.Now()
 	hasTtft := info.IsStream && info.HasSendResponse()
@@ -48,10 +55,54 @@ func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens i
 		LatencyMs:    latencyMs,
 		TtftMs:       ttftMs,
 		HasTtft:      hasTtft,
-		Success:      success,
+		Success:      outcome == OutcomeSuccess,
 		OutputTokens: outputTokens,
 		GenerationMs: generationMs,
+		Source:       source,
+		ErrorCode:    errCode,
 	})
+}
+
+// RecordRelaySample is the legacy success/failure wrapper kept for
+// compatibility; failures recorded through it count as server failures.
+func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens int64) {
+	outcome := OutcomeServerFailure
+	if success {
+		outcome = OutcomeSuccess
+	}
+	RecordRelayOutcome(info, outcome, outputTokens, "")
+}
+
+type tokenNameEntry struct {
+	name     string
+	expireAt time.Time
+}
+
+var tokenNameCache sync.Map // token id -> tokenNameEntry
+
+// tokenNameResolver maps a token id to its name with a short-lived cache so
+// the sampling path does not hit the database per request. Unknown or deleted
+// tokens resolve to "" (regular user traffic). Swappable in tests.
+var tokenNameResolver = func(tokenId int) string {
+	if tokenId <= 0 {
+		return ""
+	}
+	now := time.Now()
+	if cached, ok := tokenNameCache.Load(tokenId); ok {
+		entry := cached.(tokenNameEntry)
+		if now.Before(entry.expireAt) {
+			return entry.name
+		}
+	}
+	token, err := model.GetTokenById(tokenId)
+	if err != nil || token == nil {
+		// Short negative TTL so a transient DB failure cannot misclassify an
+		// internal token as real traffic for long.
+		tokenNameCache.Store(tokenId, tokenNameEntry{name: "", expireAt: now.Add(time.Minute)})
+		return ""
+	}
+	tokenNameCache.Store(tokenId, tokenNameEntry{name: token.Name, expireAt: now.Add(5 * time.Minute)})
+	return token.Name
 }
 
 func Record(sample Sample) {
@@ -65,10 +116,14 @@ func Record(sample Sample) {
 	if sample.LatencyMs < 0 {
 		sample.LatencyMs = 0
 	}
+	if sample.Source == "" {
+		sample.Source = SourceReal
+	}
 
 	key := bucketKey{
 		model:    sample.Model,
 		group:    sample.Group,
+		source:   sample.Source,
 		bucketTs: bucketStart(time.Now().Unix()),
 	}
 	actual, _ := hotBuckets.LoadOrStore(key, &atomicBucket{})
@@ -109,6 +164,9 @@ func Query(params QueryParams) (QueryResult, error) {
 
 	hotBuckets.Range(func(key, value any) bool {
 		k := key.(bucketKey)
+		if k.source != SourceReal {
+			return true
+		}
 		if k.model != params.Model || k.bucketTs < startTs || k.bucketTs > endTs {
 			return true
 		}
@@ -154,6 +212,9 @@ func QuerySummaryAll(hours int, groups []string) (SummaryAllResult, error) {
 
 	hotBuckets.Range(func(key, value any) bool {
 		k := key.(bucketKey)
+		if k.source != SourceReal {
+			return true
+		}
 		if k.bucketTs < startTs || k.bucketTs > endTs {
 			return true
 		}
@@ -398,7 +459,12 @@ func recordRedis(key bucketKey, sample Sample) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
+	// Real samples keep the legacy key; aux sources get their own namespace so
+	// they can never leak into the real bucket.
 	redisKey := redisBucketKey(key)
+	if key.source != SourceReal {
+		redisKey = fmt.Sprintf("perf:aux:%s:%s:%s:%d", key.model, key.group, key.source, key.bucketTs)
+	}
 	pipe := common.RDB.TxPipeline()
 	pipe.HIncrBy(ctx, redisKey, "req", 1)
 	if sample.Success {
@@ -427,7 +493,7 @@ func mergeRedisActiveBuckets(merged map[bucketKey]counters, params QueryParams, 
 	if active < startTs || active > endTs {
 		return
 	}
-	key := bucketKey{model: params.Model, group: params.Group, bucketTs: active}
+	key := bucketKey{model: params.Model, group: params.Group, source: SourceReal, bucketTs: active}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	values, err := common.RDB.HGetAll(ctx, redisBucketKey(key)).Result()

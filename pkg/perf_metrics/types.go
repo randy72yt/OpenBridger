@@ -16,6 +16,12 @@ type Sample struct {
 	Success      bool
 	OutputTokens int64
 	GenerationMs int64
+	// Source routes the sample: real samples feed the public perf_metrics
+	// numbers, every other source lands in perf_metrics_aux (admin-only).
+	Source string
+	// ErrorCode is the relay error code for failed samples; used for admin
+	// statistics only, never persisted.
+	ErrorCode string
 }
 
 type QueryParams struct {
@@ -68,6 +74,7 @@ type SummaryAllResult struct {
 type bucketKey struct {
 	model    string
 	group    string
+	source   string
 	bucketTs int64
 }
 

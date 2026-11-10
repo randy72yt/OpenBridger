@@ -38,21 +38,38 @@ func flushCompletedBuckets() {
 			return true
 		}
 
-		err := model.UpsertPerfMetric(&model.PerfMetric{
-			ModelName:      k.model,
-			Group:          k.group,
-			BucketTs:       k.bucketTs,
-			RequestCount:   drained.requestCount,
-			SuccessCount:   drained.successCount,
-			TotalLatencyMs: drained.totalLatencyMs,
-			TtftSumMs:      drained.ttftSumMs,
-			TtftCount:      drained.ttftCount,
-			OutputTokens:   drained.outputTokens,
-			GenerationMs:   drained.generationMs,
-		})
+		var err error
+		if k.source == "" || k.source == SourceReal {
+			err = model.UpsertPerfMetric(&model.PerfMetric{
+				ModelName:      k.model,
+				Group:          k.group,
+				BucketTs:       k.bucketTs,
+				RequestCount:   drained.requestCount,
+				SuccessCount:   drained.successCount,
+				TotalLatencyMs: drained.totalLatencyMs,
+				TtftSumMs:      drained.ttftSumMs,
+				TtftCount:      drained.ttftCount,
+				OutputTokens:   drained.outputTokens,
+				GenerationMs:   drained.generationMs,
+			})
+		} else {
+			err = model.UpsertPerfMetricAux(&model.PerfMetricAux{
+				ModelName:      k.model,
+				Group:          k.group,
+				Source:         k.source,
+				BucketTs:       k.bucketTs,
+				RequestCount:   drained.requestCount,
+				SuccessCount:   drained.successCount,
+				TotalLatencyMs: drained.totalLatencyMs,
+				TtftSumMs:      drained.ttftSumMs,
+				TtftCount:      drained.ttftCount,
+				OutputTokens:   drained.outputTokens,
+				GenerationMs:   drained.generationMs,
+			})
+		}
 		if err != nil {
 			bucket.addCounters(drained)
-			common.SysError(fmt.Sprintf("failed to flush perf metric bucket model=%s group=%s bucket=%d: %s", k.model, k.group, k.bucketTs, err.Error()))
+			common.SysError(fmt.Sprintf("failed to flush perf metric bucket model=%s group=%s source=%s bucket=%d: %s", k.model, k.group, k.source, k.bucketTs, err.Error()))
 			return true
 		}
 
@@ -74,6 +91,9 @@ func cleanupExpiredMetrics(retentionDays int) {
 	cutoff := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour).Unix()
 	if err := model.DeletePerfMetricsBefore(cutoff); err != nil {
 		common.SysError("failed to cleanup expired perf metrics: " + err.Error())
+	}
+	if err := model.DeletePerfMetricsAuxBefore(cutoff); err != nil {
+		common.SysError("failed to cleanup expired perf metrics aux: " + err.Error())
 	}
 }
 

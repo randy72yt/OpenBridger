@@ -252,7 +252,8 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 	if newAPIError != nil {
 		gopool.Go(func() {
-			perfmetrics.RecordRelaySample(relayInfo, false, 0)
+			outcome := perfmetrics.ClassifyRelayError(newAPIError)
+			perfmetrics.RecordRelayOutcome(relayInfo, outcome, 0, string(newAPIError.GetErrorCode()))
 		})
 	}
 }
