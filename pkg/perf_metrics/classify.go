@@ -34,17 +34,17 @@ const (
 // availability: bad client parameters, insufficient quota, auth failures and
 // content moderation.
 var excludedErrorCodes = map[types.ErrorCode]struct{}{
-	types.ErrorCodeInvalidRequest:            {},
-	types.ErrorCodeBadRequestBody:            {},
-	types.ErrorCodeReadRequestBodyFailed:     {},
-	types.ErrorCodeConvertRequestFailed:      {},
-	types.ErrorCodeJsonMarshalFailed:         {},
-	types.ErrorCodeCountTokenFailed:          {},
-	types.ErrorCodeInsufficientUserQuota:     {},
+	types.ErrorCodeInvalidRequest:             {},
+	types.ErrorCodeBadRequestBody:             {},
+	types.ErrorCodeReadRequestBodyFailed:      {},
+	types.ErrorCodeConvertRequestFailed:       {},
+	types.ErrorCodeJsonMarshalFailed:          {},
+	types.ErrorCodeCountTokenFailed:           {},
+	types.ErrorCodeInsufficientUserQuota:      {},
 	types.ErrorCodePreConsumeTokenQuotaFailed: {},
-	types.ErrorCodeAccessDenied:              {},
-	types.ErrorCodeSensitiveWordsDetected:    {},
-	types.ErrorCodePromptBlocked:             {},
+	types.ErrorCodeAccessDenied:               {},
+	types.ErrorCodeSensitiveWordsDetected:     {},
+	types.ErrorCodePromptBlocked:              {},
 	// A missing built-in price is our configuration problem, but surfacing it in
 	// public availability would mark sellable models as down; it stays
 	// admin-only together with the other excluded sources.
@@ -54,18 +54,18 @@ var excludedErrorCodes = map[types.ErrorCode]struct{}{
 // serverFailureErrorCodes are gateway/upstream problems we own: transport
 // failures, channel misconfiguration and routing failures.
 var serverFailureErrorCodes = map[types.ErrorCode]struct{}{
-	types.ErrorCodeDoRequestFailed:            {},
+	types.ErrorCodeDoRequestFailed:             {},
 	types.ErrorCodeChannelResponseTimeExceeded: {},
-	types.ErrorCodeReadResponseBodyFailed:     {},
-	types.ErrorCodeEmptyResponse:              {},
-	types.ErrorCodeBadResponse:                {},
-	types.ErrorCodeBadResponseBody:            {},
-	types.ErrorCodeGetChannelFailed:           {},
-	types.ErrorCodeChannelNoAvailableKey:      {},
-	types.ErrorCodeChannelInvalidKey:          {},
-	types.ErrorCodeChannelModelMappedError:    {},
-	types.ErrorCodeChannelAwsClientError:      {},
-	types.ErrorCodeModelNotFound:              {},
+	types.ErrorCodeReadResponseBodyFailed:      {},
+	types.ErrorCodeEmptyResponse:               {},
+	types.ErrorCodeBadResponse:                 {},
+	types.ErrorCodeBadResponseBody:             {},
+	types.ErrorCodeGetChannelFailed:            {},
+	types.ErrorCodeChannelNoAvailableKey:       {},
+	types.ErrorCodeChannelInvalidKey:           {},
+	types.ErrorCodeChannelModelMappedError:     {},
+	types.ErrorCodeChannelAwsClientError:       {},
+	types.ErrorCodeModelNotFound:               {},
 }
 
 // upstreamErrorTypes mark errors whose status code came from the upstream

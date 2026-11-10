@@ -60,9 +60,9 @@ type ProbeRoundResult struct {
 }
 
 var (
-	probeSkipNamePattern     = regexp.MustCompile(`(?i)image|seedance|video|tts|whisper|embedding|rerank`)
+	probeSkipNamePattern      = regexp.MustCompile(`(?i)image|seedance|video|tts|whisper|embedding|rerank`)
 	probeExpensiveNamePattern = regexp.MustCompile(`(?i)opus|fable|sol|astra|-pro$|-pro-`)
-	probeCheapNamePattern    = regexp.MustCompile(`(?i)flash-lite|flash|mini|luna|lite|glm|grok|deepseek-.*flash`)
+	probeCheapNamePattern     = regexp.MustCompile(`(?i)flash-lite|flash|mini|luna|lite|glm|grok|deepseek-.*flash`)
 )
 
 // DefaultTokenParam picks the upstream token-limit parameter for a model.
@@ -300,6 +300,11 @@ func setProbeLastRun(model string, ts int64) {
 		return
 	}
 	probeLastRunFallback.Store(model, ts)
+}
+
+// GetProbeLastRunAt exposes the last probe timestamp for the admin perf view.
+func GetProbeLastRunAt(model string) int64 {
+	return getProbeLastRun(model)
 }
 
 // RunModelProbeRound is the scheduled entry point: it checks the switch, the

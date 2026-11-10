@@ -88,11 +88,11 @@ func TestRecordRelayOutcomeRoutesSources(t *testing.T) {
 		}
 	}
 
-	RecordRelayOutcome(mkInfo(7, false), OutcomeSuccess, 3, "")                              // internal token
-	RecordRelayOutcome(mkInfo(9, false), OutcomeSuccess, 3, "")                              // probe token
-	RecordRelayOutcome(mkInfo(12, true), OutcomeSuccess, 3, "")                              // playground
-	RecordRelayOutcome(mkInfo(11, false), OutcomeClientExcluded, 0, "invalid_request")       // real + excluded -> client_error
-	RecordRelayOutcome(mkInfo(11, false), OutcomeSuccess, 3, "")                             // real
+	RecordRelayOutcome(mkInfo(7, false), OutcomeSuccess, 3, "")                               // internal token
+	RecordRelayOutcome(mkInfo(9, false), OutcomeSuccess, 3, "")                               // probe token
+	RecordRelayOutcome(mkInfo(12, true), OutcomeSuccess, 3, "")                               // playground
+	RecordRelayOutcome(mkInfo(11, false), OutcomeClientExcluded, 0, "invalid_request")        // real + excluded -> client_error
+	RecordRelayOutcome(mkInfo(11, false), OutcomeSuccess, 3, "")                              // real
 	RecordRelayOutcome(mkInfo(7, false), OutcomeClientExcluded, 0, "insufficient_user_quota") // internal + excluded stays internal
 
 	assert.Equal(t, map[string]bool{

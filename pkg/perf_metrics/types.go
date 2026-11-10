@@ -58,11 +58,24 @@ type SuccessRatePoint struct {
 	SuccessRate float64 `json:"success_rate"`
 }
 
+// ModelSummary is the public per-model summary. The first five fields are the
+// legacy v1 shape and must stay byte-identical; the v2-only fields below are
+// pointers/omitempty so a v1 response never emits them. Availability uses
+// pointers so a real 0.00% is still rendered instead of being dropped by
+// omitempty.
 type ModelSummary struct {
-	ModelName           string             `json:"model_name"`
-	AvgLatencyMs        int64              `json:"avg_latency_ms"`
-	SuccessRate         float64            `json:"success_rate"`
-	AvgTps              float64            `json:"avg_tps"`
+	ModelName    string  `json:"model_name"`
+	AvgLatencyMs int64   `json:"avg_latency_ms"`
+	SuccessRate  float64 `json:"success_rate"`
+	AvgTps       float64 `json:"avg_tps"`
+
+	AvgTtftMs       *int64   `json:"avg_ttft_ms,omitempty"`
+	Availability24h *float64 `json:"availability_24h,omitempty"`
+	Availability7d  *float64 `json:"availability_7d,omitempty"`
+	SampleCount     int64    `json:"sample_count,omitempty"`
+	ProbeShare      float64  `json:"probe_share,omitempty"`
+	Insufficient    bool     `json:"insufficient,omitempty"`
+
 	RecentSuccessSeries []SuccessRatePoint `json:"recent_success_series,omitempty"`
 	RequestCount        int64              `json:"-"`
 }
