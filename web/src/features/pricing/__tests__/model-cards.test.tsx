@@ -361,11 +361,11 @@ describe('model cards', () => {
     )
     await waitFor(() =>
       expect(
-        queryClient.getQueryState(['perf-metrics-summary', 24])?.status
+        queryClient.getQueryState(['perf-metrics-summary', 24, 48])?.status
       ).toBe('error')
     )
     expect(request).toHaveBeenCalledWith('/api/perf-metrics/summary', {
-      params: { hours: 24 },
+      params: { hours: 24, bars: 48 },
     })
     expect(
       within(
@@ -378,7 +378,7 @@ describe('model cards', () => {
   })
 
   it('paginates the model cards and disables navigation at both boundaries', async () => {
-    queryClient.setQueryData(['perf-metrics-summary', 24], {
+    queryClient.setQueryData(['perf-metrics-summary', 24, 48], {
       success: true,
       data: { models: [] },
     })
@@ -524,5 +524,85 @@ describe('model cards', () => {
       expect(slot.classList.contains('bg-muted-foreground/15')).toBe(true)
     })
     vi.useRealTimers()
+  })
+  it('renders v2 metrics with two-decimal availability, first-token latency and hints', () => {
+    render(
+      <ModelCard
+        model={pricingModel()}
+        onClick={vi.fn()}
+        perf={{
+          avg_latency_ms: 1200,
+          avg_tps: 42,
+          success_rate: 75,
+          availability_24h: 98.5,
+          avg_ttft_ms: 410,
+          sample_count: 12,
+          probe_share: 0.6,
+          insufficient: true,
+        }}
+      />
+    )
+    const badge = screen.getByLabelText(
+      'Performance metrics for the last 24 hours'
+    )
+    expect(within(badge).getByText('98.50%')).toBeVisible()
+    expect(within(badge).getByText('410ms / 1.20s')).toBeVisible()
+    expect(
+      within(badge).getByText('Not enough samples · Mostly probe traffic')
+    ).toBeVisible()
+    const spans = [
+      ...screen.getByRole('img', {
+        name: 'Recent success-rate samples; gray bars indicate missing data.',
+      }).children,
+    ]
+    expect(spans).toHaveLength(48)
+  })
+
+  it('renders v2 metrics without ttft as total latency only', () => {
+    render(
+      <ModelCard
+        model={pricingModel()}
+        onClick={vi.fn()}
+        perf={{
+          avg_latency_ms: 900,
+          avg_tps: 42,
+          success_rate: 75,
+          availability_24h: 100,
+          avg_ttft_ms: 0,
+          sample_count: 30,
+          probe_share: 0.2,
+          insufficient: false,
+        }}
+      />
+    )
+    const badge = screen.getByLabelText(
+      'Performance metrics for the last 24 hours'
+    )
+    expect(within(badge).getByText('100.00%')).toBeVisible()
+    expect(within(badge).getByText('900ms')).toBeVisible()
+    expect(screen.queryByText('Not enough samples')).toBeNull()
+    expect(screen.queryByText('Mostly probe traffic')).toBeNull()
+  })
+
+  it('renders v1 metrics unchanged with one-decimal status and no v2 labels', () => {
+    render(
+      <ModelCard
+        model={pricingModel()}
+        onClick={vi.fn()}
+        perf={{ avg_latency_ms: 1200, avg_tps: 42, success_rate: 98.5 }}
+      />
+    )
+    const badge = screen.getByLabelText(
+      'Performance metrics for the last 24 hours'
+    )
+    expect(within(badge).getByText('98.5%')).toBeVisible()
+    expect(screen.queryByText('First token / total')).toBeNull()
+    expect(screen.queryByText('Not enough samples')).toBeNull()
+    const spans = [
+      ...screen.getByRole('img', {
+        name: 'Recent success-rate samples; gray bars indicate missing data.',
+      }).children,
+    ]
+    expect(spans).toHaveLength(24)
   })
 })

@@ -55,6 +55,26 @@ const OPERATIONS_SECTIONS = [
             settings['perf_metrics_setting.bucket_time'] ?? 'hour',
           'perf_metrics_setting.retention_days':
             settings['perf_metrics_setting.retention_days'] ?? 0,
+          'perf_metrics_setting.public_v2':
+            settings['perf_metrics_setting.public_v2'] ?? false,
+          'perf_metrics_setting.min_public_samples':
+            settings['perf_metrics_setting.min_public_samples'] ?? 5,
+          'perf_metrics_setting.internal_token_names':
+            settings['perf_metrics_setting.internal_token_names'] ??
+            'yuntao-main,ob-probe',
+          'perf_metrics_setting.probe_enabled':
+            settings['perf_metrics_setting.probe_enabled'] ?? false,
+          'perf_metrics_setting.probe_scan_minutes':
+            settings['perf_metrics_setting.probe_scan_minutes'] ?? 10,
+          'perf_metrics_setting.probe_max_per_run':
+            settings['perf_metrics_setting.probe_max_per_run'] ?? 6,
+          'perf_metrics_setting.probe_daily_budget_quota':
+            settings['perf_metrics_setting.probe_daily_budget_quota'] ??
+            500000,
+          'perf_metrics_setting.probe_real_traffic_threshold':
+            settings['perf_metrics_setting.probe_real_traffic_threshold'] ?? 3,
+          'perf_metrics_setting.probe_models':
+            settings['perf_metrics_setting.probe_models'] ?? '',
         }}
       />
     ),

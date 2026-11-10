@@ -369,6 +369,15 @@ export type OperationsSettings = {
   'perf_metrics_setting.flush_interval': number
   'perf_metrics_setting.bucket_time': 'hour' | 'minute' | '5min'
   'perf_metrics_setting.retention_days': number
+  'perf_metrics_setting.public_v2': boolean
+  'perf_metrics_setting.min_public_samples': number
+  'perf_metrics_setting.internal_token_names': string
+  'perf_metrics_setting.probe_enabled': boolean
+  'perf_metrics_setting.probe_scan_minutes': number
+  'perf_metrics_setting.probe_max_per_run': number
+  'perf_metrics_setting.probe_daily_budget_quota': number
+  'perf_metrics_setting.probe_real_traffic_threshold': number
+  'perf_metrics_setting.probe_models': string
 }
 
 export type SecuritySettings = {

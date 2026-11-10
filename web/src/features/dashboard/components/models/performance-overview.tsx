@@ -17,91 +17,83 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { Gauge, HeartPulse, Timer } from 'lucide-react'
+import { HeartPulse } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
+import {
+  StaticDataTable,
+  staticDataTableClassNames as tableStyles,
+} from '@/components/data-table'
+import { IconBadge } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getPerfMetricsSummary } from '@/features/performance-metrics/api'
+import { getAdminPerfSummary } from '@/features/performance-metrics/api'
 import {
   formatLatency,
   formatThroughput,
   formatUptimePct,
-  getSuccessRateDotClass,
   getSuccessRateTextClass,
 } from '@/features/performance-metrics/lib/format'
-import type { PerfModelSummary } from '@/features/performance-metrics/types'
+import type { AdminModelPerf } from '@/features/performance-metrics/types'
+import { formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
-const PERFORMANCE_WINDOW_HOURS = 24
-const TOP_MODEL_LIMIT = 6
+import { UptimeSparkline } from '@/features/pricing/components/model-details-uptime-sparkline'
 
-type WeightedMetric = 'avg_latency_ms' | 'avg_tps' | 'success_rate'
+const ADMIN_WINDOW_HOURS = 24
 
-type PerformanceSummary = {
-  totalRequests: number
-  avgLatencyMs: number
-  avgTps: number
-  successRate: number
+type PerfSeriesPoint = AdminModelPerf['series'][number]
+
+function toSparklineSeries(series: PerfSeriesPoint[]) {
+  return series.map((point) => ({
+    date: new Date(point.ts * 1000).toISOString(),
+    uptime_pct: point.success_rate,
+    incidents: 0,
+    outage_minutes: 0,
+  }))
 }
 
-function simpleAverage(
-  rows: PerfModelSummary[],
-  metric: WeightedMetric,
-  isValid: (value: number) => boolean
-): number {
-  let total = 0
-  let count = 0
-
-  for (const row of rows) {
-    const value = Number(row[metric])
-    if (!isValid(value)) continue
-    total += value
-    count++
-  }
-
-  return count > 0 ? total / count : Number.NaN
+function topErrorCodes(errorCodes: Record<string, number>, limit = 2): string[] {
+  return Object.entries(errorCodes)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, limit)
+    .map(([code, count]) => `${code} ×${count}`)
 }
 
-function buildPerformanceSummary(rows: PerfModelSummary[]): PerformanceSummary {
-  return {
-    totalRequests: rows.length,
-    avgLatencyMs: Math.round(
-      simpleAverage(
-        rows,
-        'avg_latency_ms',
-        (value) => Number.isFinite(value) && value > 0
-      )
-    ),
-    avgTps: simpleAverage(
-      rows,
-      'avg_tps',
-      (value) => Number.isFinite(value) && value > 0
-    ),
-    successRate: simpleAverage(rows, 'success_rate', Number.isFinite),
-  }
+function formatRelativeTime(ts: number): string {
+  if (!ts) return '—'
+  const seconds = Math.max(0, Math.floor(Date.now() / 1000 - ts))
+  if (seconds < 60) return `${seconds}s`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`
+  return `${Math.floor(seconds / 86400)}d`
 }
 
 export function PerformanceOverview() {
   const { t } = useTranslation()
-  const metricsQuery = useQuery({
-    queryKey: ['perf-metrics-summary', PERFORMANCE_WINDOW_HOURS],
-    queryFn: () => getPerfMetricsSummary(PERFORMANCE_WINDOW_HOURS),
+  const adminQuery = useQuery({
+    queryKey: ['perf-metrics-admin', ADMIN_WINDOW_HOURS],
+    queryFn: () => getAdminPerfSummary(ADMIN_WINDOW_HOURS),
     staleTime: 60 * 1000,
     retry: false,
   })
 
-  const models = useMemo(
-    () => metricsQuery.data?.data.models ?? [],
-    [metricsQuery.data]
-  )
-  const summary = useMemo(() => buildPerformanceSummary(models), [models])
-  const topModels = useMemo(() => models.slice(0, TOP_MODEL_LIMIT), [models])
-  const loading = metricsQuery.isLoading
-  const hasData = models.length > 0
+  const models = useMemo(() => adminQuery.data?.data.models ?? [], [
+    adminQuery.data,
+  ])
+  const loading = adminQuery.isLoading
 
-  if (!loading && !hasData) {
+  if (loading) {
+    return (
+      <div className='flex items-center gap-3 rounded-lg border px-4 py-3'>
+        <Skeleton className='h-4 w-40' />
+        <Skeleton className='h-4 w-24' />
+        <Skeleton className='h-4 w-24' />
+      </div>
+    )
+  }
+
+  if (models.length === 0) {
     return (
       <div className='text-muted-foreground overflow-hidden rounded-lg border px-4 py-3 text-center text-xs'>
         {t('No performance data available')}
@@ -111,120 +103,163 @@ export function PerformanceOverview() {
 
   return (
     <div className='overflow-hidden rounded-lg border'>
-      <div className='flex flex-wrap items-center gap-x-5 gap-y-2.5 px-4 py-2.5 sm:px-5 sm:py-3'>
-        {/* Title */}
+      <div className='flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-5'>
         <div className='flex items-center gap-1.5'>
           <IconBadge tone='success' size='xs'>
             <HeartPulse />
           </IconBadge>
           <span className='text-xs font-semibold whitespace-nowrap'>
-            {t('Performance health')}
+            {t('Model performance (admin)')}
           </span>
         </div>
-
-        {/* Separator */}
-        <div className='bg-border hidden h-4 w-px sm:block' />
-
-        {/* 3 KPI inline metrics */}
-        {loading ? (
-          <div className='flex flex-wrap items-center gap-x-5 gap-y-2'>
-            {['success', 'latency', 'throughput'].map((key) => (
-              <div key={key} className='flex items-center gap-1.5'>
-                <Skeleton className='h-3 w-14' />
-                <Skeleton className='h-4 w-16' />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className='flex flex-wrap items-center gap-x-5 gap-y-2'>
-            <InlineMetric
-              icon={HeartPulse}
-              label={t('Success rate')}
-              value={formatUptimePct(summary.successRate)}
-              valueClassName={getSuccessRateTextClass(summary.successRate)}
-              tone='success'
-            />
-            <InlineMetric
-              icon={Timer}
-              label={t('Average latency')}
-              value={formatLatency(summary.avgLatencyMs)}
-              tone='warning'
-            />
-            <InlineMetric
-              icon={Gauge}
-              label={t('Throughput')}
-              value={formatThroughput(summary.avgTps)}
-              tone='info'
-            />
-          </div>
-        )}
-
-        {/* Separator */}
-        <div className='bg-border hidden h-4 w-px lg:block' />
-
-        {/* Top models inline badges */}
-        {!loading && hasData && (
-          <div className='flex flex-wrap items-center gap-1.5'>
-            {topModels.map((model) => (
-              <ModelBadge key={model.model_name} model={model} />
-            ))}
-          </div>
-        )}
+        <span className='text-muted-foreground text-xs whitespace-nowrap'>
+          {t('Sources: real / probe / internal / client errors')}
+        </span>
+        <span className='text-muted-foreground ml-auto font-mono text-xs tabular-nums'>
+          {t('Probe budget')}: {formatQuota(adminQuery.data?.data.probe_budget_used_quota ?? 0)} /{' '}
+          {formatQuota(adminQuery.data?.data.probe_budget_quota ?? 0)}
+        </span>
       </div>
-    </div>
-  )
-}
-
-function InlineMetric(props: {
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  value: string
-  valueClassName?: string
-  tone: IconBadgeTone
-}) {
-  const Icon = props.icon
-
-  return (
-    <div className='flex items-center gap-1.5'>
-      <IconBadge tone={props.tone} size='xs'>
-        <Icon />
-      </IconBadge>
-      <span className='text-muted-foreground text-[11px]'>{props.label}</span>
-      <span
-        className={cn(
-          'font-mono text-xs font-semibold tabular-nums',
-          props.valueClassName
-        )}
-      >
-        {props.value}
-      </span>
-    </div>
-  )
-}
-
-function ModelBadge(props: { model: PerfModelSummary }) {
-  const model = props.model
-
-  return (
-    <span className='bg-muted/50 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1'>
-      <span className='max-w-[10rem] truncate font-mono text-[11px]'>
-        {model.model_name}
-      </span>
-      <span
-        className={cn(
-          'size-1.5 rounded-full',
-          getSuccessRateDotClass(model.success_rate)
-        )}
-        aria-hidden='true'
+      <StaticDataTable
+        tableClassName='text-xs'
+        headerRowClassName={tableStyles.compactHeaderRow}
+        data={models}
+        getRowKey={(model) => model.model_name}
+        columns={[
+          {
+            id: 'model',
+            header: t('Model'),
+            className: tableStyles.compactHeaderCell,
+            cellClassName: tableStyles.compactCell,
+            cell: (model) => (
+              <span className='max-w-[12rem] truncate font-mono'>
+                {model.model_name}
+              </span>
+            ),
+          },
+          {
+            id: 'requests',
+            header: t('Requests (r/p/i/c)'),
+            className: tableStyles.compactHeaderCell,
+            cellClassName: tableStyles.compactCell,
+            cell: (model) => (
+              <span className='font-mono tabular-nums'>
+                {model.real.requests}/{model.probe.requests}/
+                {model.internal.requests}/{model.client_error.requests}
+              </span>
+            ),
+          },
+          {
+            id: 'availability',
+            header: t('Availability 24h / 7d'),
+            className: tableStyles.compactHeaderCellRight,
+            cellClassName: tableStyles.compactNumericCell,
+            cell: (model) => (
+              <span
+                className={cn(
+                  'font-mono tabular-nums',
+                  getSuccessRateTextClass(model.availability_24h)
+                )}
+              >
+                {formatUptimePct(model.availability_24h)}
+                <span className='text-muted-foreground'>
+                  {' / '}
+                  {formatUptimePct(model.availability_7d)}
+                </span>
+              </span>
+            ),
+          },
+          {
+            id: 'ttft',
+            header: t('First token / total'),
+            className: tableStyles.compactHeaderCellRight,
+            cellClassName: tableStyles.compactNumericCell,
+            cell: (model) => (
+              <span className='font-mono tabular-nums'>
+                {formatLatency(model.real.avg_ttft_ms || model.probe.avg_ttft_ms)}
+                <span className='text-muted-foreground'>
+                  {' / '}
+                  {formatLatency(
+                    model.real.avg_latency_ms || model.probe.avg_latency_ms
+                  )}
+                </span>
+              </span>
+            ),
+          },
+          {
+            id: 'tps',
+            header: 'TPS',
+            className: tableStyles.compactHeaderCellRight,
+            cellClassName: tableStyles.compactNumericCell,
+            cell: (model) => (
+              <span className='font-mono tabular-nums'>
+                {formatThroughput(
+                  model.real.avg_tps || model.probe.avg_tps
+                ).replace(' t/s', 't/s')}
+              </span>
+            ),
+          },
+          {
+            id: 'series',
+            header: t('24h status'),
+            className: tableStyles.compactHeaderCell,
+            cellClassName: tableStyles.compactCell,
+            cell: (model) => (
+              <UptimeSparkline size='sm' series={toSparklineSeries(model.series)} />
+            ),
+          },
+          {
+            id: 'public-preview',
+            header: t('If public v2 is on'),
+            className: tableStyles.compactHeaderCell,
+            cellClassName: tableStyles.compactCell,
+            cell: (model) => (
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1 font-mono text-[11px] tabular-nums',
+                  getSuccessRateTextClass(model.public_v2.success_rate)
+                )}
+                title={t(
+                  'What the public model square would show once public v2 is enabled'
+                )}
+              >
+                {formatUptimePct(model.public_v2.success_rate)}
+                {model.public_v2.insufficient && (
+                  <span className='text-muted-foreground'>
+                    · {t('Not enough samples')}
+                  </span>
+                )}
+              </span>
+            ),
+          },
+          {
+            id: 'errors',
+            header: t('Top error codes'),
+            className: tableStyles.compactHeaderCell,
+            cellClassName: tableStyles.compactCell,
+            cell: (model) => {
+              const codes = topErrorCodes(model.error_codes)
+              if (codes.length === 0) return <span className='text-muted-foreground'>—</span>
+              return (
+                <span className='font-mono text-[11px]'>
+                  {codes.join(', ')}
+                </span>
+              )
+            },
+          },
+          {
+            id: 'probe',
+            header: t('Probe'),
+            className: tableStyles.compactHeaderCell,
+            cellClassName: tableStyles.compactCell,
+            cell: (model) => (
+              <span className='text-muted-foreground font-mono text-[11px]'>
+                {model.probe_tier || '—'} · {formatRelativeTime(model.last_probe_at)}
+              </span>
+            ),
+          },
+        ]}
       />
-      <span
-        className={cn(
-          'font-mono text-[11px] font-semibold tabular-nums',
-          getSuccessRateTextClass(model.success_rate)
-        )}
-      >
-        {formatUptimePct(model.success_rate)}
-      </span>
-    </span>
+    </div>
   )
 }

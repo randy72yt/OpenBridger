@@ -333,6 +333,7 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       <CardFooter className='mt-auto border-0 bg-transparent pt-0'>
         <ModelPerfBadge
           perf={props.perf}
+          statusSlots={props.perf?.availability_24h != null ? 48 : 24}
           className='border-border/60 border-t pt-2'
         >
           <Button variant='ghost' size='sm' onClick={props.onClick}>
