@@ -84,7 +84,9 @@ var perfMetricsSetting = PerfMetricsSetting{
 	Enabled:       true,
 	FlushInterval: 5,
 	BucketTime:    "hour",
-	RetentionDays: 0,
+	// 90 days of history covers the 7-day availability windows with slack;
+	// an existing perf_metrics_setting.retention_days option row still wins.
+	RetentionDays: 90,
 
 	PublicV2:         false,
 	MinPublicSamples: 5,

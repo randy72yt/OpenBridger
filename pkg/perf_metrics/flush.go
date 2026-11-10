@@ -84,11 +84,20 @@ func deleteOldEmptyBucket(k bucketKey, rawKey any) {
 	}
 }
 
+// lastMetricsCleanup throttles the retention pass: the flush loop invokes it
+// every interval, but one delete sweep per day is enough.
+var lastMetricsCleanup int64
+
 func cleanupExpiredMetrics(retentionDays int) {
 	if retentionDays <= 0 {
 		return
 	}
-	cutoff := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour).Unix()
+	now := time.Now().Unix()
+	if now-lastMetricsCleanup < 24*3600 {
+		return
+	}
+	lastMetricsCleanup = now
+	cutoff := now - int64(retentionDays)*24*3600
 	if err := model.DeletePerfMetricsBefore(cutoff); err != nil {
 		common.SysError("failed to cleanup expired perf metrics: " + err.Error())
 	}

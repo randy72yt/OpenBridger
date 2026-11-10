@@ -165,6 +165,8 @@ func TestFlushRoutesAndAccumulatesBySource(t *testing.T) {
 
 func TestCleanupExpiredMetricsDeletesBothTables(t *testing.T) {
 	db := setupPerfTestDB(t)
+	lastMetricsCleanup = 0
+	t.Cleanup(func() { lastMetricsCleanup = 0 })
 
 	oldTs := time.Now().Add(-48 * time.Hour).Unix()
 	freshTs := time.Now().Add(-1 * time.Hour).Unix()
@@ -184,6 +186,24 @@ func TestCleanupExpiredMetricsDeletesBothTables(t *testing.T) {
 	assert.Zero(t, auxCount)
 	require.NoError(t, db.Model(&model.PerfMetricAux{}).Where("model_name = ?", "fresh").Count(&auxCount).Error)
 	assert.Equal(t, int64(1), auxCount)
+}
+
+func TestCleanupExpiredMetricsRunsAtMostOncePerDay(t *testing.T) {
+	db := setupPerfTestDB(t)
+	lastMetricsCleanup = 0
+	t.Cleanup(func() { lastMetricsCleanup = 0 })
+
+	cleanupExpiredMetrics(1)
+	require.NotZero(t, lastMetricsCleanup)
+
+	// Rows that expired after the first sweep survive the throttled pass.
+	oldTs := time.Now().Add(-48 * time.Hour).Unix()
+	require.NoError(t, db.Create(&model.PerfMetric{ModelName: "late-old", Group: "default", BucketTs: oldTs, RequestCount: 1, SuccessCount: 1}).Error)
+	cleanupExpiredMetrics(1)
+
+	var count int64
+	require.NoError(t, db.Model(&model.PerfMetric{}).Where("model_name = ?", "late-old").Count(&count).Error)
+	assert.Equal(t, int64(1), count)
 }
 
 // withPerfSetting mutates the live registered setting for one test and
