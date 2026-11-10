@@ -16,20 +16,19 @@ description: >-
 1. 没有用户明确给出的 git ref + 发版指令 → 只做巡检/备份/文档，禁止 deploy。
 2. 密钥永不进对话/git；生产 .env 不动。
 3. **尽量减少 CI 触发次数**（用户明确要求）：不在 Mac 上构建的情况下才用 CI（workflow_dispatch 手动触发；ghcr-release.yml 已无 push 触发）。不要为了构建而推送空提交。
-4. 生产机（2C/1.6G）**永不本地编译**（2026-11-03 曾整机 OOM 拖死）。
+4. 生产机 ob-prod（2 vCPU / ~1.6GB）**永不本地编译**。2026-11-10 `obctl build` 打挂服务器，只能强制重启。`obctl build` 默认拒绝；`OBCTL_ALLOW_SERVER_BUILD=YES` 仅 emergency-only。禁止 `docker build` / `go build` / `docker compose build`。`obctl build-status` 只读。
 
 ## 流程（主路径：Mac 构建 → 管道传镜像）
 
 1. **前置检查**：`ssh ob-prod '/srv/openbridger/obctl backup-check && /srv/openbridger/obctl status'`（备份新鲜、磁盘 <70%）。
-2. **冻结备份**：`ssh ob-prod '/srv/openbridger/obctl backup'`。
-3. **确认目标代码**：本地 `~/code/OpenBridger` 在目标 ref；前端已构建（`cd web && bun run build`，dist 与代码一致）。
-4. **Mac 构建镜像并直传服务器**（无需镜像仓库；Mac Docker 为 linux/amd64）：
+2. **确认目标代码**在运维 Mac 的检出里（Intel x86_64，Docker Desktop）。工作区干净，或显式 ref 且 HEAD 就是该提交。
+3. **Mac 构建镜像并传入**（脚本不 deploy，不打印密钥；前端打进镜像，运行容器只挂载 `/data`，不要 rsync `web/dist`）：
    ```bash
-   SHA=$(git rev-parse --short HEAD)
-   docker buildx build --platform linux/amd64 -t openbridger:$SHA -f Dockerfile.dev --load .
-   docker save openbridger:$SHA | gzip | ssh ob-prod 'gunzip | docker load'
+   scripts/release-image.sh <git-ref>
    ```
-5. **部署**：`ssh ob-prod "/srv/openbridger/obctl deploy $SHA"`。L1 本地冒烟失败才自动回滚；L2（经 CF 公网自测）失败只是假失败告警，**不要**接受回滚。
+   等价手工步骤：`cd web && NODE_OPTIONS= bun run build`；`TAG=$(git rev-parse --short=9 HEAD)`；`docker buildx build --platform linux/amd64 -f Dockerfile.dev -t openbridger:$TAG --load .`；磁盘 <70% 后 `docker save openbridger:$TAG | gzip | ssh -o BatchMode=yes ob-prod 'gunzip | docker load'`。
+4. **冻结备份**（镜像 load 成功之后、切换之前）：`ssh ob-prod '/srv/openbridger/obctl backup'`。
+5. **部署**：`ssh ob-prod "/srv/openbridger/obctl deploy $TAG"`，tag 用脚本打印的那一个。L1 本地冒烟失败才自动回滚；L2（经 CF 公网自测）失败只是假失败告警，**不要**据此回滚。
 6. **外网验证**：本机 curl 三域名（openbridger.com / api.openbridger.com / docs.openbridger.com）均 200；`docker inspect repo-openbridger-1` 确认镜像 tag 与 healthy。
 7. **回滚**（异常时）：`ssh ob-prod '/srv/openbridger/obctl rollback'`。
 

@@ -10,7 +10,8 @@
 配套：
 
 - 总纲文档：`../ops-handbook.md`（监控/应急/Release R0-R8/治理/上游同步 §5.6）
-- 一键 CLI：`../scripts/obctl.sh`（部署在服务器 `/srv/openbridger/obctl`，不依赖任何 AI 工具）
+- 一键 CLI：`../scripts/obctl.sh`（部署在服务器 `/srv/openbridger/obctl`，不依赖任何 AI 工具）。`obctl build` 默认拒绝，生产机不编译
+- Mac 发版镜像：`../../../scripts/release-image.sh`（构建 linux/amd64 并 `docker load`，不执行 deploy）
 - 上游检查器：`../scripts/upstream-sync-check.sh`（exit 0 无变化 / exit 2 出整合报告）
 
 ## 在其他 AI 工具中使用

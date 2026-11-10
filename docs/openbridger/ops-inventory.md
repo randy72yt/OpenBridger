@@ -75,20 +75,21 @@ Web 层配置**不在仓库**，全部落在主机：
 
 ## 4. 构建策略
 
-服务器 1.6Gi 内存，**不具备**编译 Go 与前端的能力。镜像在运维本机（x86_64 + Docker + bun）构建后传入：
+服务器 1.6Gi 内存，**不具备**编译 Go 与前端的能力。2026-11-10 在 ob-prod 上 `obctl build` 打挂整机。`obctl build` 默认拒绝；`OBCTL_ALLOW_SERVER_BUILD=YES` 仅紧急排障。镜像在运维 Mac（Intel x86_64，Docker Desktop）构建后传入：
 
 ```bash
-# 运维本机
-cd <repo> && bun install --frozen-lockfile && bun run build      # 生成 web/dist
-docker build -f Dockerfile.dev -t openbridger:$(git rev-parse --short HEAD) .
-docker save openbridger:<tag> | gzip -1 | ssh ob-prod 'gunzip | docker load'
-# 服务器
-cd /srv/openbridger/repo && docker compose --env-file /srv/openbridger/.env -f compose.release.yml up -d
+# 运维 Mac，仓库根目录。工作区干净，或显式 ref 且 HEAD 就是该提交。
+scripts/release-image.sh [git-ref]
+# 脚本不 deploy。结束时打印 tag。然后：
+ssh ob-prod '/srv/openbridger/obctl backup'
+ssh ob-prod "/srv/openbridger/obctl deploy <tag>"
 ```
 
-注意：`docker compose -f compose.release.yml build` 会因缺少运行时变量而报错（该文件的 `environment` 段带 `${VAR:?}`），**构建请直接用 `docker build`**，运行时变量只在部署时注入。
+脚本内部是：`cd web && NODE_OPTIONS= bun run build`，`docker buildx build --platform linux/amd64 -f Dockerfile.dev -t openbridger:<至少 9 位 sha> --load .`，确认磁盘 <70% 后 `docker save | gzip | ssh -o BatchMode=yes ob-prod 'gunzip | docker load'`。前端打进镜像，运行容器只挂载 `/data`。rsync `web/dist` 不会改变正在跑的镜像。
 
-后续若要自动化：启用 GitHub Actions → 构建推送 GHCR → 服务器 `docker pull`，可省掉本机上传。
+不要在服务器上 `docker compose -f compose.release.yml build`（会在小机器上编译；该文件的 `environment` 段还有 `${VAR:?}`，缺变量会报错）。运行时变量只在 `obctl deploy` 时注入。
+
+Mac 不可用时的备选：GitHub Actions 手动构建推送 GHCR → 服务器 `obctl pull`（生产机仍然零编译）。
 
 ## 5. 发布记录
 

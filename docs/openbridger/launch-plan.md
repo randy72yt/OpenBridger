@@ -103,7 +103,7 @@
 状态：**待实施**
 
 - [ ] 创建 staging 和 production 环境。
-- [ ] 使用 `compose.release.yml` 从当前源码构建发布镜像：先生成 `web/dist`，再构建镜像；发布环境由外部注入数据库、Redis 和会话密钥，不使用根目录示例 Compose 的上游 `new-api:latest` 镜像或示例密码。
+- [ ] 使用 `compose.release.yml` 运行发布镜像。镜像在运维 Mac 上构建（`scripts/release-image.sh`），不要在 ob-prod 上 `docker build`。发布环境由外部注入数据库、Redis 和会话密钥，不使用根目录示例 Compose 的上游 `new-api:latest` 镜像或示例密码。
 - [ ] 配置 PostgreSQL/MySQL、Redis 和高强度会话密钥。
 - [ ] 配置生产域名与 `docs.` 子域的 DNS、TLS 和反向代理（部署位置已定为阿里云轻量服务器；域名已在 Cloudflare 购买但尚未解析，见文末 2026-09-21 章节）。
 - [ ] 启用生产 Secure Cookie、可信 Origin 和可信代理。
@@ -266,7 +266,7 @@
 
 | 项 | 结论 |
 | --- | --- |
-| 部署形态 | 服务器上用 `compose.release.yml` 从源码构建发布镜像（先生成 `web/dist`，再 `docker build`），不用上游 `new-api:latest` 镜像 |
+| 部署形态 | 发布镜像由 `compose.release.yml` 运行（先生成 `web/dist`，再 `docker build`），不用上游 `new-api:latest` 镜像。2026-11-10 起构建只在运维 Mac 上做，禁止在 ob-prod 上编译 |
 | 端口与 TLS | 容器只监听 `127.0.0.1:3000`，由宿主机反向代理（Nginx/Caddy）终止 TLS；轻量服务器防火墙与安全组只放行 80/443，SSH 限制来源 IP |
 | 秘密注入 | `SQL_DSN`、`REDIS_CONN_STRING`、`SESSION_SECRET`、`CRYPTO_SECRET`、`TRUSTED_PROXIES` 由部署环境注入，不进版本库 |
 | 数据库 | 生产不使用 SQLite；本机容器化 PostgreSQL/MySQL 或阿里云 RDS 二选一，须与三库测试矩阵中实际验证过的版本一致（MySQL 8.0 / PostgreSQL 17） |
