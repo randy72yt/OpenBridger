@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -44,6 +45,27 @@ type ModelPricingSnapshot struct {
 }
 
 var ErrModelPricingConflict = errors.New("model pricing changed; reload before saving")
+
+// ErrManualPricingWriteBlocked is returned when a legacy admin write would
+// change user-facing sell prices while dynamic pricing control is enabled.
+// PublishPricingProposal writes through UpdateModelPricing and does not use
+// this guard.
+var ErrManualPricingWriteBlocked = errors.New("dynamic pricing control is enabled; selling prices may only be written by approving and publishing a pricing proposal")
+
+// PricingControlEnabled reports whether the dynamic pricing plane owns
+// selling prices. When it is on, legacy option and ratio writes are rejected.
+func PricingControlEnabled() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("PRICING_CONTROL_ENABLED")), "true")
+}
+
+// RejectLegacySellPriceWrite blocks option-map sell-price writes outside
+// UpdateModelPricing. A full-map replace has no single-model override.
+func RejectLegacySellPriceWrite() error {
+	if !PricingControlEnabled() {
+		return nil
+	}
+	return ErrManualPricingWriteBlocked
+}
 
 // Lock order is stable across instances. Creating missing option rows inside
 // the transaction also serializes the first write to an unconfigured database.
@@ -266,6 +288,9 @@ func ValidateModelPricing(name string, values PricingValues) error {
 	return nil
 }
 
+// UpdateModelPricing is the selling-price writer used by dynamic pricing
+// publish. It must stay reachable while RejectLegacySellPriceWrite blocks
+// the legacy option APIs.
 func UpdateModelPricing(changes []ModelPricingChange) error {
 	if len(changes) == 0 {
 		return errors.New("select model pricing changes before saving")
@@ -339,6 +364,9 @@ func writeModelPricingValues(values map[string]map[string]any, name, expectedVer
 // UpdateModelPricingOptions keeps legacy single-option callers on the same
 // locking, validation and transaction path as the model-level API.
 func UpdateModelPricingOptions(updates map[string]string) error {
+	if err := RejectLegacySellPriceWrite(); err != nil {
+		return err
+	}
 	return mutateModelPricingOptions(func(_ *gorm.DB, values map[string]map[string]any) error {
 		names := make(map[string]bool)
 		for key, raw := range updates {

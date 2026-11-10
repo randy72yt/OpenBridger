@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/jsplugin"
 	"github.com/QuantumNous/new-api/setting/config"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -200,4 +202,157 @@ export function parseTaskResult() { return {}; }
 	assert.Equal(t, http.StatusOK, unresolvable.Code)
 	assert.Contains(t, unresolvable.Body.String(), `"success":false`)
 	assert.Contains(t, unresolvable.Body.String(), "no task plugin usage schema")
+}
+
+func putOptionRequest(t *testing.T, key, value string) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := common.Marshal(OptionUpdateRequest{Key: key, Value: value})
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodPut, "/api/option/", strings.NewReader(string(body)))
+	UpdateOption(context)
+	return recorder
+}
+
+func storedOption(t *testing.T, key string) (string, bool) {
+	t.Helper()
+	var row model.Option
+	err := model.DB.Where(&model.Option{Key: key}).First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", false
+	}
+	require.NoError(t, err)
+	return row.Value, true
+}
+
+func TestLegacySellPriceWritesRejectedWhenPricingControlEnabled(t *testing.T) {
+	savedRatios := map[string]struct {
+		value  string
+		update func(string) error
+	}{
+		"ModelRatio":           {ratio_setting.ModelRatio2JSONString(), ratio_setting.UpdateModelRatioByJSONString},
+		"ModelPrice":           {ratio_setting.ModelPrice2JSONString(), ratio_setting.UpdateModelPriceByJSONString},
+		"CompletionRatio":      {ratio_setting.CompletionRatio2JSONString(), ratio_setting.UpdateCompletionRatioByJSONString},
+		"CacheRatio":           {ratio_setting.CacheRatio2JSONString(), ratio_setting.UpdateCacheRatioByJSONString},
+		"CreateCacheRatio":     {ratio_setting.CreateCacheRatio2JSONString(), ratio_setting.UpdateCreateCacheRatioByJSONString},
+		"ImageRatio":           {ratio_setting.ImageRatio2JSONString(), ratio_setting.UpdateImageRatioByJSONString},
+		"AudioRatio":           {ratio_setting.AudioRatio2JSONString(), ratio_setting.UpdateAudioRatioByJSONString},
+		"AudioCompletionRatio": {ratio_setting.AudioCompletionRatio2JSONString(), ratio_setting.UpdateAudioCompletionRatioByJSONString},
+		"GroupRatio":           {ratio_setting.GroupRatio2JSONString(), ratio_setting.UpdateGroupRatioByJSONString},
+	}
+	savedConfigs := config.GlobalConfig.ExportAllConfigs()
+	t.Cleanup(func() {
+		for _, item := range savedRatios {
+			require.NoError(t, item.update(item.value))
+		}
+		require.NoError(t, config.GlobalConfig.LoadFromDB(savedConfigs))
+	})
+
+	setupBillingAliasOptionDB(t)
+	t.Setenv("PRICING_CONTROL_ENABLED", "false")
+	seeded := putOptionRequest(t, "ModelRatio", `{"keep-model":1}`)
+	require.Equal(t, http.StatusOK, seeded.Code)
+	require.Contains(t, seeded.Body.String(), `"success":true`)
+	seededRatio, ok := storedOption(t, "ModelRatio")
+	require.True(t, ok)
+	require.Contains(t, seededRatio, "keep-model")
+
+	t.Setenv("PRICING_CONTROL_ENABLED", "true")
+	imageBefore := ratio_setting.ImageRatio2JSONString()
+	sellPriceKeys := []string{
+		"ModelRatio", "CompletionRatio", "CacheRatio", "ModelPrice",
+		"ImageRatio", "AudioRatio", "AudioCompletionRatio", "CreateCacheRatio",
+		"billing_setting.billing_expr", "billing_setting.billing_mode",
+	}
+	for _, key := range sellPriceKeys {
+		t.Run(key, func(t *testing.T) {
+			value := `{"hijack":1}`
+			if key == "billing_setting.billing_expr" {
+				value = `{"hijack":"tier(\"base\", p * 1 + c * 1)"}`
+			}
+			if key == "billing_setting.billing_mode" {
+				value = `{"hijack":"tiered_expr"}`
+			}
+			before, beforeOK := storedOption(t, key)
+			recorder := putOptionRequest(t, key, value)
+			assert.Equal(t, http.StatusForbidden, recorder.Code)
+			assert.Contains(t, recorder.Body.String(), "approving and publishing")
+			after, afterOK := storedOption(t, key)
+			assert.Equal(t, beforeOK, afterOK)
+			assert.Equal(t, before, after)
+			assert.NotContains(t, after, "hijack")
+		})
+	}
+	assert.Equal(t, imageBefore, ratio_setting.ImageRatio2JSONString())
+
+	groupRecorder := putOptionRequest(t, "GroupRatio", `{"default":1,"vip":1.2}`)
+	assert.Equal(t, http.StatusOK, groupRecorder.Code)
+	assert.Contains(t, groupRecorder.Body.String(), `"success":true`)
+	assert.Equal(t, 1.2, ratio_setting.GetGroupRatioCopy()["vip"])
+
+	resetRecorder := httptest.NewRecorder()
+	resetContext, _ := gin.CreateTestContext(resetRecorder)
+	resetContext.Request = httptest.NewRequest(http.MethodPost, "/api/option/rest_model_ratio", nil)
+	ResetModelRatio(resetContext)
+	assert.Equal(t, http.StatusForbidden, resetRecorder.Code)
+	resetRatio, _ := storedOption(t, "ModelRatio")
+	assert.Contains(t, resetRatio, "keep-model")
+	assert.NotContains(t, resetRatio, "gpt-4")
+
+	bulkErr := model.UpdateOptionsBulk(map[string]string{"CacheRatio": `{"hijack":1}`})
+	require.ErrorIs(t, bulkErr, model.ErrManualPricingWriteBlocked)
+	require.NoError(t, model.UpdateOptionsBulk(map[string]string{"Notice": "still-writable"}))
+	notice, noticeOK := storedOption(t, "Notice")
+	require.True(t, noticeOK)
+	assert.Equal(t, "still-writable", notice)
+
+	snapshot, err := model.GetModelPricingSnapshot([]string{"keep-model"})
+	require.NoError(t, err)
+	require.Len(t, snapshot.Entries, 1)
+	require.NoError(t, model.UpdateModelPricing([]model.ModelPricingChange{{
+		ModelName:       "keep-model",
+		ExpectedVersion: snapshot.Entries[0].Version,
+		Pricing:         model.PricingValues{"ModelPrice": float64(3)},
+	}}))
+	published, publishedOK := storedOption(t, "ModelPrice")
+	require.True(t, publishedOK)
+	assert.Contains(t, published, "keep-model")
+
+	patchBody, err := common.Marshal(map[string]any{
+		"changes": []model.ModelPricingChange{{
+			ModelName:       "keep-model",
+			ExpectedVersion: snapshot.Entries[0].Version,
+			Pricing:         model.PricingValues{"ModelPrice": float64(9)},
+		}},
+		"override": map[string]any{"enabled": true, "reason": "direct API write"},
+	})
+	require.NoError(t, err)
+	patchRecorder := httptest.NewRecorder()
+	patchContext, _ := gin.CreateTestContext(patchRecorder)
+	patchContext.Request = httptest.NewRequest(http.MethodPatch, "/api/option/model_pricing", strings.NewReader(string(patchBody)))
+	UpdateModelPricingConfig(patchContext)
+	assert.Equal(t, http.StatusForbidden, patchRecorder.Code)
+	unchanged, _ := storedOption(t, "ModelPrice")
+	assert.Equal(t, published, unchanged)
+
+	statusRecorder := httptest.NewRecorder()
+	statusContext, _ := gin.CreateTestContext(statusRecorder)
+	statusContext.Request = httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	GetStatus(statusContext)
+	var statusPayload struct {
+		Success bool           `json:"success"`
+		Data    map[string]any `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(statusRecorder.Body.Bytes(), &statusPayload))
+	require.True(t, statusPayload.Success)
+	assert.Equal(t, true, statusPayload.Data["pricing_control_enabled"])
+
+	t.Setenv("PRICING_CONTROL_ENABLED", "false")
+	allowed := putOptionRequest(t, "ModelRatio", `{"keep-model":2}`)
+	assert.Equal(t, http.StatusOK, allowed.Code)
+	assert.Contains(t, allowed.Body.String(), `"success":true`)
+	updatedRatio, _ := storedOption(t, "ModelRatio")
+	assert.Contains(t, updatedRatio, "keep-model")
+	assert.NotContains(t, updatedRatio, `"keep-model":1`)
 }

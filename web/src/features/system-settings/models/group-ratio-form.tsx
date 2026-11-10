@@ -33,6 +33,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -131,6 +132,14 @@ export const GroupRatioForm = memo(function GroupRatioForm({
 
   return (
     <div className='space-y-6'>
+      <Alert>
+        <AlertTitle>{t('Group ratio is a second multiplier')}</AlertTitle>
+        <AlertDescription>
+          {t(
+            'It scales the published model sell price for a user group and does not replace that sell price.'
+          )}
+        </AlertDescription>
+      </Alert>
       <div className='flex flex-wrap justify-end gap-2'>
         <Button variant='outline' size='sm' onClick={() => setGuideOpen(true)}>
           <HelpCircle className='mr-2 h-4 w-4' />
@@ -244,7 +253,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
               name='GroupRatio'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('Group ratios')}</FormLabel>
+                  <FormLabel>{t('Group ratio (second multiplier)')}</FormLabel>
                   <FormControl>
                     <JsonCodeEditor
                       value={field.value}
@@ -256,7 +265,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
                   </FormControl>
                   <FormDescription>
                     {t(
-                      'JSON map of group → ratio applied when the user selects the group explicitly.'
+                      'Second multiplier on the published model sell price. JSON map of group → ratio, applied when that group is selected. This does not replace the model sell price.'
                     )}
                   </FormDescription>
                   <FormMessage />

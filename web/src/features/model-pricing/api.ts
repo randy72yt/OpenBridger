@@ -26,6 +26,7 @@ import { isAxiosError } from 'axios'
 import { t } from 'i18next'
 
 import type { BillingUsageSchema } from '@/features/pricing/types'
+import { useStatus } from '@/hooks/use-status'
 import { api } from '@/lib/api'
 import { ROLE } from '@/lib/roles'
 import { useAuthStore } from '@/stores/auth-store'
@@ -59,6 +60,11 @@ export type ModelPricingChange = {
 
 export function useCanEditModelPricing() {
   return useAuthStore((state) => state.auth.user?.role === ROLE.SUPER_ADMIN)
+}
+
+export function usePricingControlEnabled() {
+  const { status } = useStatus()
+  return status?.pricing_control_enabled === true
 }
 
 export async function getModelPricing(

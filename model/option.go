@@ -230,6 +230,9 @@ func validateOptionValue(key string, value string) error {
 
 func UpdateOption(key string, value string) error {
 	if IsModelPricingOption(key) {
+		if err := RejectLegacySellPriceWrite(); err != nil {
+			return err
+		}
 		return UpdateModelPricingOptions(map[string]string{key: value})
 	}
 	if err := validateOptionValue(key, value); err != nil {
@@ -258,6 +261,13 @@ func UpdateOption(key string, value string) error {
 func UpdateOptionsBulk(values map[string]string) error {
 	if len(values) == 0 {
 		return nil
+	}
+	for key := range values {
+		if IsModelPricingOption(key) {
+			if err := RejectLegacySellPriceWrite(); err != nil {
+				return err
+			}
+		}
 	}
 	for key, value := range values {
 		if err := validateOptionValue(key, value); err != nil {

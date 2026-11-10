@@ -874,27 +874,21 @@ func pricingAutoPublishEnabled() bool {
 }
 
 // PricingControlEnabled reports whether the dynamic pricing plane owns
-// procurement cost and selling price. When it is on, manual bulk price writes
-// are rejected so two writers cannot fight over the same price version (D2).
+// procurement cost and selling price. When it is on, legacy sell-price writes
+// are rejected so two writers cannot fight over the same price version.
 func PricingControlEnabled() bool {
-	return strings.EqualFold(strings.TrimSpace(os.Getenv("PRICING_CONTROL_ENABLED")), "true")
+	return model.PricingControlEnabled()
 }
 
 // ErrManualPricingWriteBlocked is returned when a manual price write would
 // compete with the dynamic pricing plane.
-var ErrManualPricingWriteBlocked = errors.New("dynamic pricing control is enabled; selling prices may only be written by approving and publishing a pricing proposal")
+var ErrManualPricingWriteBlocked = model.ErrManualPricingWriteBlocked
 
-// ValidateManualPricingWrite guards the admin price editor. A single model can
-// still be edited on purpose by passing an explicit override with a reason;
-// bulk writes stay blocked because they are what the "sync prices" flow does.
-func ValidateManualPricingWrite(changeCount int, override bool, reason string) error {
-	if !PricingControlEnabled() {
-		return nil
-	}
-	if override && changeCount == 1 && strings.TrimSpace(reason) != "" {
-		return nil
-	}
-	return ErrManualPricingWriteBlocked
+// ValidateManualPricingWrite rejects every admin sell-price write while
+// dynamic pricing control is on. Approve-then-publish stays allowed because
+// it calls model.UpdateModelPricing directly.
+func ValidateManualPricingWrite() error {
+	return model.RejectLegacySellPriceWrite()
 }
 
 // pricingAutoPublishVerifySamples returns how many recent cost snapshots must

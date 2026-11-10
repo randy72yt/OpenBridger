@@ -519,7 +519,7 @@ function GroupPricingTable({
             <CardTitle>{t('Pricing groups')}</CardTitle>
             <CardDescription>
               {t(
-                'All group names live here. Ratio applies when calls are billed as this group; top-up ratio applies to users whose account is in this group.'
+                'Second multiplier on the published model sell price, not the sell price itself. Ratio applies when calls are billed as this group; top-up ratio applies to users whose account is in this group.'
               )}
             </CardDescription>
           </div>

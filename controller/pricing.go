@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"net/http"
+
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
@@ -77,6 +79,13 @@ func GetPricing(c *gin.Context) {
 }
 
 func ResetModelRatio(c *gin.Context) {
+	if err := model.RejectLegacySellPriceWrite(); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
 	defaultStr := ratio_setting.DefaultModelRatio2JSONString()
 	err := model.UpdateOption("ModelRatio", defaultStr)
 	if err != nil {
