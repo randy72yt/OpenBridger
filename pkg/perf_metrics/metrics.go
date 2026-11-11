@@ -31,7 +31,7 @@ func RecordRelayOutcome(info *relaycommon.RelayInfo, outcome Outcome, outputToke
 	if info == nil {
 		return
 	}
-	source := SourceForRelay(info, tokenNameResolver(info.TokenId))
+	source := SourceForRelay(info, relayTokenInfoResolver(info.TokenId))
 	if outcome == OutcomeClientExcluded && source == SourceReal {
 		source = SourceClientError
 	}
@@ -73,36 +73,46 @@ func RecordRelaySample(info *relaycommon.RelayInfo, success bool, outputTokens i
 	RecordRelayOutcome(info, outcome, outputTokens, "")
 }
 
-type tokenNameEntry struct {
-	name     string
+// relayTokenInfo carries what the sampler needs about a request's token:
+// its name and whether its owner is an admin/root user. Name-based
+// probe/internal classification must only apply to privileged tokens.
+type relayTokenInfo struct {
+	name       string
+	adminOwned bool
+}
+
+type relayTokenInfoEntry struct {
+	info     relayTokenInfo
 	expireAt time.Time
 }
 
-var tokenNameCache sync.Map // token id -> tokenNameEntry
+var relayTokenInfoCache sync.Map // token id -> relayTokenInfoEntry
 
-// tokenNameResolver maps a token id to its name with a short-lived cache so
-// the sampling path does not hit the database per request. Unknown or deleted
-// tokens resolve to "" (regular user traffic). Swappable in tests.
-var tokenNameResolver = func(tokenId int) string {
+// relayTokenInfoResolver maps a token id to its owner info with a
+// short-lived cache so the sampling path does not hit the database per
+// request. Unknown or deleted tokens resolve to the zero value (regular user
+// traffic). Swappable in tests.
+var relayTokenInfoResolver = func(tokenId int) relayTokenInfo {
 	if tokenId <= 0 {
-		return ""
+		return relayTokenInfo{}
 	}
 	now := time.Now()
-	if cached, ok := tokenNameCache.Load(tokenId); ok {
-		entry := cached.(tokenNameEntry)
+	if cached, ok := relayTokenInfoCache.Load(tokenId); ok {
+		entry := cached.(relayTokenInfoEntry)
 		if now.Before(entry.expireAt) {
-			return entry.name
+			return entry.info
 		}
 	}
-	token, err := model.GetTokenById(tokenId)
-	if err != nil || token == nil {
-		// Short negative TTL so a transient DB failure cannot misclassify an
-		// internal token as real traffic for long.
-		tokenNameCache.Store(tokenId, tokenNameEntry{name: "", expireAt: now.Add(time.Minute)})
-		return ""
+	name, adminOwned, err := model.GetTokenOwnerInfoById(tokenId)
+	if err != nil {
+		// Short negative TTL so a transient DB failure cannot misclassify a
+		// privileged token as real traffic for long.
+		relayTokenInfoCache.Store(tokenId, relayTokenInfoEntry{info: relayTokenInfo{}, expireAt: now.Add(time.Minute)})
+		return relayTokenInfo{}
 	}
-	tokenNameCache.Store(tokenId, tokenNameEntry{name: token.Name, expireAt: now.Add(5 * time.Minute)})
-	return token.Name
+	info := relayTokenInfo{name: name, adminOwned: adminOwned}
+	relayTokenInfoCache.Store(tokenId, relayTokenInfoEntry{info: info, expireAt: now.Add(5 * time.Minute)})
+	return info
 }
 
 func Record(sample Sample) {

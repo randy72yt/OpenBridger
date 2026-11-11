@@ -39,11 +39,11 @@ func drainHotBuckets() {
 	})
 }
 
-func stubTokenNames(t *testing.T, names map[int]string) {
+func stubRelayTokenInfo(t *testing.T, info map[int]relayTokenInfo) {
 	t.Helper()
-	orig := tokenNameResolver
-	tokenNameResolver = func(id int) string { return names[id] }
-	t.Cleanup(func() { tokenNameResolver = orig })
+	orig := relayTokenInfoResolver
+	relayTokenInfoResolver = func(id int) relayTokenInfo { return info[id] }
+	t.Cleanup(func() { relayTokenInfoResolver = orig })
 }
 
 func hotBucketSources() map[string]bool {
@@ -76,7 +76,11 @@ func TestQuerySummaryAllOnlyCountsRealSamples(t *testing.T) {
 func TestRecordRelayOutcomeRoutesSources(t *testing.T) {
 	setupPerfTestDB(t)
 	resetHotBuckets(t)
-	stubTokenNames(t, map[int]string{7: "yuntao-main", 9: "ob-probe"})
+	stubRelayTokenInfo(t, map[int]relayTokenInfo{
+		7:  {name: "yuntao-main", adminOwned: true},
+		9:  {name: "ob-probe", adminOwned: true},
+		13: {name: "ob-probe", adminOwned: false}, // regular user's same-name token
+	})
 
 	mkInfo := func(tokenId int, playground bool) *relaycommon.RelayInfo {
 		return &relaycommon.RelayInfo{
@@ -94,6 +98,7 @@ func TestRecordRelayOutcomeRoutesSources(t *testing.T) {
 	RecordRelayOutcome(mkInfo(11, false), OutcomeClientExcluded, 0, "invalid_request")        // real + excluded -> client_error
 	RecordRelayOutcome(mkInfo(11, false), OutcomeSuccess, 3, "")                              // real
 	RecordRelayOutcome(mkInfo(7, false), OutcomeClientExcluded, 0, "insufficient_user_quota") // internal + excluded stays internal
+	RecordRelayOutcome(mkInfo(13, false), OutcomeSuccess, 3, "")                              // same-name user token stays real
 
 	assert.Equal(t, map[string]bool{
 		SourceReal:        true,
@@ -105,7 +110,8 @@ func TestRecordRelayOutcomeRoutesSources(t *testing.T) {
 	result, err := QuerySummaryAll(24, nil)
 	require.NoError(t, err)
 	require.Len(t, result.Models, 1)
-	assert.Equal(t, int64(1), result.Models[0].RequestCount)
+	// Real bucket holds the plain user request AND the same-name token 13.
+	assert.Equal(t, int64(2), result.Models[0].RequestCount)
 	assert.InDelta(t, 100.0, result.Models[0].SuccessRate, 0.01)
 }
 

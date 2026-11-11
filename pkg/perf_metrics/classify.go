@@ -119,21 +119,26 @@ func ClassifyRelayError(err *types.NewAPIError) Outcome {
 	return OutcomeServerFailure
 }
 
-// SourceForRelay decides which sample bucket a relay belongs to. The probe
+// SourceForRelay decides which sample bucket a relay belongs to. Name-based
+// probe/internal classification only applies to tokens owned by admin/root
+// users, so a regular user naming their token "ob-probe" or "yuntao-main"
+// cannot have their traffic excluded from the public numbers. The probe
 // token wins over the internal list; playground traffic is always internal.
-func SourceForRelay(info *relaycommon.RelayInfo, tokenName string) string {
+func SourceForRelay(info *relaycommon.RelayInfo, token relayTokenInfo) string {
 	if info == nil {
 		return SourceReal
 	}
 	cfg := perf_metrics_setting.GetSetting()
-	if cfg.ProbeTokenName != "" && tokenName == cfg.ProbeTokenName {
+	if token.adminOwned && cfg.ProbeTokenName != "" && token.name == cfg.ProbeTokenName {
 		return SourceProbe
 	}
 	if info.IsPlayground {
 		return SourceInternal
 	}
-	if _, ok := cfg.InternalTokenSet()[tokenName]; ok {
-		return SourceInternal
+	if token.adminOwned {
+		if _, ok := cfg.InternalTokenSet()[token.name]; ok {
+			return SourceInternal
+		}
 	}
 	return SourceReal
 }

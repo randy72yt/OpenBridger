@@ -84,19 +84,24 @@ func TestSourceForRelay(t *testing.T) {
 		name       string
 		playground bool
 		tokenName  string
+		adminOwned bool
 		want       string
 	}{
-		{"probe token wins over internal list", false, "ob-probe", SourceProbe},
-		{"internal token by name", false, "yuntao-main", SourceInternal},
-		{"regular user token", false, "some-user-token", SourceReal},
-		{"empty token name", false, "", SourceReal},
-		{"playground is always internal", true, "some-user-token", SourceInternal},
-		{"playground with probe token still probe", true, "ob-probe", SourceProbe},
+		{"admin-owned probe token wins over internal list", false, "ob-probe", true, SourceProbe},
+		{"admin-owned internal token by name", false, "yuntao-main", true, SourceInternal},
+		{"regular user token", false, "some-user-token", false, SourceReal},
+		{"regular user token named ob-probe stays real", false, "ob-probe", false, SourceReal},
+		{"regular user token named yuntao-main stays real", false, "yuntao-main", false, SourceReal},
+		{"empty token name", false, "", false, SourceReal},
+		{"empty token name admin-owned", false, "", true, SourceReal},
+		{"playground is always internal", true, "some-user-token", false, SourceInternal},
+		{"playground with admin probe token still probe", true, "ob-probe", true, SourceProbe},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			relayInfo := &relaycommon.RelayInfo{IsPlayground: tc.playground}
-			assert.Equal(t, tc.want, SourceForRelay(relayInfo, tc.tokenName))
+			token := relayTokenInfo{name: tc.tokenName, adminOwned: tc.adminOwned}
+			assert.Equal(t, tc.want, SourceForRelay(relayInfo, token))
 		})
 	}
 }
