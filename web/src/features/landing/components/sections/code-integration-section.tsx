@@ -17,11 +17,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Code2, CheckCircle2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { CardContent, CardHeader } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useStatus } from '@/hooks/use-status'
 import { cn } from '@/lib/utils'
@@ -29,6 +29,63 @@ import { cn } from '@/lib/utils'
 import { getCodeSnippets } from '../../constants'
 import type { CodeLanguage } from '../../types'
 import { ScrollReveal } from '../scroll-reveal'
+
+const CODE_TOKEN_RE =
+  /(#.*$)|("[^"]*"|'[^']*')|\b(from|import|const|new|await|curl|POST)\b/g
+
+function highlightCodeLine(line: string): ReactNode {
+  if (!line.trim()) return ' '
+  const trimmed = line.trimStart()
+  if (trimmed.startsWith('#')) {
+    return <span className='ob-code-iron'>{line}</span>
+  }
+
+  const segments: ReactNode[] = []
+  let cursor = 0
+  const matches = [...line.matchAll(CODE_TOKEN_RE)]
+
+  if (matches.length === 0) {
+    return <span>{line}</span>
+  }
+
+  matches.forEach((match) => {
+    const start = match.index ?? 0
+    if (start > cursor) {
+      segments.push(
+        <span key={`plain-${start}`}>{line.slice(cursor, start)}</span>
+      )
+    }
+    const [full, comment, strLiteral, keyword] = match
+    if (comment) {
+      segments.push(
+        <span key={`com-${start}`} className='ob-code-iron'>
+          {full}
+        </span>
+      )
+    } else if (strLiteral) {
+      segments.push(
+        <span key={`str-${start}`} className='ob-code-str'>
+          {full}
+        </span>
+      )
+    } else if (keyword) {
+      segments.push(
+        <span key={`kw-${start}`} className='ob-code-kw font-semibold'>
+          {full}
+        </span>
+      )
+    } else {
+      segments.push(<span key={`tok-${start}`}>{full}</span>)
+    }
+    cursor = start + full.length
+  })
+
+  if (cursor < line.length) {
+    segments.push(<span key='tail'>{line.slice(cursor)}</span>)
+  }
+
+  return segments
+}
 
 export function CodeIntegrationSection() {
   const { t } = useTranslation()
@@ -70,16 +127,16 @@ export function CodeIntegrationSection() {
   ]
 
   return (
-    <section className='relative z-10 py-20 sm:py-28'>
+    <section className='ob-section-bg relative z-10 py-20 sm:py-28'>
       <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
         <div className='grid grid-cols-1 items-center gap-10 lg:grid-cols-12'>
           {/* Left Column: 3-Step Drop-In Guide */}
           <ScrollReveal className='min-w-0 space-y-6 lg:col-span-5'>
-            <div className='border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold'>
+            <div className='ob-chip-primary inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold'>
               <Code2 className='size-3.5' />
               <span>{t('landing.code.eyebrow')}</span>
             </div>
-            <h2 className='text-2xl font-bold tracking-tight sm:text-4xl'>
+            <h2 className='ob-serif-heading text-2xl font-bold tracking-tight sm:text-4xl'>
               {t('landing.code.title')}
             </h2>
             <p className='text-muted-foreground text-sm leading-relaxed sm:text-base'>
@@ -90,9 +147,9 @@ export function CodeIntegrationSection() {
               {steps.map((step) => (
                 <div
                   key={step.num}
-                  className='border-border/60 bg-card/60 flex items-start gap-3.5 rounded-2xl border p-4'
+                  className='ob-card ob-card-interactive flex items-start gap-3.5 rounded-2xl p-4'
                 >
-                  <span className='bg-primary/15 text-primary flex size-8 shrink-0 items-center justify-center rounded-lg font-mono text-xs font-bold'>
+                  <span className='ob-chip-primary ob-mono flex size-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold'>
                     {step.num}
                   </span>
                   <div className='space-y-1'>
@@ -109,21 +166,21 @@ export function CodeIntegrationSection() {
             </div>
           </ScrollReveal>
 
-          {/* Right Column: Interactive Code Window */}
+          {/* Right Column: Interactive Code Window (#14110F Dark Card) */}
           <ScrollReveal delay={0.12} className='min-w-0 lg:col-span-7'>
-            <Card className='border-border/70 bg-card/90 overflow-hidden rounded-2xl py-0 shadow-none backdrop-blur-md'>
+            <div className='ob-code-card overflow-hidden rounded-2xl'>
               <Tabs
                 value={activeTab}
                 onValueChange={(value) => setActiveTab(value as CodeLanguage)}
                 className='gap-0'
               >
-                <CardHeader className='border-border/60 bg-muted/30 flex flex-row flex-wrap items-center justify-between gap-3 border-b px-4 py-3'>
-                  <TabsList className='bg-background/80 h-9 p-1'>
+                <CardHeader className='ob-code-header flex flex-row flex-wrap items-center justify-between gap-3 border-b px-4 py-3'>
+                  <TabsList className='h-9 bg-black/30 p-1'>
                     {snippets.map((snippet) => (
                       <TabsTrigger
                         key={snippet.id}
                         value={snippet.id}
-                        className='px-3 text-xs'
+                        className='px-3 text-xs text-[var(--ob-iron)] data-[active]:bg-[var(--ob-primary)] data-[active]:text-white'
                       >
                         {snippet.label}
                       </TabsTrigger>
@@ -133,14 +190,14 @@ export function CodeIntegrationSection() {
                   {snippets.map((snippet) =>
                     snippet.id === activeTab ? (
                       <div key={snippet.id} className='flex items-center gap-2'>
-                        <span className='text-muted-foreground hidden font-mono text-xs sm:inline'>
+                        <span className='ob-mono ob-code-iron hidden text-xs sm:inline'>
                           {snippet.filename}
                         </span>
                         <CopyButton
                           value={snippet.code}
                           variant='outline'
                           size='sm'
-                          className='h-8 gap-1.5 rounded-lg px-2.5 text-xs'
+                          className='h-8 gap-1.5 rounded-lg border-white/15 bg-white/5 px-2.5 text-xs text-[var(--ob-code-ink)] hover:border-[var(--ob-primary)] hover:bg-white/10 hover:text-white'
                           iconClassName='size-3.5'
                         >
                           <span>{t('Copy')}</span>
@@ -157,7 +214,7 @@ export function CodeIntegrationSection() {
                       value={snippet.id}
                       className='m-0'
                     >
-                      <pre className='overflow-x-auto p-5 font-mono text-xs leading-6 sm:text-[13px]'>
+                      <pre className='ob-mono overflow-x-auto p-5 text-xs leading-6 sm:text-[13px]'>
                         <code>
                           {snippet.code.split('\n').map((line, index) => {
                             const lineNum = index + 1
@@ -169,17 +226,17 @@ export function CodeIntegrationSection() {
                                 className={cn(
                                   '-mx-5 flex px-5',
                                   isHighlighted &&
-                                    'bg-primary/10 border-primary border-l-2'
+                                    'border-l-2 border-[var(--ob-primary)] bg-[rgba(255,107,0,0.12)]'
                                 )}
                               >
                                 <span
                                   aria-hidden='true'
-                                  className='text-muted-foreground/50 mr-4 w-5 shrink-0 text-right select-none'
+                                  className='ob-code-iron mr-4 w-5 shrink-0 text-right select-none'
                                 >
                                   {lineNum}
                                 </span>
-                                <span className='text-foreground/90'>
-                                  {line || ' '}
+                                <span className='whitespace-pre'>
+                                  {highlightCodeLine(line)}
                                 </span>
                               </div>
                             )
@@ -190,7 +247,7 @@ export function CodeIntegrationSection() {
                   ))}
                 </CardContent>
               </Tabs>
-            </Card>
+            </div>
           </ScrollReveal>
         </div>
       </div>

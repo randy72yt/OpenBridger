@@ -41,27 +41,27 @@ function CssGradientFallback(props: {
         props.className
       )}
     >
-      {/* Primary teal ambient glow */}
+      {/* Subtle warm orange ambient glow */}
       <div
         className={cn(
-          'absolute -top-28 left-1/2 h-[420px] w-[720px] -translate-x-1/2 rounded-full opacity-35 blur-3xl dark:opacity-25',
+          'absolute -top-28 left-1/2 h-[420px] w-[720px] -translate-x-1/2 rounded-full opacity-20 blur-3xl dark:opacity-25',
           !props.reducedMotion && 'animate-pulse'
         )}
         style={{
           background:
-            'radial-gradient(circle, color-mix(in srgb, var(--primary) 65%, transparent) 0%, transparent 72%)',
+            'radial-gradient(circle, color-mix(in srgb, var(--ob-primary) 42%, transparent) 0%, transparent 72%)',
         }}
       />
-      {/* Secondary offset orb */}
+      {/* Secondary warm amber orb */}
       <div
-        className='absolute top-1/3 right-[-10%] h-[320px] w-[320px] rounded-full opacity-25 blur-3xl dark:opacity-20'
+        className='absolute top-1/3 right-[-10%] h-[320px] w-[320px] rounded-full opacity-15 blur-3xl dark:opacity-20'
         style={{
           background:
-            'radial-gradient(circle, color-mix(in srgb, var(--primary) 45%, #38bdf8) 0%, transparent 70%)',
+            'radial-gradient(circle, color-mix(in srgb, var(--ob-amber) 38%, var(--ob-primary-light)) 0%, transparent 70%)',
         }}
       />
-      {/* Perspective grid lines */}
-      <div className='absolute inset-0 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_75%_55%_at_50%_35%,black_20%,transparent_100%)] bg-[size:3.5rem_3.5rem] opacity-[0.18] dark:opacity-[0.12]' />
+      {/* Subtle grid texture (< 3% opacity) */}
+      <div className='ob-subtle-grid absolute inset-0 [mask-image:radial-gradient(ellipse_80%_65%_at_50%_38%,black_25%,transparent_100%)]' />
     </div>
   )
 }

@@ -80,15 +80,15 @@ export function PricingPreviewSection() {
   }, [models, groupRatio])
 
   return (
-    <section className='relative z-10 py-20 sm:py-28'>
+    <section className='ob-section-bg relative z-10 py-20 sm:py-28'>
       <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
         <ScrollReveal className='flex flex-col items-start justify-between gap-6 md:flex-row md:items-end'>
           <div className='max-w-2xl'>
-            <div className='border-primary/25 bg-primary/10 text-primary mb-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold'>
+            <div className='ob-chip-primary mb-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold'>
               <Coins className='size-3.5' />
               <span>{t('landing.pricing.eyebrow')}</span>
             </div>
-            <h2 className='text-2xl font-bold tracking-tight sm:text-4xl'>
+            <h2 className='ob-serif-heading text-2xl font-bold tracking-tight sm:text-4xl'>
               {t('landing.pricing.title')}
             </h2>
             <p className='text-muted-foreground mt-3 text-sm leading-relaxed sm:text-base'>
@@ -97,7 +97,7 @@ export function PricingPreviewSection() {
           </div>
           <Button
             variant='outline'
-            className='border-primary/30 hover:bg-primary/10 group shrink-0 rounded-xl px-5'
+            className='ob-btn-secondary group shrink-0 rounded-xl px-5'
             render={<Link to='/pricing' />}
           >
             <span>{t('landing.pricing.exploreAll')}</span>
@@ -110,11 +110,14 @@ export function PricingPreviewSection() {
           delay={0.08}
           className='mt-10 grid grid-cols-1 gap-4 md:grid-cols-3'
         >
-          <Card className='border-border/60 bg-card/70 rounded-2xl py-0 shadow-none'>
+          <Card className='ob-card ob-card-interactive rounded-2xl py-0 shadow-none'>
             <CardHeader className='p-5 pb-2'>
               <div className='flex items-center justify-between'>
-                <span className='font-mono text-xs font-semibold'>default</span>
-                <Badge variant='secondary' className='text-[11px]'>
+                <span className='ob-mono text-xs font-semibold'>default</span>
+                <Badge
+                  variant='secondary'
+                  className='ob-chip-primary text-[11px]'
+                >
                   {t('landing.pricing.group.standardBadge')}
                 </Badge>
               </div>
@@ -127,14 +130,14 @@ export function PricingPreviewSection() {
             </CardContent>
           </Card>
 
-          <Card className='border-primary/35 bg-primary/5 rounded-2xl py-0 shadow-none'>
+          <Card className='ob-card-featured ob-card-interactive rounded-2xl py-0 shadow-none'>
             <CardHeader className='p-5 pb-2'>
               <div className='flex items-center justify-between'>
-                <span className='text-primary flex items-center gap-1 font-mono text-xs font-semibold'>
+                <span className='text-primary ob-mono flex items-center gap-1 text-xs font-semibold'>
                   <Sparkles className='size-3.5' />
                   smart / auto
                 </span>
-                <Badge className='bg-primary text-primary-foreground text-[11px]'>
+                <Badge className='ob-btn-primary text-[11px]'>
                   {t('landing.pricing.group.smartBadge')}
                 </Badge>
               </div>
@@ -147,13 +150,16 @@ export function PricingPreviewSection() {
             </CardContent>
           </Card>
 
-          <Card className='border-border/60 bg-card/70 rounded-2xl py-0 shadow-none'>
+          <Card className='ob-card ob-card-interactive rounded-2xl py-0 shadow-none'>
             <CardHeader className='p-5 pb-2'>
               <div className='flex items-center justify-between'>
-                <span className='font-mono text-xs font-semibold'>
+                <span className='ob-mono text-xs font-semibold'>
                   codex / dedicated
                 </span>
-                <Badge variant='secondary' className='text-[11px]'>
+                <Badge
+                  variant='secondary'
+                  className='ob-chip-primary text-[11px]'
+                >
                   {t('landing.pricing.group.dedicatedBadge')}
                 </Badge>
               </div>
@@ -169,11 +175,11 @@ export function PricingPreviewSection() {
 
         {/* Live Model Square Preview Table */}
         <ScrollReveal delay={0.14} className='mt-6'>
-          <Card className='border-border/60 bg-card/75 overflow-hidden rounded-2xl py-0 shadow-none backdrop-blur-sm'>
+          <Card className='ob-card overflow-hidden rounded-2xl py-0 shadow-none'>
             <div className='overflow-x-auto'>
               <table className='w-full border-collapse text-left text-sm'>
                 <thead>
-                  <tr className='border-border/60 bg-muted/40 text-muted-foreground border-b text-xs font-semibold tracking-wider uppercase'>
+                  <tr className='ob-section-warm border-border text-muted-foreground border-b text-xs font-semibold tracking-wider uppercase'>
                     <th className='px-5 py-3.5'>
                       {t('landing.pricing.col.model')}
                     </th>
@@ -191,16 +197,16 @@ export function PricingPreviewSection() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className='divide-border/50 divide-y'>
+                <tbody className='divide-border divide-y'>
                   {previewRows.map((row) => (
                     <tr
                       key={row.modelName}
-                      className='hover:bg-muted/30 transition-colors'
+                      className='transition-colors hover:bg-[var(--ob-surf-warm)]'
                     >
                       <td className='px-5 py-4'>
                         <div className='flex flex-col gap-1'>
                           <div className='flex items-center gap-2'>
-                            <span className='font-mono text-sm font-semibold'>
+                            <span className='text-foreground ob-mono text-sm font-semibold'>
                               {row.modelName}
                             </span>
                             <span className='text-muted-foreground text-xs'>
@@ -211,7 +217,7 @@ export function PricingPreviewSection() {
                             {row.tags.map((tag) => (
                               <span
                                 key={tag}
-                                className='bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px]'
+                                className='ob-section-warm text-muted-foreground rounded px-1.5 py-0.5 text-[10px]'
                               >
                                 {tag}
                               </span>
@@ -220,26 +226,25 @@ export function PricingPreviewSection() {
                         </div>
                       </td>
                       <td className='px-5 py-4'>
-                        <span className='border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-xs'>
+                        <span className='ob-chip-primary ob-mono inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold'>
                           {row.groupName} ×{row.groupRatio}
                         </span>
                       </td>
-                      <td className='px-5 py-4 text-right font-mono text-sm tabular-nums'>
+                      <td className='text-foreground ob-mono px-5 py-4 text-right text-sm font-bold tabular-nums'>
                         ${row.inputPerMillionUsd.toFixed(2)}{' '}
-                        <span className='text-muted-foreground text-[11px]'>
+                        <span className='text-muted-foreground text-[11px] font-normal'>
                           / 1M
                         </span>
                       </td>
-                      <td className='px-5 py-4 text-right font-mono text-sm tabular-nums'>
+                      <td className='text-foreground ob-mono px-5 py-4 text-right text-sm font-bold tabular-nums'>
                         ${row.outputPerMillionUsd.toFixed(2)}{' '}
-                        <span className='text-muted-foreground text-[11px]'>
+                        <span className='text-muted-foreground text-[11px] font-normal'>
                           / 1M
                         </span>
                       </td>
-                      <td className='text-primary px-5 py-4 text-right font-mono text-sm font-medium tabular-nums'>
-                        ${row.cacheReadPerMillionUsd.toFixed(3)}{' '}
-                        <span className='text-muted-foreground text-[11px]'>
-                          / 1M
+                      <td className='px-5 py-4 text-right'>
+                        <span className='ob-chip-primary ob-mono inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold tabular-nums'>
+                          ${row.cacheReadPerMillionUsd.toFixed(3)} / 1M
                         </span>
                       </td>
                     </tr>

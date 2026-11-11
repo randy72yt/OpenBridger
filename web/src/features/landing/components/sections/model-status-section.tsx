@@ -28,12 +28,22 @@ import { ScrollReveal } from '../scroll-reveal'
 
 function getSlotColorClass(level: ModelStatusLevel): string {
   if (level === 'healthy') {
-    return 'bg-emerald-500/85 dark:bg-emerald-400/85'
+    return 'ob-status-bar-healthy'
   }
   if (level === 'degraded') {
-    return 'bg-amber-500/85 dark:bg-amber-400/85'
+    return 'ob-status-bar-degraded'
   }
-  return 'bg-rose-500/85 dark:bg-rose-400/85'
+  return 'ob-status-bar-down'
+}
+
+function getStatusTextColorClass(level: ModelStatusLevel): string {
+  if (level === 'healthy') {
+    return 'ob-status-text-healthy'
+  }
+  if (level === 'degraded') {
+    return 'ob-status-text-degraded'
+  }
+  return 'ob-status-text-down'
 }
 
 export function ModelStatusSection() {
@@ -58,16 +68,16 @@ export function ModelStatusSection() {
   ]
 
   return (
-    <section className='relative z-10 py-20 sm:py-28'>
+    <section className='ob-section-warm relative z-10 py-20 sm:py-28'>
       <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
         <div className='grid grid-cols-1 items-start gap-10 lg:grid-cols-12'>
           {/* Left Column: Reliability & Architecture */}
           <ScrollReveal className='min-w-0 space-y-6 lg:col-span-5'>
-            <div className='border-primary/25 bg-primary/10 text-primary inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold'>
+            <div className='ob-chip-primary inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold'>
               <Activity className='size-3.5' />
               <span>{t('landing.status.eyebrow')}</span>
             </div>
-            <h2 className='text-2xl font-bold tracking-tight sm:text-4xl'>
+            <h2 className='ob-serif-heading text-2xl font-bold tracking-tight sm:text-4xl'>
               {t('landing.status.title')}
             </h2>
             <p className='text-muted-foreground text-sm leading-relaxed sm:text-base'>
@@ -80,10 +90,10 @@ export function ModelStatusSection() {
                 return (
                   <Card
                     key={point.titleKey}
-                    className='border-border/60 bg-card/65 rounded-2xl py-0 shadow-none'
+                    className='ob-card ob-card-interactive rounded-2xl py-0 shadow-none'
                   >
                     <CardContent className='flex items-start gap-3.5 p-4'>
-                      <div className='bg-primary/10 text-primary mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl'>
+                      <div className='ob-chip-primary mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl'>
                         <Icon className='size-4' />
                       </div>
                       <div className='space-y-1'>
@@ -103,81 +113,82 @@ export function ModelStatusSection() {
 
           {/* Right Column: Real-Time Model Health Telemetry Board */}
           <ScrollReveal delay={0.1} className='min-w-0 lg:col-span-7'>
-            <Card className='border-border/70 bg-card/80 overflow-hidden rounded-2xl py-0 shadow-none backdrop-blur-md'>
-              <CardHeader className='border-border/60 bg-muted/30 flex flex-row items-center justify-between border-b px-5 py-4'>
+            <Card className='ob-card overflow-hidden rounded-2xl py-0 shadow-none'>
+              <CardHeader className='ob-section-warm border-border flex flex-row items-center justify-between border-b px-5 py-4'>
                 <div className='flex items-center gap-2.5'>
                   <span className='relative flex size-2.5'>
-                    <span className='absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75' />
-                    <span className='relative inline-flex size-2.5 rounded-full bg-emerald-500' />
+                    <span className='ob-dot-success absolute inline-flex h-full w-full animate-ping rounded-full opacity-75' />
+                    <span className='ob-dot-success relative inline-flex size-2.5 rounded-full' />
                   </span>
                   <span className='text-sm font-semibold'>
                     {t('landing.status.boardTitle')}
                   </span>
                 </div>
-                <div className='text-muted-foreground flex items-center gap-1.5 font-mono text-xs'>
+                <div className='text-muted-foreground ob-mono flex items-center gap-1.5 text-xs'>
                   <Clock className='size-3.5' />
                   <span>{t('landing.status.window24h')}</span>
                 </div>
               </CardHeader>
 
-              <CardContent className='divide-border/50 divide-y p-0'>
-                {DEFAULT_MODEL_HEALTH_ITEMS.map((item) => {
-                  const isHealthy = item.status === 'healthy'
-                  return (
-                    <div
-                      key={item.modelName}
-                      className='flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between'
-                    >
-                      <div className='min-w-0 space-y-1'>
-                        <div className='flex items-center gap-2'>
-                          <span className='truncate font-mono text-sm font-semibold'>
-                            {item.modelName}
-                          </span>
-                          <span className='border-border/70 bg-background/80 text-muted-foreground rounded px-1.5 py-0.5 font-mono text-[10px]'>
-                            {item.groupName}
-                          </span>
-                        </div>
-                        <div className='text-muted-foreground flex items-center gap-3 font-mono text-xs tabular-nums'>
-                          <span>
-                            TTFT <strong>{item.ttftMs}ms</strong>
-                          </span>
-                          <span>·</span>
-                          <span>
-                            TPS <strong>{item.tps}</strong>
-                          </span>
-                        </div>
+              <CardContent className='divide-border divide-y p-0'>
+                {DEFAULT_MODEL_HEALTH_ITEMS.map((item) => (
+                  <div
+                    key={item.modelName}
+                    className='flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between'
+                  >
+                    <div className='min-w-0 space-y-1'>
+                      <div className='flex items-center gap-2'>
+                        <span className='ob-mono truncate text-sm font-semibold'>
+                          {item.modelName}
+                        </span>
+                        <span className='ob-chip-primary ob-mono rounded px-1.5 py-0.5 text-[10px] font-semibold'>
+                          {item.groupName}
+                        </span>
                       </div>
-
-                      {/* 24-hour status bars + success rate */}
-                      <div className='flex items-center justify-between gap-4 sm:justify-end'>
-                        <div
-                          className='flex items-center gap-0.5'
-                          aria-label={`${item.modelName} 24h status`}
-                        >
-                          {item.hourlySlots.map((slot) => (
-                            <span
-                              key={slot.id}
-                              className={cn(
-                                'h-5 w-1.5 rounded-[2px] transition-opacity hover:opacity-80',
-                                getSlotColorClass(slot.level)
-                              )}
-                            />
-                          ))}
-                        </div>
-                        <span
-                          className={cn(
-                            'w-16 text-right font-mono text-xs font-semibold tabular-nums',
-                            isHealthy
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : 'text-amber-600 dark:text-amber-400'
-                          )}
-                        >
-                          {item.successRate.toFixed(2)}%
+                      <div className='text-muted-foreground ob-mono flex items-center gap-3 text-xs tabular-nums'>
+                        <span>
+                          TTFT{' '}
+                          <strong className='text-foreground'>
+                            {item.ttftMs}ms
+                          </strong>
+                        </span>
+                        <span>·</span>
+                        <span>
+                          TPS{' '}
+                          <strong className='text-foreground'>
+                            {item.tps}
+                          </strong>
                         </span>
                       </div>
                     </div>
-                  )
-                })}
+
+                    {/* 24-hour status bars + success rate */}
+                    <div className='flex items-center justify-between gap-4 sm:justify-end'>
+                      <div
+                        className='flex items-center gap-0.5'
+                        aria-label={`${item.modelName} 24h status`}
+                      >
+                        {item.hourlySlots.map((slot) => (
+                          <span
+                            key={slot.id}
+                            className={cn(
+                              'h-5 w-1.5 rounded-[2px] transition-opacity hover:opacity-80',
+                              getSlotColorClass(slot.level)
+                            )}
+                          />
+                        ))}
+                      </div>
+                      <span
+                        className={cn(
+                          'ob-mono w-16 text-right text-xs font-bold tabular-nums',
+                          getStatusTextColorClass(item.status)
+                        )}
+                      >
+                        {item.successRate.toFixed(2)}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           </ScrollReveal>

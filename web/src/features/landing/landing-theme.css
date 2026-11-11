@@ -1,0 +1,301 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+.ob-landing-theme {
+  /* Core design tokens — Light mode (default) */
+  --ob-bg: #fffbf7;
+  --ob-surf-warm: #fff6ed;
+  --ob-card: #ffffff;
+  --ob-ink: #14110f;
+  --ob-muted: #57534e;
+  --ob-iron: #8a817c;
+  --ob-line: rgba(20, 17, 15, 0.09);
+  --ob-line-strong: rgba(20, 17, 15, 0.16);
+  --ob-primary: #ff6b00;
+  --ob-primary-light: #ff8533;
+  --ob-primary-active: #e05a00;
+  --ob-primary-soft: #fff7ed;
+  --ob-amber: #f59e0b;
+  --ob-success: #10b981;
+  --ob-danger: #ef4444;
+  --ob-header-bg: rgba(255, 251, 247, 0.8);
+  --ob-code-bg: #14110f;
+  --ob-code-surface: #1c1917;
+  --ob-code-ink: #f5f5f4;
+  --ob-code-str: #fdba74;
+  --ob-code-line: rgba(255, 255, 255, 0.08);
+  --ob-footer-bg: #14110f;
+  --ob-footer-ink: #f5f5f4;
+  --ob-footer-muted: #a8a29e;
+  --ob-footer-line: rgba(255, 255, 255, 0.08);
+
+  /* Typography stacks */
+  --ob-font-serif:
+    'Lora Variable', 'Noto Serif SC', 'Songti SC', 'STSong', Georgia, serif;
+  --ob-font-sans:
+    -apple-system, 'PingFang SC', 'Noto Sans SC', 'Inter', sans-serif;
+  --ob-font-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    monospace;
+
+  /* Bridge to Tailwind / shadcn semantic variables */
+  --background: var(--ob-bg);
+  --foreground: var(--ob-ink);
+  --card: var(--ob-card);
+  --card-foreground: var(--ob-ink);
+  --popover: var(--ob-card);
+  --popover-foreground: var(--ob-ink);
+  --primary: var(--ob-primary);
+  --primary-foreground: #ffffff;
+  --secondary: var(--ob-surf-warm);
+  --secondary-foreground: var(--ob-ink);
+  --muted: var(--ob-surf-warm);
+  --muted-foreground: var(--ob-muted);
+  --accent: var(--ob-primary-soft);
+  --accent-foreground: var(--ob-ink);
+  --border: var(--ob-line);
+  --input: var(--ob-line-strong);
+  --ring: var(--ob-primary);
+
+  background-color: var(--ob-bg);
+  color: var(--ob-ink);
+  font-family: var(--ob-font-sans);
+}
+
+.dark .ob-landing-theme,
+.ob-landing-theme.dark {
+  --ob-bg: #14110f;
+  --ob-surf-warm: #1c1917;
+  --ob-card: #1c1917;
+  --ob-ink: #f5f5f4;
+  --ob-muted: #a8a29e;
+  --ob-iron: #8a817c;
+  --ob-line: rgba(255, 255, 255, 0.08);
+  --ob-line-strong: rgba(255, 255, 255, 0.16);
+  --ob-primary: #ff6b00;
+  --ob-primary-light: #ff8533;
+  --ob-primary-active: #e05a00;
+  --ob-primary-soft: rgba(255, 107, 0, 0.12);
+  --ob-amber: #f59e0b;
+  --ob-success: #10b981;
+  --ob-danger: #ef4444;
+  --ob-header-bg: rgba(20, 17, 15, 0.82);
+}
+
+/* Typography helpers */
+.ob-landing-theme .ob-serif-heading {
+  font-family: var(--ob-font-serif);
+}
+
+.ob-landing-theme .ob-mono {
+  font-family: var(--ob-font-mono);
+}
+
+/* Alternating section backgrounds */
+.ob-landing-theme .ob-section-bg {
+  background-color: var(--ob-bg);
+}
+
+.ob-landing-theme .ob-section-warm {
+  background-color: var(--ob-surf-warm);
+}
+
+/* Subtle page-level texture (< 3% opacity) */
+.ob-landing-theme .ob-subtle-grid {
+  background-image:
+    linear-gradient(to right, var(--ob-ink) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--ob-ink) 1px, transparent 1px);
+  background-size: 3.5rem 3.5rem;
+  opacity: 0.025;
+}
+
+/* Header surface */
+.ob-landing-theme .ob-header-bar {
+  background-color: var(--ob-header-bg);
+  border-color: var(--ob-line);
+}
+
+/* Primary & Secondary CTA Buttons */
+.ob-landing-theme .ob-btn-primary {
+  background: linear-gradient(
+    135deg,
+    var(--ob-primary),
+    var(--ob-primary-light)
+  );
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 8px 24px rgba(255, 107, 0, 0.25);
+  transition:
+    filter 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.ob-landing-theme .ob-btn-primary:hover {
+  filter: brightness(1.06);
+  color: #ffffff;
+  box-shadow: 0 10px 28px rgba(255, 107, 0, 0.34);
+}
+
+.ob-landing-theme .ob-btn-primary:active {
+  background: var(--ob-primary-active);
+  filter: none;
+}
+
+.ob-landing-theme .ob-btn-secondary {
+  background-color: var(--ob-card);
+  color: var(--ob-ink);
+  border: 1px solid var(--ob-line-strong);
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.ob-landing-theme .ob-btn-secondary:hover {
+  border-color: var(--ob-primary);
+  color: var(--ob-primary);
+  background-color: var(--ob-primary-soft);
+}
+
+/* Hero gradient text (primary -> amber) */
+.ob-landing-theme .ob-hero-gradient-text {
+  background: linear-gradient(
+    135deg,
+    var(--ob-primary) 0%,
+    var(--ob-primary-light) 52%,
+    var(--ob-amber) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Primary soft badges & chips */
+.ob-landing-theme .ob-chip-primary {
+  background-color: var(--ob-primary-soft);
+  color: var(--ob-primary);
+  border: 1px solid color-mix(in srgb, var(--ob-primary) 20%, transparent);
+}
+
+.ob-landing-theme .ob-dot-primary {
+  background-color: var(--ob-primary);
+}
+
+.ob-landing-theme .ob-dot-success {
+  background-color: var(--ob-success);
+}
+
+/* Interactive cards */
+.ob-landing-theme .ob-card {
+  background-color: var(--ob-card);
+  border: 1px solid var(--ob-line);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.ob-landing-theme .ob-card-interactive:hover {
+  border-color: var(--ob-primary);
+  box-shadow: 0 12px 32px -12px rgba(20, 17, 15, 0.12);
+}
+
+.ob-landing-theme .ob-card-featured {
+  background-color: var(--ob-primary-soft);
+  border: 1px solid color-mix(in srgb, var(--ob-primary) 32%, transparent);
+}
+
+/* Dark terminal & code cards (always #14110F background as visual focal point) */
+.ob-landing-theme .ob-code-card {
+  background-color: var(--ob-code-bg);
+  color: var(--ob-code-ink);
+  border: 1px solid var(--ob-line-strong);
+  box-shadow: 0 24px 60px -24px rgba(20, 17, 15, 0.26);
+}
+
+.ob-landing-theme .ob-code-header {
+  background-color: var(--ob-code-surface);
+  border-color: var(--ob-code-line);
+}
+
+.ob-landing-theme .ob-code-str {
+  color: var(--ob-code-str);
+}
+
+.ob-landing-theme .ob-code-kw {
+  color: var(--ob-primary);
+}
+
+.ob-landing-theme .ob-code-num {
+  color: var(--ob-amber);
+}
+
+.ob-landing-theme .ob-code-iron {
+  color: var(--ob-iron);
+}
+
+.ob-landing-theme .ob-code-success {
+  color: var(--ob-success);
+}
+
+/* Model health status tokens */
+.ob-landing-theme .ob-status-bar-healthy {
+  background-color: var(--ob-success);
+}
+
+.ob-landing-theme .ob-status-bar-degraded {
+  background-color: var(--ob-amber);
+}
+
+.ob-landing-theme .ob-status-bar-down {
+  background-color: var(--ob-danger);
+}
+
+.ob-landing-theme .ob-status-text-healthy {
+  color: var(--ob-success);
+}
+
+.ob-landing-theme .ob-status-text-degraded {
+  color: var(--ob-amber);
+}
+
+.ob-landing-theme .ob-status-text-down {
+  color: var(--ob-danger);
+}
+
+/* Deep ink footer */
+.ob-landing-theme .ob-footer-dark {
+  background-color: var(--ob-footer-bg);
+  color: var(--ob-footer-muted);
+  border-color: var(--ob-footer-line);
+}
+
+.ob-landing-theme .ob-footer-dark .ob-footer-title {
+  color: var(--ob-footer-ink);
+}
+
+.ob-landing-theme .ob-footer-dark .ob-footer-link {
+  color: var(--ob-footer-muted);
+  transition: color 0.2s ease;
+}
+
+.ob-landing-theme .ob-footer-dark .ob-footer-link:hover {
+  color: var(--ob-primary);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}

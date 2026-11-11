@@ -45,7 +45,7 @@ export function LandingFooter(props: LandingFooterProps) {
   return (
     <footer
       className={cn(
-        'border-border/60 bg-card/40 relative z-10 border-t px-4 pt-14 pb-10 backdrop-blur-sm sm:px-6 lg:px-8',
+        'ob-footer-dark relative z-10 border-t px-4 pt-14 pb-10 sm:px-6 lg:px-8',
         props.className
       )}
     >
@@ -54,7 +54,7 @@ export function LandingFooter(props: LandingFooterProps) {
           {/* Brand and Description */}
           <div className='space-y-4 md:col-span-5'>
             <div className='flex items-center gap-2.5'>
-              <div className='bg-primary/10 ring-primary/25 flex size-8 items-center justify-center rounded-xl ring-1'>
+              <div className='flex size-8 items-center justify-center rounded-xl border border-white/15 bg-white/5'>
                 <HeaderLogo
                   src={systemLogo}
                   loading={loading}
@@ -62,53 +62,41 @@ export function LandingFooter(props: LandingFooterProps) {
                   className='size-5 rounded-md object-contain'
                 />
               </div>
-              <span className='text-base font-bold tracking-tight'>
+              <span className='ob-footer-title text-base font-bold tracking-tight'>
                 {displayName}
               </span>
             </div>
-            <p className='text-muted-foreground max-w-sm text-sm leading-relaxed'>
+            <p className='max-w-sm text-sm leading-relaxed'>
               {t('landing.footer.tagline')}
             </p>
-            <div className='text-muted-foreground flex flex-wrap items-center gap-x-5 gap-y-2 text-xs'>
+            <div className='flex flex-wrap items-center gap-x-5 gap-y-2 text-xs'>
               <PlatformContact />
             </div>
           </div>
 
           {/* Product Navigation */}
           <div className='space-y-3 md:col-span-3'>
-            <h3 className='text-foreground text-xs font-semibold tracking-wider uppercase'>
+            <h3 className='ob-footer-title text-xs font-semibold tracking-wider uppercase'>
               {t('landing.footer.productHeading')}
             </h3>
-            <ul className='text-muted-foreground space-y-2.5 text-sm'>
+            <ul className='space-y-2.5 text-sm'>
               <li>
-                <Link
-                  to='/pricing'
-                  className='hover:text-foreground transition-colors'
-                >
+                <Link to='/pricing' className='ob-footer-link'>
                   {t('Model Square')}
                 </Link>
               </li>
               <li>
-                <Link
-                  to='/dashboard'
-                  className='hover:text-foreground transition-colors'
-                >
+                <Link to='/dashboard' className='ob-footer-link'>
                   {t('Console')}
                 </Link>
               </li>
               <li>
-                <Link
-                  to='/docs'
-                  className='hover:text-foreground transition-colors'
-                >
+                <Link to='/docs' className='ob-footer-link'>
                   {t('Practical tutorials')}
                 </Link>
               </li>
               <li>
-                <Link
-                  to='/about'
-                  className='hover:text-foreground transition-colors'
-                >
+                <Link to='/about' className='ob-footer-link'>
                   {t('About')}
                 </Link>
               </li>
@@ -117,38 +105,32 @@ export function LandingFooter(props: LandingFooterProps) {
 
           {/* Protocols & Compliance */}
           <div className='space-y-3 md:col-span-4'>
-            <h3 className='text-foreground text-xs font-semibold tracking-wider uppercase'>
+            <h3 className='ob-footer-title text-xs font-semibold tracking-wider uppercase'>
               {t('landing.footer.legalHeading')}
             </h3>
-            <ul className='text-muted-foreground space-y-2.5 text-sm'>
+            <ul className='space-y-2.5 text-sm'>
               <li>
-                <Link
-                  to='/user-agreement'
-                  className='hover:text-foreground transition-colors'
-                >
+                <Link to='/user-agreement' className='ob-footer-link'>
                   {t('User Agreement')}
                 </Link>
               </li>
               <li>
-                <Link
-                  to='/privacy-policy'
-                  className='hover:text-foreground transition-colors'
-                >
+                <Link to='/privacy-policy' className='ob-footer-link'>
                   {t('Privacy Policy')}
                 </Link>
               </li>
             </ul>
             {footerHtml ? (
-              <HtmlContent
-                content={footerHtml}
-                className='text-muted-foreground pt-2 text-xs'
-              />
+              <HtmlContent content={footerHtml} className='pt-2 text-xs' />
             ) : null}
           </div>
         </div>
 
         {/* Bottom Attribution Bar — Mandatory NOTICE preservation */}
-        <div className='border-border/60 text-muted-foreground flex flex-col items-start justify-between gap-4 border-t pt-6 text-xs sm:flex-row sm:items-center'>
+        <div
+          className='flex flex-col items-start justify-between gap-4 border-t pt-6 text-xs sm:flex-row sm:items-center'
+          style={{ borderColor: 'var(--ob-footer-line)' }}
+        >
           <div>
             &copy; {currentYear} {displayName}. {t('footer.defaultCopyright')}
           </div>
@@ -158,7 +140,7 @@ export function LandingFooter(props: LandingFooterProps) {
               href='https://github.com/QuantumNous/new-api'
               target='_blank'
               rel='noopener noreferrer'
-              className='text-foreground hover:text-primary font-medium underline-offset-4 transition-colors hover:underline'
+              className='text-primary font-medium underline-offset-4 transition-colors hover:underline'
             >
               New API
             </a>

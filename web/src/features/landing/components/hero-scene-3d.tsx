@@ -28,7 +28,7 @@ interface HeroScene3DProps {
 
 export default function HeroScene3D(props: HeroScene3DProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const isDark = props.isDark ?? true
+  const isDark = props.isDark ?? false
 
   useEffect(() => {
     const container = containerRef.current
@@ -53,20 +53,22 @@ export default function HeroScene3D(props: HeroScene3DProps) {
     container.appendChild(renderer.domElement)
 
     const scene = new THREE.Scene()
-    const fogColor = isDark ? 0x0b1016 : 0xf1eee6
+    // Warm cream (#FFFBF7) in light mode, deep warm ink (#14110F) in dark mode
+    const fogColor = isDark ? 0x14110f : 0xfffbf7
     scene.fog = new THREE.FogExp2(fogColor, 0.032)
 
     const camera = new THREE.PerspectiveCamera(58, width / height, 0.1, 100)
     camera.position.set(0, 1.8, 9.5)
 
-    const primaryHex = isDark ? 0x2bbfb4 : 0x087c74
-    const secondaryHex = isDark ? 0x16857d : 0x0d9488
-    const accentHex = isDark ? 0x67e8f9 : 0x0f766e
+    // Warm orange palette tokens: primary (#FF6B00), primary-light (#FF8533), amber (#F59E0B)
+    const primaryHex = 0xff6b00
+    const primaryLightHex = 0xff8533
+    const amberHex = 0xf59e0b
 
     const rootGroup = new THREE.Group()
     scene.add(rootGroup)
 
-    // 1. Undulating wave grid at the bottom
+    // 1. Undulating wave grid at the bottom (15-25% opacity as specified)
     const gridGeometry = new THREE.PlaneGeometry(42, 32, 44, 32)
     gridGeometry.rotateX(-Math.PI * 0.48)
     const gridBasePositions = Float32Array.from(
@@ -76,7 +78,7 @@ export default function HeroScene3D(props: HeroScene3DProps) {
       color: primaryHex,
       wireframe: true,
       transparent: true,
-      opacity: isDark ? 0.22 : 0.16,
+      opacity: isDark ? 0.22 : 0.17,
     })
     const gridMesh = new THREE.Mesh(gridGeometry, gridMaterial)
     gridMesh.position.set(0, -3.2, -4)
@@ -93,9 +95,9 @@ export default function HeroScene3D(props: HeroScene3DProps) {
       const radius = 2.2 + (i % 3) * 0.65
       const ringGeo = new THREE.TorusGeometry(radius, 0.018, 12, 72)
       const ringMat = new THREE.MeshBasicMaterial({
-        color: i % 2 === 0 ? primaryHex : accentHex,
+        color: i % 2 === 0 ? primaryHex : primaryLightHex,
         transparent: true,
-        opacity: 0.35,
+        opacity: isDark ? 0.3 : 0.2,
       })
       const ring = new THREE.Mesh(ringGeo, ringMat)
       ring.position.set(0, 0.4, -i * (ringTrackLength / ringCount))
@@ -116,27 +118,26 @@ export default function HeroScene3D(props: HeroScene3DProps) {
       color: primaryHex,
       wireframe: true,
       transparent: true,
-      opacity: isDark ? 0.34 : 0.26,
+      opacity: isDark ? 0.28 : 0.18,
     })
     const outerPolyMesh = new THREE.Mesh(outerPolyGeo, outerPolyMat)
     polyGroup.add(outerPolyMesh)
 
     const innerPolyGeo = new THREE.OctahedronGeometry(1.05, 0)
     const innerPolyMat = new THREE.MeshBasicMaterial({
-      color: accentHex,
+      color: amberHex,
       wireframe: true,
       transparent: true,
-      opacity: isDark ? 0.5 : 0.38,
+      opacity: isDark ? 0.4 : 0.24,
     })
     const innerPolyMesh = new THREE.Mesh(innerPolyGeo, innerPolyMat)
     polyGroup.add(innerPolyMesh)
 
-    // 4. Ambient particles
+    // 4. Ambient particles (primary-light / amber)
     const particleCount = 110
     const particlePositions = new Float32Array(particleCount * 3)
     for (let i = 0; i < particleCount; i++) {
       const i3 = i * 3
-      // Deterministic pseudo-random distribution so tests/renders stay predictable
       const seed1 = Math.sin(i * 12.9898) * 43758.5453
       const seed2 = Math.sin(i * 78.233) * 43758.5453
       const seed3 = Math.sin(i * 39.346) * 43758.5453
@@ -153,10 +154,10 @@ export default function HeroScene3D(props: HeroScene3DProps) {
       new THREE.BufferAttribute(particlePositions, 3)
     )
     const particleMat = new THREE.PointsMaterial({
-      color: secondaryHex,
+      color: isDark ? amberHex : primaryLightHex,
       size: 0.065,
       transparent: true,
-      opacity: isDark ? 0.65 : 0.45,
+      opacity: isDark ? 0.55 : 0.32,
     })
     const particles = new THREE.Points(particleGeo, particleMat)
     rootGroup.add(particles)
@@ -192,7 +193,6 @@ export default function HeroScene3D(props: HeroScene3DProps) {
       frameId = window.requestAnimationFrame(tick)
       const elapsed = (now - startTime) * 0.001
 
-      // Smooth pointer damping
       currentPointer.x += (targetPointer.x - currentPointer.x) * 0.045
       currentPointer.y += (targetPointer.y - currentPointer.y) * 0.045
 
@@ -222,22 +222,19 @@ export default function HeroScene3D(props: HeroScene3DProps) {
         if (ring.position.z > 6.5) {
           ring.position.z = -ringTrackLength + 6.5
         }
-        // Fade in from deep z and fade out near camera
         const normalizedZ =
           (ring.position.z + ringTrackLength - 6.5) / ringTrackLength
         const edgeFade = Math.sin(
           Math.min(Math.max(normalizedZ, 0), 1) * Math.PI
         )
-        mat.opacity = edgeFade * (isDark ? 0.36 : 0.24)
+        mat.opacity = edgeFade * (isDark ? 0.32 : 0.21)
       }
 
-      // Rotate polyhedron
       outerPolyMesh.rotation.y = elapsed * 0.24
       outerPolyMesh.rotation.x = elapsed * 0.15
       innerPolyMesh.rotation.y = -elapsed * 0.38
       innerPolyMesh.rotation.z = elapsed * 0.22
 
-      // Gentle particle drift
       particles.rotation.y = elapsed * 0.03
 
       renderer?.render(scene, camera)

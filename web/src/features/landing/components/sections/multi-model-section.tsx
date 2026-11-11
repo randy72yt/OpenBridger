@@ -49,14 +49,14 @@ export function MultiModelSection() {
   const { t } = useTranslation()
 
   return (
-    <section className='relative z-10 py-20 sm:py-28'>
+    <section className='ob-section-warm relative z-10 py-20 sm:py-28'>
       <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
         <ScrollReveal className='mx-auto max-w-3xl text-center'>
-          <div className='border-primary/25 bg-primary/10 text-primary mb-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold'>
+          <div className='ob-chip-primary mb-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold'>
             <KeyRound className='size-3.5' />
             <span>{t('landing.multiModel.eyebrow')}</span>
           </div>
-          <h2 className='text-2xl font-bold tracking-tight sm:text-4xl'>
+          <h2 className='ob-serif-heading text-2xl font-bold tracking-tight sm:text-4xl'>
             {t('landing.multiModel.title')}
           </h2>
           <p className='text-muted-foreground mt-3.5 text-sm leading-relaxed sm:text-base'>
@@ -68,24 +68,24 @@ export function MultiModelSection() {
         <div className='mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3'>
           {LANDING_PROVIDERS.map((provider, idx) => (
             <ScrollReveal key={provider.id} delay={idx * 0.06}>
-              <Card className='border-border/60 bg-card/70 hover:border-primary/40 h-full rounded-2xl py-0 shadow-none backdrop-blur-sm transition-colors'>
+              <Card className='ob-card ob-card-interactive h-full rounded-2xl py-0 shadow-none'>
                 <CardHeader className='flex flex-row items-center justify-between gap-3 p-5 pb-3'>
                   <div className='flex items-center gap-3'>
-                    <div className='bg-muted/70 ring-border/60 flex size-10 shrink-0 items-center justify-center rounded-xl ring-1'>
+                    <div className='ob-section-warm border-border flex size-10 shrink-0 items-center justify-center rounded-xl border'>
                       {renderProviderIcon(provider.iconKey)}
                     </div>
                     <div>
                       <h3 className='text-base font-semibold'>
                         {provider.name}
                       </h3>
-                      <p className='text-muted-foreground font-mono text-[11px]'>
+                      <p className='text-muted-foreground ob-mono text-[11px]'>
                         {provider.protocol}
                       </p>
                     </div>
                   </div>
                   <Badge
                     variant='secondary'
-                    className='bg-primary/10 text-primary border-primary/20 shrink-0 border text-[11px]'
+                    className='ob-chip-primary shrink-0 text-[11px]'
                   >
                     {t(provider.tagKey)}
                   </Badge>
@@ -95,7 +95,7 @@ export function MultiModelSection() {
                     {provider.models.map((modelName) => (
                       <span
                         key={modelName}
-                        className='border-border/60 bg-background/70 text-foreground/85 rounded-lg border px-2.5 py-1 font-mono text-xs'
+                        className='ob-section-bg border-border text-foreground/90 ob-mono rounded-lg border px-2.5 py-1 text-xs'
                       >
                         {modelName}
                       </span>
@@ -109,7 +109,7 @@ export function MultiModelSection() {
 
         {/* Bottom Compatibility Banner */}
         <ScrollReveal delay={0.18} className='mt-8'>
-          <Card className='border-primary/20 bg-primary/5 rounded-2xl py-0 shadow-none'>
+          <Card className='ob-card rounded-2xl py-0 shadow-none'>
             <CardContent className='flex flex-col justify-between gap-6 p-6 lg:flex-row lg:items-center'>
               <div className='space-y-1.5'>
                 <div className='text-primary flex items-center gap-2 text-xs font-semibold tracking-wider uppercase'>
@@ -127,11 +127,11 @@ export function MultiModelSection() {
                 {SUPPORTED_CLI_TOOLS.map((tool) => (
                   <div
                     key={tool.name}
-                    className='border-border/70 bg-card/85 flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs'
+                    className='ob-section-warm border-border flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs'
                   >
                     <Terminal className='text-primary size-3.5 shrink-0' />
                     <span className='font-semibold'>{tool.name}</span>
-                    <span className='text-muted-foreground font-mono text-[10px]'>
+                    <span className='text-muted-foreground ob-mono text-[10px]'>
                       {tool.protocol}
                     </span>
                   </div>

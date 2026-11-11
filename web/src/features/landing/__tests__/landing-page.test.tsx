@@ -234,6 +234,9 @@ describe('LandingPage (P0)', { timeout: 15000 }, () => {
     ).toBeVisible()
     expect(screen.getByRole('heading', { name: 'DeepSeek' })).toBeVisible()
 
+    // Scoped warm-orange theme wrapper is mounted
+    expect(document.querySelector('.ob-landing-theme')).toBeInTheDocument()
+
     // 2. Pricing preview section
     expect(screen.getAllByText('claude-sonnet-4-6').length).toBeGreaterThan(0)
 
@@ -243,7 +246,13 @@ describe('LandingPage (P0)', { timeout: 15000 }, () => {
     // 4. 3-line code integration tabs
     const tsTab = screen.getByRole('tab', { name: 'TypeScript / Node.js' })
     await userEvent.click(tsTab)
-    expect(screen.getByText(/import OpenAI from 'openai'/)).toBeVisible()
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.tagName.toLowerCase() === 'code' &&
+          element.textContent?.includes("import OpenAI from 'openai'") === true
+      )
+    ).toBeVisible()
 
     // 5. Mandatory NOTICE attribution in footer
     expect(

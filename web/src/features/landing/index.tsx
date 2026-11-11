@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import './landing-theme.css'
 import { lazy, Suspense, useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -23,6 +24,7 @@ import { PublicLayout } from '@/components/layout/components/public-layout'
 import { useTheme } from '@/context/theme-provider'
 import { useHomePageContent } from '@/features/home/hooks'
 import { isLikelyHtml } from '@/lib/content-format'
+import { getCookie } from '@/lib/cookies'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { LandingFooter } from './components/landing-footer'
@@ -43,10 +45,17 @@ const LazyRichContent = lazy(() =>
 export function LandingPage() {
   const { i18n, t } = useTranslation()
   const iframeRef = useRef<HTMLIFrameElement>(null)
-  const { resolvedTheme } = useTheme()
+  const { resolvedTheme, setTheme } = useTheme()
   const user = useAuthStore((s) => s.auth.user)
   const isAuthenticated = Boolean(user)
   const { content, isLoaded, isUrl } = useHomePageContent()
+
+  // Default to light mode on first visit while preserving manual theme switching
+  useEffect(() => {
+    if (!getCookie('vite-ui-theme')) {
+      setTheme('light')
+    }
+  }, [setTheme])
 
   const syncIframePreferences = useCallback(() => {
     try {
@@ -116,7 +125,7 @@ export function LandingPage() {
   }
 
   return (
-    <div className='bg-background text-foreground relative min-h-svh overflow-x-clip'>
+    <div className='ob-landing-theme bg-background text-foreground relative min-h-svh overflow-x-clip'>
       <LandingHeader />
       <main>
         <LandingHero isAuthenticated={isAuthenticated} />
