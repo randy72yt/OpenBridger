@@ -277,12 +277,19 @@ func GetTokenById(id int) (*Token, error) {
 	return &token, err
 }
 
-func GetTokenByName(name string) (*Token, error) {
+// GetAdminTokenByName returns the token with the given name owned by an
+// admin/root user. Token names are not unique across users, so a plain
+// name lookup would let any user impersonate privileged tokens (e.g. the
+// perf probe token); the join keeps those out. The raw join bypasses GORM's
+// soft-delete scoping, so deleted rows are filtered explicitly.
+func GetAdminTokenByName(name string) (*Token, error) {
 	if name == "" {
 		return nil, errors.New("name 为空！")
 	}
 	token := Token{}
-	err := DB.Where("name = ?", name).First(&token).Error
+	err := DB.Joins("JOIN users ON users.id = tokens.user_id AND users.deleted_at IS NULL").
+		Where("tokens.name = ? AND tokens.deleted_at IS NULL AND users.role >= ?", name, common.RoleAdminUser).
+		First(&token).Error
 	if err != nil {
 		return nil, err
 	}

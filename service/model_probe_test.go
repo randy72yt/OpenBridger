@@ -10,9 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
@@ -156,11 +159,11 @@ func TestRunProbeRoundSkipsModelsUntilDue(t *testing.T) {
 
 	var probed []string
 	result := runProbeRound(context.Background(), probeRoundDeps{
-		tokenKey:  "test-key",
+		tokenKey:   "test-key",
 		budgetLeft: 500000,
-		threshold: 3,
-		maxPerRun: 6,
-		now:       func() time.Time { return now },
+		threshold:  3,
+		maxPerRun:  6,
+		now:        func() time.Time { return now },
 		send: func(ctx context.Context, spec ProbeSpec, tokenKey string) ProbeResult {
 			probed = append(probed, spec.Model)
 			return ProbeResult{Model: spec.Model, Ok: true}
@@ -286,4 +289,59 @@ func TestProbeOnceUpstreamErrorAndTimeout(t *testing.T) {
 	result = probeOnce(context.Background(), spec, "probe-secret-key")
 	assert.False(t, result.Ok)
 	assert.Zero(t, result.Status)
+}
+
+func setupProbeTokenDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Token{}, &model.User{}, &model.Log{}))
+	origDB, origLogDB := model.DB, model.LOG_DB
+	model.DB, model.LOG_DB = db, db
+	t.Cleanup(func() { model.DB, model.LOG_DB = origDB, origLogDB })
+	return db
+}
+
+func TestResolveProbeTokenRequiresAdminOwner(t *testing.T) {
+	db := setupProbeTokenDB(t)
+	require.NoError(t, db.Create(&model.User{Id: 1, Username: "regular-user", Role: common.RoleCommonUser, AffCode: "u1"}).Error)
+	require.NoError(t, db.Create(&model.User{Id: 2, Username: "ops-admin", Role: common.RoleAdminUser, AffCode: "u2"}).Error)
+
+	// A regular user naming their token "ob-probe" must not be picked.
+	require.NoError(t, db.Create(&model.Token{Name: "ob-probe", UserId: 1, Key: "sk-user", Status: common.TokenStatusEnabled}).Error)
+	_, err := ResolveProbeToken("ob-probe")
+	require.Error(t, err)
+
+	// The admin-owned same-name token wins.
+	require.NoError(t, db.Create(&model.Token{Name: "ob-probe", UserId: 2, Key: "sk-admin", Status: common.TokenStatusEnabled}).Error)
+	token, err := ResolveProbeToken("ob-probe")
+	require.NoError(t, err)
+	assert.Equal(t, 2, token.UserId)
+	assert.Equal(t, "sk-admin", token.Key)
+
+	// Disabled admin tokens are rejected too.
+	require.NoError(t, db.Model(&model.Token{}).Where("user_id = ?", 2).Update("status", 2).Error)
+	_, err = ResolveProbeToken("ob-probe")
+	require.Error(t, err)
+}
+
+func TestProbeBudgetLeftSumsByTokenIDNotName(t *testing.T) {
+	db := setupProbeTokenDB(t)
+	today := startOfProbeBudgetDay()
+	seed := func(tokenId int, tokenName string, quota int, createdAt int64) {
+		require.NoError(t, db.Create(&model.Log{
+			TokenId: tokenId, TokenName: tokenName, Type: model.LogTypeConsume,
+			Quota: quota, CreatedAt: createdAt,
+		}).Error)
+	}
+
+	seed(11, "ob-probe", 100, today+100)    // admin probe token spend today
+	seed(99, "ob-probe", 5000, today+200)   // a regular user's same-name token: must not count
+	seed(11, "renamed", 50, today+300)      // same token id, older log row name
+	seed(11, "ob-probe", 9999, today-90000) // yesterday's spend of the probe token
+
+	left, err := ProbeBudgetLeft(11, 1000)
+	require.NoError(t, err)
+	// Only 100 + 50 count: 850 left. A name-based sum would have been 5100+.
+	assert.Equal(t, int64(850), left)
 }

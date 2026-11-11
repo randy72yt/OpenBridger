@@ -178,9 +178,11 @@ func GetAdminPerfSummary(c *gin.Context) {
 	}
 
 	cfg := perf_metrics_setting.GetSetting()
-	if left, budgetErr := service.ProbeBudgetLeft(cfg.ProbeTokenName, cfg.ProbeDailyBudgetQuota); budgetErr == nil {
-		summary.ProbeBudgetQuota = int64(cfg.ProbeDailyBudgetQuota)
-		summary.ProbeBudgetUsedQuota = int64(cfg.ProbeDailyBudgetQuota) - left
+	summary.ProbeBudgetQuota = int64(cfg.ProbeDailyBudgetQuota)
+	if probeToken, err := service.ResolveProbeToken(cfg.ProbeTokenName); err == nil {
+		if left, budgetErr := service.ProbeBudgetLeft(probeToken.Id, cfg.ProbeDailyBudgetQuota); budgetErr == nil {
+			summary.ProbeBudgetUsedQuota = int64(cfg.ProbeDailyBudgetQuota) - left
+		}
 	}
 
 	specByModel := map[string]service.ProbeSpec{}

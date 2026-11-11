@@ -228,10 +228,12 @@ func startOfProbeBudgetDay() int64 {
 }
 
 // ProbeBudgetLeft returns the remaining daily probe budget in quota, measured
-// as today's consumed quota of the probe token (Asia/Shanghai day).
-func ProbeBudgetLeft(tokenName string, budgetQuota int) (int64, error) {
-	if tokenName == "" {
-		return 0, errors.New("probe token name is empty")
+// as today's consumed quota of the probe token (Asia/Shanghai day). It sums by
+// token id: names are per-user, so a name-based sum would count traffic of
+// unrelated same-name tokens.
+func ProbeBudgetLeft(tokenId int, budgetQuota int) (int64, error) {
+	if tokenId <= 0 {
+		return 0, errors.New("probe token id is required")
 	}
 	if budgetQuota <= 0 {
 		return 0, nil
@@ -241,7 +243,7 @@ func ProbeBudgetLeft(tokenName string, budgetQuota int) (int64, error) {
 	}
 	err := model.LOG_DB.Table("logs").
 		Select("COALESCE(sum(quota), 0) quota").
-		Where("token_name = ? AND type = ? AND created_at >= ?", tokenName, model.LogTypeConsume, startOfProbeBudgetDay()).
+		Where("token_id = ? AND type = ? AND created_at >= ?", tokenId, model.LogTypeConsume, startOfProbeBudgetDay()).
 		Scan(&stat).Error
 	if err != nil {
 		return 0, err
@@ -249,23 +251,24 @@ func ProbeBudgetLeft(tokenName string, budgetQuota int) (int64, error) {
 	return int64(budgetQuota) - stat.Quota, nil
 }
 
-// loadProbeTokenKey reads the probe token key from the tokens table at
-// runtime. The key never appears in logs or results.
-func loadProbeTokenKey(name string) (string, error) {
+// ResolveProbeToken loads the enabled probe token owned by an admin/root
+// user; a same-name token of a regular user is never picked. The returned
+// error explains why probing cannot run and never exposes the token key.
+func ResolveProbeToken(name string) (*model.Token, error) {
 	if name == "" {
-		return "", errors.New("probe token name is empty")
+		return nil, errors.New("probe token name is empty")
 	}
-	token, err := model.GetTokenByName(name)
+	token, err := model.GetAdminTokenByName(name)
 	if err != nil {
-		return "", fmt.Errorf("probe token %q not found", name)
+		return nil, fmt.Errorf("admin-owned probe token %q not found", name)
 	}
 	if token.Status != common.TokenStatusEnabled {
-		return "", fmt.Errorf("probe token %q is disabled", name)
+		return nil, fmt.Errorf("probe token %q is disabled", name)
 	}
 	if token.Key == "" {
-		return "", fmt.Errorf("probe token %q has no key", name)
+		return nil, fmt.Errorf("probe token %q has no key", name)
 	}
-	return token.Key, nil
+	return token, nil
 }
 
 var probeLastRunFallback sync.Map // model -> unix ts, used when Redis is unavailable
@@ -317,20 +320,20 @@ func RunModelProbeRound(ctx context.Context) ProbeRoundResult {
 		return ProbeRoundResult{Skipped: true, Reason: "probe disabled"}
 	}
 
-	tokenKey, err := loadProbeTokenKey(cfg.ProbeTokenName)
+	probeToken, err := ResolveProbeToken(cfg.ProbeTokenName)
 	if err != nil {
 		common.SysError("model probe skipped: " + err.Error())
 		return ProbeRoundResult{Skipped: true, Reason: "probe token unavailable"}
 	}
 
-	budgetLeft, err := ProbeBudgetLeft(cfg.ProbeTokenName, cfg.ProbeDailyBudgetQuota)
+	budgetLeft, err := ProbeBudgetLeft(probeToken.Id, cfg.ProbeDailyBudgetQuota)
 	if err != nil {
 		common.SysError("model probe skipped: failed to read probe budget: " + err.Error())
 		return ProbeRoundResult{Skipped: true, Reason: "probe budget unavailable"}
 	}
 
 	return runProbeRound(ctx, probeRoundDeps{
-		tokenKey:   tokenKey,
+		tokenKey:   probeToken.Key,
 		specs:      LoadProbeSpecs(model.GetEnabledModels(), model.GetPricing(), cfg),
 		budgetLeft: budgetLeft,
 		threshold:  cfg.ProbeRealTrafficThreshold,
