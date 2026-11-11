@@ -110,6 +110,7 @@ function parseIonetMeta(otherInfo: string | null | undefined): null | {
  * Upstream update tags (+N / -N) shown on channel name for model-fetchable channels
  */
 function UpstreamUpdateTags({ channel }: { channel: Channel }) {
+  const { t } = useTranslation()
   const { upstream, setCurrentRow } = useChannels()
   if (!MODEL_FETCHABLE_TYPES.has(channel.type)) {
     return null
@@ -122,7 +123,8 @@ function UpstreamUpdateTags({ channel }: { channel: Channel }) {
 
   const addCount = meta.pendingAddModels.length
   const removeCount = meta.pendingRemoveModels.length
-  if (addCount === 0 && removeCount === 0) {
+  const prunedCount = meta.prunedModels.length
+  if (addCount === 0 && removeCount === 0 && prunedCount === 0) {
     return null
   }
 
@@ -164,6 +166,17 @@ function UpstreamUpdateTags({ channel }: { channel: Channel }) {
               'remove'
             )
           }}
+        />
+      )}
+      {prunedCount > 0 && (
+        <StatusBadge
+          label={`-${prunedCount}`}
+          variant='neutral'
+          size='sm'
+          copyable={false}
+          title={t('Removed upstream: {{models}}', {
+            models: meta.prunedModels.join(', '),
+          })}
         />
       )}
     </div>
@@ -465,7 +478,11 @@ export function BalanceCell({ channel }: { channel: Channel }) {
         setCurrentRow(channel)
         setRawBalanceResponse(response.raw_response)
       } else {
-        toast.error(response.message || t('Failed to update balance'))
+        toast.error(
+          response.message
+            ? t(response.message)
+            : t('Failed to update balance')
+        )
       }
     } catch (error: unknown) {
       toast.error(

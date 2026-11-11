@@ -23,7 +23,12 @@ import {
   CHANNEL_TYPE_OPTIONS,
   MODEL_FETCHABLE_TYPES,
 } from '../../constants'
-import { CHANNEL_FORM_DEFAULT_VALUES, channelFormSchema } from '../channel-form'
+import {
+  CHANNEL_FORM_DEFAULT_VALUES,
+  channelFormSchema,
+  dedupeModelList,
+  transformFormDataToUpdatePayload,
+} from '../channel-form'
 import { getChannelTypeConfig } from '../channel-type-config'
 import { getChannelTypeIcon, getKeyPromptForType } from '../channel-utils'
 
@@ -78,6 +83,33 @@ describe('New API channel', () => {
     expect(
       channelFormSchema.safeParse(newAPIForm('https://new-api.example')).success
     ).toBe(true)
+  })
+
+  test('omits an empty upstream access token and dedupes models on save', () => {
+    const withoutToken = transformFormDataToUpdatePayload(
+      {
+        ...newAPIForm('https://new-api.example'),
+        models: 'gpt-5, gpt-5, claude ',
+        upstream_access_token: '   ',
+        upstream_user_id: '9',
+      },
+      1
+    )
+    expect(withoutToken.models).toBe('gpt-5,claude')
+    expect(withoutToken.upstream_access_token).toBeUndefined()
+    expect(withoutToken.upstream_user_id).toBe(9)
+    expect(dedupeModelList('a, a,b,b')).toBe('a,b')
+
+    const withToken = transformFormDataToUpdatePayload(
+      {
+        ...newAPIForm('https://new-api.example'),
+        upstream_access_token: 'system-token',
+        upstream_user_id: '9',
+      },
+      1
+    )
+    expect(withToken.upstream_access_token).toBe('system-token')
+    expect(JSON.stringify(withoutToken)).not.toContain('system-token')
   })
 
   test('keeps Sub2API Base URL validation unchanged', () => {

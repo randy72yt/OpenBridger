@@ -119,7 +119,9 @@ export function BalanceQueryDialog(props: BalanceQueryDialogProps) {
       } else if (response.success && response.raw_response !== undefined) {
         setRawResponse(response.raw_response)
       } else {
-        toast.error(response.message || t('Failed to query balance'))
+        toast.error(
+          response.message ? t(response.message) : t('Failed to query balance')
+        )
       }
     } catch (error: unknown) {
       toast.error(
