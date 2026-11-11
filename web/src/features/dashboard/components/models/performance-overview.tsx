@@ -118,6 +118,16 @@ export function PerformanceOverview() {
         <span className='text-muted-foreground ml-auto font-mono text-xs tabular-nums'>
           {t('Probe budget')}: {formatQuota(adminQuery.data?.data.probe_budget_used_quota ?? 0)} /{' '}
           {formatQuota(adminQuery.data?.data.probe_budget_quota ?? 0)}
+          {adminQuery.data?.data.error_codes_truncated && (
+            <span
+              className='ml-2'
+              title={t(
+                'Error-log scan hit its row cap; error codes cover only part of the window.'
+              )}
+            >
+              {t('Error codes truncated')}
+            </span>
+          )}
         </span>
       </div>
       <StaticDataTable

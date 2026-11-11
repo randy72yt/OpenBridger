@@ -163,12 +163,17 @@ func GetPerfMetricsSummary(c *gin.Context) {
 }
 
 // GetAdminPerfSummary serves the admin-only full view (all four sources, probe
-// budget, error codes). It is unaffected by public_v2.
+// budget, error codes). It is unaffected by public_v2. The aggregation result
+// is cached for 60s like the public summary; live enrichment (probe budget,
+// last probe run) runs on a per-request copy so the cached payload is never
+// mutated concurrently.
 func GetAdminPerfSummary(c *gin.Context) {
-	hours := queryHours(c, 24, 168)
+	hours := normalizeSummaryHours(c.Query("hours"))
 	activeGroups := activePricingGroups()
 
-	summary, err := perfmetrics.QueryAdminSummary(hours, activeGroups)
+	payload, err := cachedPerfPayload(summaryCacheKey("admin", hours, 0, activeGroups, false), func() (any, error) {
+		return perfmetrics.QueryAdminSummary(hours, activeGroups)
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -176,6 +181,9 @@ func GetAdminPerfSummary(c *gin.Context) {
 		})
 		return
 	}
+	cachedSummary := payload.(perfmetrics.AdminPerfSummary)
+	summary := cachedSummary
+	summary.Models = append([]perfmetrics.AdminModelPerf(nil), cachedSummary.Models...)
 
 	cfg := perf_metrics_setting.GetSetting()
 	summary.ProbeBudgetQuota = int64(cfg.ProbeDailyBudgetQuota)

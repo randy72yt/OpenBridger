@@ -75,6 +75,7 @@ describe('PerformanceOverview (admin)', () => {
           probe_budget_used_quota: 100000,
           probe_budget_quota: 500000,
           generated_at: 1794300000,
+          error_codes_truncated: true,
         },
       },
     })
@@ -94,6 +95,7 @@ describe('PerformanceOverview (admin)', () => {
     expect(screen.getByText('channel:invalid_key ×2')).toBeVisible()
     expect(screen.getByText(/cheap · —/)).toBeVisible()
     expect(screen.getByText(/Probe budget/)).toBeVisible()
+    expect(screen.getByText('Error codes truncated')).toBeVisible()
   })
 
   it('keeps the empty state when the admin summary has no models', async () => {

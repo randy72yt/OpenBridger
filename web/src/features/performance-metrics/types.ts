@@ -102,5 +102,6 @@ export type AdminPerfSummaryData = {
     probe_budget_used_quota: number
     probe_budget_quota: number
     generated_at: number
+    error_codes_truncated?: boolean
   }
 }

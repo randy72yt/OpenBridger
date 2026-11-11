@@ -188,3 +188,43 @@ func TestQueryAdminSummarySourceSplit(t *testing.T) {
 		assert.NotContains(t, string(data), forbidden)
 	}
 }
+
+func TestQueryAdminSummaryMarksTruncatedErrorCodes(t *testing.T) {
+	db := setupPerfTestDB(t)
+	resetHotBuckets(t)
+	origLogDB := model.LOG_DB
+	model.LOG_DB = db
+	t.Cleanup(func() { model.LOG_DB = origLogDB })
+	require.NoError(t, db.AutoMigrate(&model.Log{}))
+
+	seedBucket(t, "m-trunc", SourceReal, 30*time.Minute, counters{requestCount: 3, successCount: 3})
+
+	nowTs := time.Now().Unix()
+	logs := make([]model.Log, errorCodeScanLimit+50)
+	for i := range logs {
+		logs[i] = model.Log{
+			ModelName: "m-trunc", Type: model.LogTypeError, CreatedAt: nowTs,
+			Other: `{"error_code":"burst_error","status_code":500}`,
+		}
+	}
+	require.NoError(t, db.CreateInBatches(&logs, 40).Error)
+
+	summary, err := QueryAdminSummary(24, nil)
+	require.NoError(t, err)
+	assert.True(t, summary.ErrorCodesTruncated)
+	for _, entry := range summary.Models {
+		if entry.ModelName == "m-trunc" {
+			assert.Equal(t, int64(errorCodeScanLimit), entry.ErrorCodes["burst_error"])
+		}
+	}
+
+	// Below the cap nothing is flagged.
+	require.NoError(t, db.Where("model_name = ?", "m-trunc").Delete(&model.Log{}).Error)
+	require.NoError(t, db.Create(&model.Log{
+		ModelName: "m-trunc", Type: model.LogTypeError, CreatedAt: nowTs,
+		Other: `{"error_code":"single_error","status_code":500}`,
+	}).Error)
+	summary, err = QueryAdminSummary(24, nil)
+	require.NoError(t, err)
+	assert.False(t, summary.ErrorCodesTruncated)
+}

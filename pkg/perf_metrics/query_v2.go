@@ -49,6 +49,9 @@ type AdminPerfSummary struct {
 	ProbeBudgetUsedQuota int64            `json:"probe_budget_used_quota"`
 	ProbeBudgetQuota     int64            `json:"probe_budget_quota"`
 	GeneratedAt          int64            `json:"generated_at"`
+	// ErrorCodesTruncated marks that the error-log scan hit its row limit and
+	// the code counts cover only part of the window.
+	ErrorCodesTruncated bool `json:"error_codes_truncated"`
 }
 
 // sourceBuckets maps model -> source -> bucketTs -> counters.
@@ -365,7 +368,7 @@ func QueryAdminSummary(hours int, groups []string) (AdminPerfSummary, error) {
 		return models[i].ModelName < models[j].ModelName
 	})
 
-	errorCodes := collectErrorCodes(startTs)
+	errorCodes, codesTruncated := collectErrorCodes(startTs)
 	for i := range models {
 		if codes, ok := errorCodes[models[i].ModelName]; ok {
 			models[i].ErrorCodes = codes
@@ -373,15 +376,22 @@ func QueryAdminSummary(hours int, groups []string) (AdminPerfSummary, error) {
 	}
 
 	return AdminPerfSummary{
-		Models:      models,
-		GeneratedAt: endTs,
+		Models:              models,
+		GeneratedAt:         endTs,
+		ErrorCodesTruncated: codesTruncated,
 	}, nil
 }
 
+// errorCodeScanLimit caps how many error-log rows one admin query scans; past
+// that the counts are marked truncated instead of paging through an unbounded
+// error burst.
+const errorCodeScanLimit = 20000
+
 // collectErrorCodes counts error-log error codes per model within the window.
 // logs.other is parsed in Go (common.UnmarshalJsonStr) so the query works on
-// SQLite/MySQL/PostgreSQL without dialect JSON functions.
-func collectErrorCodes(startTs int64) map[string]map[string]int64 {
+// SQLite/MySQL/PostgreSQL without dialect JSON functions. The scan is row-
+// capped; the bool reports whether the cap was hit.
+func collectErrorCodes(startTs int64) (map[string]map[string]int64, bool) {
 	codes := map[string]map[string]int64{}
 	var rows []struct {
 		ModelName string
@@ -390,9 +400,14 @@ func collectErrorCodes(startTs int64) map[string]map[string]int64 {
 	if err := model.LOG_DB.Model(&model.Log{}).
 		Select("model_name, other").
 		Where("type = ? AND created_at >= ? AND model_name <> ''", model.LogTypeError, startTs).
+		Limit(errorCodeScanLimit + 1).
 		Find(&rows).Error; err != nil {
 		common.SysError("perf admin: failed to load error logs: " + err.Error())
-		return codes
+		return codes, false
+	}
+	truncated := len(rows) > errorCodeScanLimit
+	if truncated {
+		rows = rows[:errorCodeScanLimit]
 	}
 	for _, row := range rows {
 		var other struct {
@@ -411,7 +426,7 @@ func collectErrorCodes(startTs int64) map[string]map[string]int64 {
 		}
 		codes[row.ModelName][label]++
 	}
-	return codes
+	return codes, truncated
 }
 
 func minInt64(values ...int64) int64 {

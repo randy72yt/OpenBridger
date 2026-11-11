@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -190,4 +191,34 @@ func TestPerfCacheEvictionSweepsExpiredAndCapsSize(t *testing.T) {
 	assert.LessOrEqual(t, perfCacheSize(), perfSummaryCacheMaxEntries)
 	_, firstKept := perfSummaryCache.Load("fresh")
 	assert.False(t, firstKept, "oldest entries are evicted first")
+}
+
+func TestGetAdminPerfSummaryCachesAggregation(t *testing.T) {
+	setupPerfControllerTest(t)
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/api/perf-metrics/admin/summary", GetAdminPerfSummary)
+
+	require.NoError(t, model.UpsertPerfMetric(&model.PerfMetric{
+		ModelName: "m-admin-ctl", Group: "default", BucketTs: nowHourTs(),
+		RequestCount: 2, SuccessCount: 2, TotalLatencyMs: 600,
+	}))
+
+	for i := 0; i < 2; i++ {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/perf-metrics/admin/summary?hours=999", nil)
+		router.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code, "request %d", i)
+		require.Contains(t, w.Body.String(), "m-admin-ctl", "request %d", i)
+	}
+	// hours=999 falls back to 24 (single whitelisted key) and the second
+	// request is served from the cache: exactly one admin entry exists.
+	adminEntries := 0
+	perfSummaryCache.Range(func(k, _ any) bool {
+		if strings.HasPrefix(k.(string), "admin:") {
+			adminEntries++
+		}
+		return true
+	})
+	assert.Equal(t, 1, adminEntries)
 }
