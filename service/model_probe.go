@@ -382,8 +382,13 @@ func runProbeRound(ctx context.Context, deps probeRoundDeps) ProbeRoundResult {
 		due = append(due, dueSpec{spec: spec, lastRun: lastRun})
 	}
 	// Oldest probe first so nothing starves when maxPerRun truncates the batch.
+	// A negative maxPerRun (misconfigured option) means zero probes, not
+	// "everything due in one pass".
 	sort.Slice(due, func(i, j int) bool { return due[i].lastRun < due[j].lastRun })
-	if deps.maxPerRun >= 0 && len(due) > deps.maxPerRun {
+	if deps.maxPerRun < 0 {
+		deps.maxPerRun = 0
+	}
+	if len(due) > deps.maxPerRun {
 		due = due[:deps.maxPerRun]
 	}
 

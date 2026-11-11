@@ -345,3 +345,25 @@ func TestProbeBudgetLeftSumsByTokenIDNotName(t *testing.T) {
 	// Only 100 + 50 count: 850 left. A name-based sum would have been 5100+.
 	assert.Equal(t, int64(850), left)
 }
+
+func TestRunProbeRoundNegativeMaxPerRunProbesNothing(t *testing.T) {
+	var calls atomic.Int64
+	result := runProbeRound(context.Background(), probeRoundDeps{
+		tokenKey:   "test-key",
+		budgetLeft: 500000,
+		threshold:  3,
+		maxPerRun:  -5,
+		now:        func() time.Time { return time.Unix(1794300000, 0) },
+		send: func(ctx context.Context, spec ProbeSpec, tokenKey string) ProbeResult {
+			calls.Add(1)
+			return ProbeResult{Model: spec.Model, Ok: true}
+		},
+		specs: []ProbeSpec{
+			{Model: "probe-negative-a", Tier: "cheap", Interval: probeTierCheapInterval, Endpoint: "chat"},
+			{Model: "probe-negative-b", Tier: "cheap", Interval: probeTierCheapInterval, Endpoint: "chat"},
+		},
+	})
+	assert.False(t, result.Skipped)
+	assert.Zero(t, result.Probed)
+	assert.Zero(t, calls.Load())
+}
