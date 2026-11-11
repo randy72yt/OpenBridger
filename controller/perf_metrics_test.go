@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -130,4 +131,63 @@ func TestGetAdminPerfSummaryRequiresAdmin(t *testing.T) {
 
 func nowHourTs() int64 {
 	return time.Now().Unix() / 3600 * 3600
+}
+
+func perfCacheSize() int {
+	count := 0
+	perfSummaryCache.Range(func(_, _ any) bool {
+		count++
+		return true
+	})
+	return count
+}
+
+func TestSummaryCacheKeyIgnoresGroupOrder(t *testing.T) {
+	a := summaryCacheKey("summary", 24, 48, []string{"default", "vip", "auto"}, true)
+	b := summaryCacheKey("summary", 24, 48, []string{"auto", "vip", "default"}, true)
+	assert.Equal(t, a, b)
+
+	assert.NotEqual(t, a, summaryCacheKey("summary", 24, 48, []string{"default", "auto"}, true))
+	assert.NotEqual(t, a, summaryCacheKey("summary", 24, 48, []string{"default", "vip", "auto"}, false))
+}
+
+func TestGetPerfMetricsSummaryInvalidHoursAddsNoCacheEntry(t *testing.T) {
+	setupPerfControllerTest(t)
+	withPublicV2(t, false)
+
+	w := perfSummaryRequest(t, "")
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, 1, perfCacheSize())
+
+	// Junk or out-of-whitelist hours all fall back to 24: same cache key,
+	// so the cache cannot be inflated with hostile values.
+	for _, query := range []string{"?hours=999999", "?hours=abc", "?hours=0", "?hours=-5", "?hours=2", "?hours=48"} {
+		w := perfSummaryRequest(t, query)
+		require.Equal(t, http.StatusOK, w.Code, query)
+	}
+	require.Equal(t, 1, perfCacheSize())
+
+	// The whitelisted 168 window is a legitimate second entry.
+	w = perfSummaryRequest(t, "?hours=168")
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, 2, perfCacheSize())
+}
+
+func TestPerfCacheEvictionSweepsExpiredAndCapsSize(t *testing.T) {
+	setupPerfControllerTest(t)
+
+	// Expired entries are swept.
+	perfSummaryCache.Store("expired", perfCacheEntry{payload: 1, expireAt: time.Now().Add(-time.Second)})
+	storePerfCacheEntry("fresh", 2)
+	assert.Equal(t, 1, perfCacheSize())
+	_, cached := perfSummaryCache.Load("expired")
+	assert.False(t, cached)
+
+	// The cache never exceeds the cap.
+	for i := 0; i < perfSummaryCacheMaxEntries+20; i++ {
+		storePerfCacheEntry(fmt.Sprintf("bulk-%d", i), i)
+	}
+	assert.LessOrEqual(t, perfCacheSize(), perfSummaryCacheMaxEntries)
+	_, firstKept := perfSummaryCache.Load("fresh")
+	assert.False(t, firstKept, "oldest entries are evicted first")
 }

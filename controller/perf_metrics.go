@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +23,10 @@ import (
 // 7d availability figures reuse the same idea); clients additionally get a
 // Cache-Control header so the model square does not hammer the endpoint.
 const perfSummaryCacheTTL = 60 * time.Second
+
+// perfSummaryCacheMaxEntries caps the in-process cache size; the eviction
+// pass enforces it so hostile query combinations cannot grow the map.
+const perfSummaryCacheMaxEntries = 64
 
 type perfCacheEntry struct {
 	payload  any
@@ -41,8 +46,69 @@ func cachedPerfPayload(key string, build func() (any, error)) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	perfSummaryCache.Store(key, perfCacheEntry{payload: payload, expireAt: time.Now().Add(perfSummaryCacheTTL)})
+	storePerfCacheEntry(key, payload)
 	return payload, nil
+}
+
+func storePerfCacheEntry(key string, payload any) {
+	now := time.Now()
+	perfSummaryCache.Store(key, perfCacheEntry{payload: payload, expireAt: now.Add(perfSummaryCacheTTL)})
+	evictPerfCache(now)
+}
+
+// evictPerfCache sweeps expired entries and, if the map is still over the cap,
+// drops the soonest-to-expire (oldest) entries until it is back at the cap.
+func evictPerfCache(now time.Time) {
+	type liveEntry struct {
+		key      string
+		expireAt time.Time
+	}
+	live := make([]liveEntry, 0, perfSummaryCacheMaxEntries+1)
+	perfSummaryCache.Range(func(k, v any) bool {
+		entry := v.(perfCacheEntry)
+		if now.After(entry.expireAt) {
+			perfSummaryCache.Delete(k)
+			return true
+		}
+		live = append(live, liveEntry{key: k.(string), expireAt: entry.expireAt})
+		return true
+	})
+	if len(live) <= perfSummaryCacheMaxEntries {
+		return
+	}
+	sort.Slice(live, func(i, j int) bool { return live[i].expireAt.Before(live[j].expireAt) })
+	for _, entry := range live[:len(live)-perfSummaryCacheMaxEntries] {
+		perfSummaryCache.Delete(entry.key)
+	}
+}
+
+// summaryCacheKey builds the cache key with sorted groups so request order
+// cannot multiply entries.
+func summaryCacheKey(prefix string, hours int, bars int, groups []string, publicV2 bool) string {
+	sorted := append([]string(nil), groups...)
+	sort.Strings(sorted)
+	return fmt.Sprintf("%s:%d:%d:%s:%t", prefix, hours, bars, strings.Join(sorted, ","), publicV2)
+}
+
+// normalizeSummaryHours whitelists the supported windows; anything else
+// (including junk) falls back to the default instead of producing a fresh
+// cache key per value.
+func normalizeSummaryHours(raw string) int {
+	if raw == "168" {
+		return 168
+	}
+	return 24
+}
+
+func normalizeSummaryBars(raw string) int {
+	switch raw {
+	case "48":
+		return 48
+	case "72":
+		return 72
+	default:
+		return 24
+	}
 }
 
 func activePricingGroups() []string {
@@ -66,23 +132,15 @@ func queryHours(c *gin.Context, fallback int, max int) int {
 }
 
 func GetPerfMetricsSummary(c *gin.Context) {
-	hours := queryHours(c, 24, 24*30)
+	hours := normalizeSummaryHours(c.Query("hours"))
 	publicV2 := perf_metrics_setting.GetSetting().PublicV2
 	bars := 24
 	if publicV2 {
-		bars = 24
-		if raw := c.Query("bars"); raw != "" {
-			if parsed, err := strconv.Atoi(raw); err == nil && parsed >= 1 {
-				bars = parsed
-			}
-		}
-		if bars > 72 {
-			bars = 72
-		}
+		bars = normalizeSummaryBars(c.Query("bars"))
 	}
 
 	activeGroups := activePricingGroups()
-	cacheKey := fmt.Sprintf("summary:%d:%d:%v:%t", hours, bars, activeGroups, publicV2)
+	cacheKey := summaryCacheKey("summary", hours, bars, activeGroups, publicV2)
 	payload, err := cachedPerfPayload(cacheKey, func() (any, error) {
 		if publicV2 {
 			return perfmetrics.QuerySummaryAllV2(hours, bars, activeGroups, []string{perfmetrics.SourceReal, perfmetrics.SourceProbe})
