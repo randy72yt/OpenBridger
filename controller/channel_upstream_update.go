@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -88,6 +89,7 @@ type detectChannelUpstreamModelUpdatesResult struct {
 	ChannelName     string   `json:"channel_name"`
 	AddModels       []string `json:"add_models"`
 	RemoveModels    []string `json:"remove_models"`
+	PrunedModels    []string `json:"pruned_models"`
 	LastCheckTime   int64    `json:"last_check_time"`
 	AutoAddedModels int      `json:"auto_added_models"`
 }
@@ -236,20 +238,6 @@ func collectPendingUpstreamModelChangesFromModels(
 		return !ok
 	})
 	return normalizeModelNames(pendingAdd), normalizeModelNames(pendingRemove)
-}
-
-func collectPendingUpstreamModelChanges(channel *model.Channel, settings dto.ChannelOtherSettings) (pendingAddModels []string, pendingRemoveModels []string, err error) {
-	upstreamModels, err := fetchChannelUpstreamModelIDs(channel)
-	if err != nil {
-		return nil, nil, err
-	}
-	pendingAddModels, pendingRemoveModels = collectPendingUpstreamModelChangesFromModels(
-		channel.GetModels(),
-		upstreamModels,
-		settings.UpstreamModelUpdateIgnoredModels,
-		normalizeChannelModelMapping(channel),
-	)
-	return pendingAddModels, pendingRemoveModels, nil
 }
 
 func getUpstreamModelUpdateMinCheckIntervalSeconds() int64 {
@@ -496,7 +484,7 @@ func fetchAdvancedCustomUpstreamModelIDs(channel *model.Channel, baseURL string)
 	return parseOpenAIModelIDs(body)
 }
 
-func updateChannelUpstreamModelSettings(channel *model.Channel, settings dto.ChannelOtherSettings, updateModels bool) error {
+func updateChannelUpstreamModelSettings(channel *model.Channel, settings dto.ChannelOtherSettings, updateModels bool, updateMapping bool) error {
 	channel.SetOtherSettings(settings)
 	updates := map[string]interface{}{
 		"settings": channel.OtherSettings,
@@ -504,7 +492,73 @@ func updateChannelUpstreamModelSettings(channel *model.Channel, settings dto.Cha
 	if updateModels {
 		updates["models"] = channel.Models
 	}
+	if updateMapping {
+		updates["model_mapping"] = channel.ModelMapping
+	}
 	return model.DB.Model(&model.Channel{}).Where("id = ?", channel.Id).Updates(updates).Error
+}
+
+// dropModelMappingsToMissingTargets removes mappings whose upstream target is
+// not in the current upstream model list and records "source -> target".
+// Unparseable mappings are left in place and logged: rewriting them could
+// destroy a mapping the sync cannot read.
+func dropModelMappingsToMissingTargets(channel *model.Channel, upstreamSet map[string]struct{}) (dropped []string, changed bool) {
+	if channel == nil || channel.ModelMapping == nil {
+		return nil, false
+	}
+	raw := strings.TrimSpace(*channel.ModelMapping)
+	if raw == "" || raw == "{}" {
+		return nil, false
+	}
+	parsed := make(map[string]string)
+	if err := common.UnmarshalJsonStr(raw, &parsed); err != nil {
+		common.SysLog(fmt.Sprintf("upstream model sync: channel_id=%d model_mapping is not a JSON object; left unchanged", channel.Id))
+		return nil, false
+	}
+	kept := make(map[string]string, len(parsed))
+	for source, target := range parsed {
+		normalizedSource := strings.TrimSpace(source)
+		normalizedTarget := strings.TrimSpace(target)
+		if normalizedSource == "" || normalizedTarget == "" {
+			continue
+		}
+		if _, ok := upstreamSet[normalizedTarget]; ok {
+			kept[normalizedSource] = normalizedTarget
+			continue
+		}
+		dropped = append(dropped, normalizedSource+" -> "+normalizedTarget)
+	}
+	if len(dropped) == 0 {
+		return nil, false
+	}
+	sort.Strings(dropped)
+	encoded := ""
+	if len(kept) > 0 {
+		rawJSON, err := common.Marshal(kept)
+		if err != nil {
+			common.SysLog(fmt.Sprintf("upstream model sync: channel_id=%d failed to encode model_mapping; left unchanged", channel.Id))
+			return nil, false
+		}
+		encoded = string(rawJSON)
+	}
+	channel.ModelMapping = &encoded
+	return dropped, true
+}
+
+func duplicateModelNames(models string) []string {
+	seen := make(map[string]int)
+	var duplicates []string
+	for _, part := range strings.Split(models, ",") {
+		name := strings.TrimSpace(part)
+		if name == "" {
+			continue
+		}
+		seen[name]++
+		if seen[name] == 2 {
+			duplicates = append(duplicates, name)
+		}
+	}
+	return duplicates
 }
 
 func checkAndPersistChannelUpstreamModelUpdates(
@@ -512,48 +566,92 @@ func checkAndPersistChannelUpstreamModelUpdates(
 	settings *dto.ChannelOtherSettings,
 	force bool,
 	allowAutoApply bool,
-) (modelsChanged bool, autoAdded int, err error) {
+) (modelsChanged bool, autoAdded int, prunedModels []string, err error) {
 	now := common.GetTimestamp()
 	if !force {
 		minInterval := getUpstreamModelUpdateMinCheckIntervalSeconds()
 		if settings.UpstreamModelUpdateLastCheckTime > 0 &&
 			now-settings.UpstreamModelUpdateLastCheckTime < minInterval {
-			return false, 0, nil
+			return false, 0, nil, nil
 		}
 	}
 
-	pendingAddModels, pendingRemoveModels, fetchErr := collectPendingUpstreamModelChanges(channel, *settings)
+	upstreamModels, fetchErr := fetchChannelUpstreamModelIDs(channel)
 	settings.UpstreamModelUpdateLastCheckTime = now
 	if fetchErr != nil {
-		if err = updateChannelUpstreamModelSettings(channel, *settings, false); err != nil {
-			return false, 0, err
+		if err = updateChannelUpstreamModelSettings(channel, *settings, false, false); err != nil {
+			return false, 0, nil, err
 		}
-		return false, 0, fetchErr
+		return false, 0, nil, fetchErr
+	}
+	// An empty discovery response is not evidence that every local model was
+	// removed. Refuse to prune so a bad upstream reply cannot wipe the channel.
+	if len(upstreamModels) == 0 {
+		if err = updateChannelUpstreamModelSettings(channel, *settings, false, false); err != nil {
+			return false, 0, nil, err
+		}
+		return false, 0, nil, errors.New("upstream model list is empty; refusing to remove channel models")
 	}
 
+	originalModels := channel.Models
+	duplicates := duplicateModelNames(originalModels)
+	nextModels := normalizeModelNames(channel.GetModels())
+	upstreamSet := make(map[string]struct{}, len(upstreamModels))
+	for _, modelName := range upstreamModels {
+		upstreamSet[modelName] = struct{}{}
+	}
+	droppedMappings, mappingChanged := dropModelMappingsToMissingTargets(channel, upstreamSet)
+	pendingAddModels, pendingRemoveModels := collectPendingUpstreamModelChangesFromModels(
+		nextModels,
+		upstreamModels,
+		settings.UpstreamModelUpdateIgnoredModels,
+		normalizeChannelModelMapping(channel),
+	)
+	nextModels = subtractModelNames(nextModels, pendingRemoveModels)
+	prunedModels = pendingRemoveModels
+
 	if allowAutoApply && settings.UpstreamModelUpdateAutoSyncEnabled && len(pendingAddModels) > 0 {
-		originModels := normalizeModelNames(channel.GetModels())
-		mergedModels := mergeModelNames(originModels, pendingAddModels)
-		if len(mergedModels) > len(originModels) {
-			channel.Models = strings.Join(mergedModels, ",")
-			autoAdded = len(mergedModels) - len(originModels)
-			modelsChanged = true
-		}
+		beforeAdd := len(nextModels)
+		nextModels = mergeModelNames(nextModels, pendingAddModels)
+		autoAdded = len(nextModels) - beforeAdd
 		settings.UpstreamModelUpdateLastDetectedModels = []string{}
 	} else {
 		settings.UpstreamModelUpdateLastDetectedModels = pendingAddModels
 	}
-	settings.UpstreamModelUpdateLastRemovedModels = pendingRemoveModels
+	// Removals are applied immediately, so the pending-remove list is empty.
+	// The pruned list is the admin-visible record of what left the channel.
+	settings.UpstreamModelUpdateLastRemovedModels = nil
+	if len(prunedModels) > 0 {
+		settings.UpstreamModelUpdateLastPrunedModels = prunedModels
+		settings.UpstreamModelUpdateLastPrunedTime = now
+	}
+	if len(droppedMappings) > 0 {
+		settings.UpstreamModelUpdateLastDroppedMappings = droppedMappings
+	}
 
-	if err = updateChannelUpstreamModelSettings(channel, *settings, modelsChanged); err != nil {
-		return false, autoAdded, err
+	finalModels := strings.Join(nextModels, ",")
+	modelsChanged = finalModels != originalModels
+	if modelsChanged {
+		channel.Models = finalModels
+	}
+	if err = updateChannelUpstreamModelSettings(channel, *settings, modelsChanged, mappingChanged); err != nil {
+		return false, autoAdded, prunedModels, err
 	}
 	if modelsChanged {
 		if err = channel.UpdateAbilities(nil); err != nil {
-			return true, autoAdded, err
+			return true, autoAdded, prunedModels, err
 		}
 	}
-	return modelsChanged, autoAdded, nil
+	if len(prunedModels) > 0 || len(droppedMappings) > 0 || len(duplicates) > 0 {
+		common.SysLog(fmt.Sprintf(
+			"upstream model sync: channel_id=%d pruned=%s dropped_mappings=%s deduped=%s",
+			channel.Id,
+			strings.Join(prunedModels, ","),
+			strings.Join(droppedMappings, "; "),
+			strings.Join(duplicates, ","),
+		))
+	}
+	return modelsChanged, autoAdded, prunedModels, nil
 }
 
 func refreshChannelRuntimeCache() {
@@ -750,7 +848,7 @@ scanLoop:
 			}
 
 			checkedChannels++
-			modelsChanged, autoAdded, err := checkAndPersistChannelUpstreamModelUpdates(channel, &settings, force, allowAutoApply)
+			modelsChanged, autoAdded, prunedModels, err := checkAndPersistChannelUpstreamModelUpdates(channel, &settings, force, allowAutoApply)
 			if err != nil {
 				failedChannels++
 				failedChannelIDs = append(failedChannelIDs, channel.Id)
@@ -758,7 +856,7 @@ scanLoop:
 				continue
 			}
 			currentAddModels := normalizeModelNames(settings.UpstreamModelUpdateLastDetectedModels)
-			currentRemoveModels := normalizeModelNames(settings.UpstreamModelUpdateLastRemovedModels)
+			currentRemoveModels := normalizeModelNames(prunedModels)
 			currentAddCount := len(currentAddModels) + autoAdded
 			currentRemoveCount := len(currentRemoveModels)
 			detectedAddModels += currentAddCount
@@ -929,7 +1027,7 @@ func DetectChannelUpstreamModelUpdates(c *gin.Context) {
 	}
 
 	settings := channel.GetOtherSettings()
-	modelsChanged, autoAdded, err := checkAndPersistChannelUpstreamModelUpdates(channel, &settings, true, false)
+	modelsChanged, autoAdded, prunedModels, err := checkAndPersistChannelUpstreamModelUpdates(channel, &settings, true, false)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -946,6 +1044,7 @@ func DetectChannelUpstreamModelUpdates(c *gin.Context) {
 			ChannelName:     channel.Name,
 			AddModels:       normalizeModelNames(settings.UpstreamModelUpdateLastDetectedModels),
 			RemoveModels:    normalizeModelNames(settings.UpstreamModelUpdateLastRemovedModels),
+			PrunedModels:    normalizeModelNames(prunedModels),
 			LastCheckTime:   settings.UpstreamModelUpdateLastCheckTime,
 			AutoAddedModels: autoAdded,
 		},
@@ -990,7 +1089,7 @@ func applyChannelUpstreamModelUpdates(
 	settings.UpstreamModelUpdateLastRemovedModels = remainingRemoveModels
 	settings.UpstreamModelUpdateLastCheckTime = common.GetTimestamp()
 
-	if err := updateChannelUpstreamModelSettings(channel, settings, modelsChanged); err != nil {
+	if err := updateChannelUpstreamModelSettings(channel, settings, modelsChanged, false); err != nil {
 		return nil, nil, nil, nil, false, err
 	}
 

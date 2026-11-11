@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -91,20 +93,108 @@ func TestPricingGroupRatioPolicyRejectsUnknownGroups(t *testing.T) {
 // provider settles each model through a private group it never publishes. max
 // therefore over-priced whole families by up to 15x, so median is the default
 // and calibration corrects the rest from real invoices.
-func TestPricingGroupRatioPolicyDefaultsToMedian(t *testing.T) {
+func TestPricingGroupRatioPolicyDefaultsToEffectiveGroup(t *testing.T) {
 	t.Setenv("PRICING_GROUP_RATIO_POLICY", "")
-	assert.Equal(t, pricingGroupRatioPolicyMedian, pricingGroupRatioPolicy())
+	assert.Equal(t, pricingGroupRatioPolicyKeyGroup, pricingGroupRatioPolicy())
 	t.Setenv("PRICING_GROUP_RATIO_POLICY", "MAX")
 	assert.Equal(t, pricingGroupRatioPolicyMax, pricingGroupRatioPolicy())
-	t.Setenv("PRICING_GROUP_RATIO_POLICY", "key_group")
-	assert.Equal(t, pricingGroupRatioPolicyKeyGroup, pricingGroupRatioPolicy())
-	t.Setenv("PRICING_GROUP_RATIO_POLICY", "nonsense")
+	t.Setenv("PRICING_GROUP_RATIO_POLICY", "median")
 	assert.Equal(t, pricingGroupRatioPolicyMedian, pricingGroupRatioPolicy())
+	t.Setenv("PRICING_GROUP_RATIO_POLICY", "nonsense")
+	assert.Equal(t, pricingGroupRatioPolicyKeyGroup, pricingGroupRatioPolicy())
+}
+
+func TestEffectiveAutoGroupSkipsGroupsTheKeyCannotUse(t *testing.T) {
+	payload := ratioTestPayload()
+	payload.AutoGroups = []string{"codex-plus", "claude-kiro", "claude-max", "gemini"}
+	payload.UsableGroup = map[string]string{
+		"claude-max": "Claude Max",
+		"gemini":     "Gemini",
+	}
+	payload.KeyGroup = "auto"
+	item := upstreamPriceItem{
+		ModelName:       "claude-haiku-4-5",
+		ModelRatio:      0.5,
+		CompletionRatio: 4,
+		EnableGroups:    []string{"claude-kiro", "claude-max", "gemini"},
+	}
+
+	choice, warnings := resolveUpstreamGroupRatio(payload, item, pricingGroupRatioPolicyKeyGroup)
+	require.Empty(t, warnings)
+	assert.Equal(t, "claude-max", choice.Group)
+	assert.InDelta(t, 0.2647, choice.Ratio, 1e-9, "model_group_ratio for the effective group wins")
+
+	input, output, err := upstreamCostUSD(item, choice.Ratio)
+	require.NoError(t, err)
+	assert.InDelta(t, 0.5*2*0.2647, input, 1e-9)
+	assert.InDelta(t, 0.5*2*4*0.2647, output, 1e-9)
+
+	payload.KeyGroup = "gemini"
+	choice, warnings = resolveUpstreamGroupRatio(payload, item, pricingGroupRatioPolicyKeyGroup)
+	require.Empty(t, warnings)
+	assert.Equal(t, "gemini", choice.Group)
+	assert.InDelta(t, 0.3, choice.Ratio, 1e-9)
+
+	payload.UsableGroup = map[string]string{"gemini": "Gemini"}
+	payload.KeyGroup = "auto"
+	onlyKiro := upstreamPriceItem{ModelName: "missing", EnableGroups: []string{"claude-kiro"}}
+	choice, warnings = resolveUpstreamGroupRatio(payload, onlyKiro, pricingGroupRatioPolicyKeyGroup)
+	assert.Zero(t, choice.Ratio)
+	require.NotEmpty(t, warnings)
 }
 
 // ---------------------------------------------------------------------------
 // P0-6 offer TTL
 // ---------------------------------------------------------------------------
+
+func TestFetchPricingOfferUsesEffectiveAutoGroup(t *testing.T) {
+	t.Setenv("PRICING_GROUP_RATIO_POLICY", "")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/pricing", r.URL.Path)
+		assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))
+		_, _ = w.Write([]byte(`{
+          "success": true,
+          "auto_groups": ["codex-plus", "default", "claude-max"],
+          "usable_group": {"default": "Default", "claude-max": "Claude"},
+          "group_ratio": {"codex-plus": 0.1, "default": 0.23, "claude-max": 1.5},
+          "data": [{
+            "model_name": "claude-haiku-4-5",
+            "quota_type": 0,
+            "model_ratio": 0.5,
+            "completion_ratio": 4,
+            "enable_groups": ["codex-plus", "claude-max"]
+          }]
+        }`))
+	}))
+	t.Cleanup(server.Close)
+
+	baseURL := server.URL
+	channel := &model.Channel{
+		Id: 7, Key: "sk-test", BaseURL: &baseURL, Models: "claude-haiku-4-5",
+	}
+	offers, warnings, err := fetchPricingOffersForChannel(context.Background(), channel)
+	require.NoError(t, err)
+	require.Empty(t, warnings)
+	require.Len(t, offers, 1)
+	assert.Equal(t, "claude-max", offers[0].UpstreamGroup)
+	require.NotNil(t, offers[0].UpstreamGroupRatio)
+	assert.InDelta(t, 1.5, *offers[0].UpstreamGroupRatio, 1e-9)
+	assert.InDelta(t, 1, offers[0].InputCost, 1e-9)
+	assert.InDelta(t, 4, offers[0].OutputCost, 1e-9)
+}
+
+func TestPublishedSellPriceAndMarginStayComputed(t *testing.T) {
+	entry := model.ModelPricingEntry{Effective: model.PricingValues{
+		"billing_setting.billing_expr": "p * 3 + c * 12",
+	}}
+	input, output, ok := publishedTokenUnitPrices(entry)
+	require.True(t, ok)
+	assert.InDelta(t, 3, input, 1e-9)
+	assert.InDelta(t, 12, output, 1e-9)
+	margin := marginBPS(3, 1)
+	require.NotNil(t, margin)
+	assert.Equal(t, 6667, *margin)
+}
 
 func TestPricingOfferTTLConfig(t *testing.T) {
 	t.Setenv("PRICING_OFFER_TTL_MINUTES", "")

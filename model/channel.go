@@ -21,25 +21,35 @@ import (
 )
 
 type Channel struct {
-	Id                 int     `json:"id"`
-	Type               int     `json:"type" gorm:"default:0"`
-	Key                string  `json:"key" gorm:"not null"`
-	OpenAIOrganization *string `json:"openai_organization"`
-	TestModel          *string `json:"test_model"`
-	Status             int     `json:"status" gorm:"default:1"`
-	Name               string  `json:"name" gorm:"index"`
-	Weight             *uint   `json:"weight" gorm:"default:0"`
-	CreatedTime        int64   `json:"created_time" gorm:"bigint"`
-	TestTime           int64   `json:"test_time" gorm:"bigint"`
-	ResponseTime       int     `json:"response_time"` // in milliseconds
-	BaseURL            *string `json:"base_url" gorm:"column:base_url;default:''"`
-	Other              string  `json:"other"`
-	Balance            float64 `json:"balance"` // in USD
-	BalanceUpdatedTime int64   `json:"balance_updated_time" gorm:"bigint"`
-	Models             string  `json:"models"`
-	Group              string  `json:"group" gorm:"type:varchar(64);default:'default'"`
-	UsedQuota          int64   `json:"used_quota" gorm:"bigint;default:0"`
-	ModelMapping       *string `json:"model_mapping" gorm:"type:text"`
+	Id   int    `json:"id"`
+	Type int    `json:"type" gorm:"default:0"`
+	Key  string `json:"key" gorm:"not null"`
+	// UpstreamAccessToken is a new-api system access token used only to read
+	// upstream quota. It is never serialized to API clients.
+	UpstreamAccessToken string `json:"-" gorm:"column:upstream_access_token;type:text"`
+	// UpstreamAccessTokenWrite accepts a replacement token from an admin save.
+	// An empty value keeps the stored token. It is not a database column.
+	UpstreamAccessTokenWrite string `json:"upstream_access_token,omitempty" gorm:"-"`
+	UpstreamUserID           int    `json:"upstream_user_id" gorm:"column:upstream_user_id;default:0"`
+	// UpstreamAccessTokenConfigured reports whether a token is stored without
+	// returning the token itself.
+	UpstreamAccessTokenConfigured bool    `json:"upstream_access_token_configured,omitempty" gorm:"-"`
+	OpenAIOrganization            *string `json:"openai_organization"`
+	TestModel                     *string `json:"test_model"`
+	Status                        int     `json:"status" gorm:"default:1"`
+	Name                          string  `json:"name" gorm:"index"`
+	Weight                        *uint   `json:"weight" gorm:"default:0"`
+	CreatedTime                   int64   `json:"created_time" gorm:"bigint"`
+	TestTime                      int64   `json:"test_time" gorm:"bigint"`
+	ResponseTime                  int     `json:"response_time"` // in milliseconds
+	BaseURL                       *string `json:"base_url" gorm:"column:base_url;default:''"`
+	Other                         string  `json:"other"`
+	Balance                       float64 `json:"balance"` // in USD
+	BalanceUpdatedTime            int64   `json:"balance_updated_time" gorm:"bigint"`
+	Models                        string  `json:"models"`
+	Group                         string  `json:"group" gorm:"type:varchar(64);default:'default'"`
+	UsedQuota                     int64   `json:"used_quota" gorm:"bigint;default:0"`
+	ModelMapping                  *string `json:"model_mapping" gorm:"type:text"`
 	//MaxInputTokens     *int    `json:"max_input_tokens" gorm:"default:0"`
 	StatusCodeMapping *string `json:"status_code_mapping" gorm:"type:varchar(1024);default:''"`
 	Priority          *int64  `json:"priority" gorm:"bigint;default:0"`
@@ -298,6 +308,72 @@ func (channel *Channel) GetModels() []string {
 	return strings.Split(strings.Trim(channel.Models, ","), ",")
 }
 
+// DeduplicateModelList trims and removes repeated model names while keeping
+// the first occurrence. Channel model lists are a comma-separated string, so
+// duplicates otherwise survive into abilities and upstream tests.
+func DeduplicateModelList(models string) string {
+	if strings.TrimSpace(models) == "" {
+		return ""
+	}
+	seen := make(map[string]struct{})
+	parts := strings.Split(models, ",")
+	deduped := make([]string, 0, len(parts))
+	for _, part := range parts {
+		name := strings.TrimSpace(part)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		deduped = append(deduped, name)
+	}
+	return strings.Join(deduped, ",")
+}
+
+func (channel *Channel) deduplicateModels() {
+	if channel == nil {
+		return
+	}
+	channel.Models = DeduplicateModelList(channel.Models)
+}
+
+func (channel *Channel) consumeUpstreamAccessTokenWrite() {
+	if channel == nil {
+		return
+	}
+	token := strings.TrimSpace(channel.UpstreamAccessTokenWrite)
+	channel.UpstreamAccessTokenWrite = ""
+	if token == "" {
+		return
+	}
+	channel.UpstreamAccessToken = token
+	channel.UpstreamAccessTokenConfigured = true
+}
+
+// RedactUpstreamAccessToken clears every in-memory copy of the upstream access
+// token before a channel is returned to an API client.
+func (channel *Channel) RedactUpstreamAccessToken() {
+	if channel == nil {
+		return
+	}
+	if strings.TrimSpace(channel.UpstreamAccessToken) != "" {
+		channel.UpstreamAccessTokenConfigured = true
+	}
+	channel.UpstreamAccessToken = ""
+	channel.UpstreamAccessTokenWrite = ""
+}
+
+func (channel *Channel) AfterFind(_ *gorm.DB) error {
+	if channel == nil {
+		return nil
+	}
+	channel.UpstreamAccessTokenConfigured = strings.TrimSpace(channel.UpstreamAccessToken) != ""
+	channel.UpstreamAccessTokenWrite = ""
+	return nil
+}
+
 func (channel *Channel) GetGroups() []string {
 	if channel.Group == "" {
 		return []string{}
@@ -451,6 +527,10 @@ func BatchInsertChannels(channels []Channel) error {
 	if len(channels) == 0 {
 		return nil
 	}
+	for i := range channels {
+		channels[i].deduplicateModels()
+		channels[i].consumeUpstreamAccessTokenWrite()
+	}
 	tx := DB.Begin()
 	if tx.Error != nil {
 		return tx.Error
@@ -544,6 +624,8 @@ func (channel *Channel) GetStatusCodeMapping() string {
 }
 
 func (channel *Channel) Insert() error {
+	channel.deduplicateModels()
+	channel.consumeUpstreamAccessTokenWrite()
 	var err error
 	err = DB.Create(channel).Error
 	if err != nil {
@@ -554,6 +636,8 @@ func (channel *Channel) Insert() error {
 }
 
 func (channel *Channel) Update() error {
+	channel.deduplicateModels()
+	channel.consumeUpstreamAccessTokenWrite()
 	// If this is a multi-key channel, recalculate MultiKeySize based on the current key list to avoid inconsistency after editing keys
 	if channel.ChannelInfo.IsMultiKey {
 		var keyStr string
@@ -841,7 +925,8 @@ func EditChannelByTag(tag string, newTag *string, modelMapping *string, models *
 	}
 	if models != nil && *models != "" {
 		shouldReCreateAbilities = true
-		updateData.Models = *models
+		deduped := DeduplicateModelList(*models)
+		updateData.Models = deduped
 	}
 	if group != nil && *group != "" {
 		shouldReCreateAbilities = true

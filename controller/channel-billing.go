@@ -492,6 +492,10 @@ func updateStandardChannelBalance(channel *model.Channel) (float64, error) {
 		return updateChannelOpenRouterBalance(channel)
 	case constant.ChannelTypeMoonshot:
 		return updateChannelMoonshotBalance(channel)
+	case constant.ChannelTypeNewAPI:
+		// New API sites answer /v1/dashboard/billing/subscription with a bogus
+		// hard_limit_usd. Quota lives on /api/user/self and must not use that path.
+		return updateNewAPIChannelBalance(channel)
 	default:
 		return 0, errors.New("尚未实现")
 	}
@@ -525,6 +529,174 @@ func updateStandardChannelBalance(channel *model.Channel) (float64, error) {
 	balance := subscription.HardLimitUSD - usage.TotalUsage/100
 	channel.UpdateBalance(balance)
 	return balance, nil
+}
+
+const newAPIBalanceNotConfiguredMessage = "New API balance requires an upstream access token and upstream user id. The channel API key cannot read quota."
+
+func redactSecret(err error, secret string) error {
+	if err == nil {
+		return nil
+	}
+	secret = strings.TrimSpace(secret)
+	if secret == "" {
+		return err
+	}
+	message := strings.ReplaceAll(err.Error(), secret, "[REDACTED]")
+	if message == err.Error() {
+		return err
+	}
+	return errors.New(message)
+}
+
+func parseJSONInt(raw json.RawMessage) (int64, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0, errors.New("missing number")
+	}
+	var whole int64
+	if err := common.Unmarshal(raw, &whole); err == nil {
+		return whole, nil
+	}
+	var decimalNumber float64
+	if err := common.Unmarshal(raw, &decimalNumber); err != nil {
+		return 0, err
+	}
+	if math.IsNaN(decimalNumber) || math.IsInf(decimalNumber, 0) || decimalNumber > math.MaxInt64 || decimalNumber < math.MinInt64 {
+		return 0, errors.New("number is out of range")
+	}
+	return int64(decimalNumber), nil
+}
+
+func parseNewAPIQuotaPerUnit(body []byte) (float64, error) {
+	var envelope struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+		Data    struct {
+			QuotaPerUnit float64 `json:"quota_per_unit"`
+		} `json:"data"`
+		QuotaPerUnit float64 `json:"quota_per_unit"`
+	}
+	if err := common.Unmarshal(body, &envelope); err != nil {
+		return 0, errors.New("invalid upstream status response")
+	}
+	unit := envelope.Data.QuotaPerUnit
+	if unit <= 0 {
+		unit = envelope.QuotaPerUnit
+	}
+	if unit <= 0 || math.IsNaN(unit) || math.IsInf(unit, 0) {
+		if strings.TrimSpace(envelope.Message) != "" {
+			return 0, errors.New(strings.TrimSpace(envelope.Message))
+		}
+		return 0, errors.New("upstream status did not include quota_per_unit")
+	}
+	return unit, nil
+}
+
+func parseNewAPISelfQuota(body []byte) (int64, int64, string, error) {
+	var envelope struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+		Data    struct {
+			Quota     json.RawMessage `json:"quota"`
+			UsedQuota json.RawMessage `json:"used_quota"`
+			Group     string          `json:"group"`
+		} `json:"data"`
+	}
+	if err := common.Unmarshal(body, &envelope); err != nil {
+		return 0, 0, "", errors.New("invalid upstream user response")
+	}
+	if !envelope.Success {
+		message := strings.TrimSpace(envelope.Message)
+		if message == "" {
+			message = "upstream user quota request failed"
+		}
+		return 0, 0, "", errors.New(message)
+	}
+	quota, err := parseJSONInt(envelope.Data.Quota)
+	if err != nil {
+		return 0, 0, "", errors.New("upstream user response did not include quota")
+	}
+	used, err := parseJSONInt(envelope.Data.UsedQuota)
+	if err != nil {
+		return 0, 0, "", errors.New("upstream user response did not include used_quota")
+	}
+	return quota, used, strings.TrimSpace(envelope.Data.Group), nil
+}
+
+func newAPIBalanceUSD(quota int64, used int64, quotaPerUnit float64) (float64, error) {
+	if quotaPerUnit <= 0 || math.IsNaN(quotaPerUnit) || math.IsInf(quotaPerUnit, 0) {
+		return 0, errors.New("upstream status did not include quota_per_unit")
+	}
+	balance, _ := decimal.NewFromInt(quota).Sub(decimal.NewFromInt(used)).Div(decimal.NewFromFloat(quotaPerUnit)).Float64()
+	if math.IsNaN(balance) || math.IsInf(balance, 0) {
+		return 0, errors.New("upstream quota could not be converted to a balance")
+	}
+	return balance, nil
+}
+
+func updateNewAPIChannelBalance(channel *model.Channel) (float64, error) {
+	token := strings.TrimSpace(channel.UpstreamAccessToken)
+	if token == "" || channel.UpstreamUserID <= 0 {
+		return 0, errors.New(newAPIBalanceNotConfiguredMessage)
+	}
+	baseURL := strings.TrimRight(strings.TrimSpace(channel.GetBaseURL()), "/")
+	if baseURL == "" {
+		return 0, errors.New("New API channel base URL cannot be empty")
+	}
+	statusBody, err := GetResponseBody(http.MethodGet, baseURL+"/api/status", channel, nil)
+	if err != nil {
+		return 0, redactSecret(err, token)
+	}
+	quotaPerUnit, err := parseNewAPIQuotaPerUnit(statusBody)
+	if err != nil {
+		return 0, redactSecret(err, token)
+	}
+	headers := make(http.Header)
+	headers.Set("Authorization", token)
+	headers.Set("New-Api-User", strconv.Itoa(channel.UpstreamUserID))
+	selfBody, err := GetResponseBody(http.MethodGet, baseURL+"/api/user/self", channel, headers)
+	if err != nil {
+		return 0, redactSecret(err, token)
+	}
+	quota, used, _, err := parseNewAPISelfQuota(selfBody)
+	if err != nil {
+		return 0, redactSecret(err, token)
+	}
+	balance, err := newAPIBalanceUSD(quota, used, quotaPerUnit)
+	if err != nil {
+		return 0, err
+	}
+	channel.UpdateBalance(balance)
+	return balance, nil
+}
+
+func GetChannelUpstreamCost(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		common.ApiError(c, errors.New("invalid channel id"))
+		return
+	}
+	channel, err := model.GetChannelById(id, true)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if channel.Type != constant.ChannelTypeNewAPI {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "Upstream cost comparison is available for New API channels",
+		})
+		return
+	}
+	report, err := service.CompareChannelUpstreamCosts(c.Request.Context(), channel)
+	if err != nil {
+		common.ApiError(c, redactSecret(err, channel.UpstreamAccessToken))
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    report,
+	})
 }
 
 func UpdateChannelBalance(c *gin.Context) {

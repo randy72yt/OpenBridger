@@ -345,10 +345,11 @@ func TestFailedAdvancedCustomDetectionDoesNotStageFullRemoval(t *testing.T) {
 	channel.SetOtherSettings(settings)
 	require.NoError(t, db.Create(channel).Error)
 
-	modelsChanged, autoAdded, err := checkAndPersistChannelUpstreamModelUpdates(channel, &settings, true, true)
+	modelsChanged, autoAdded, pruned, err := checkAndPersistChannelUpstreamModelUpdates(channel, &settings, true, true)
 	require.ErrorContains(t, err, "no valid model IDs")
 	require.False(t, modelsChanged)
 	require.Zero(t, autoAdded)
+	require.Empty(t, pruned)
 	require.Empty(t, settings.UpstreamModelUpdateLastDetectedModels)
 	require.Empty(t, settings.UpstreamModelUpdateLastRemovedModels)
 
@@ -585,6 +586,129 @@ func TestShouldSendUpstreamModelUpdateNotification(t *testing.T) {
 	require.True(t, shouldSendUpstreamModelUpdateNotification(baseTime+10000, 0, 4))
 	require.True(t, shouldSendUpstreamModelUpdateNotification(baseTime+90000, 7, 0))
 	require.True(t, shouldSendUpstreamModelUpdateNotification(baseTime+90001, 0, 0))
+}
+
+func TestUpstreamModelCheckPrunesRemovedModelsDedupesAndRebuildsAbilities(t *testing.T) {
+	db := setupModelListControllerTestDB(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/models", r.URL.Path)
+		_, _ = w.Write([]byte(`{"data":[{"id":"gpt-5"},{"id":"claude-haiku-4-5"}]}`))
+	}))
+	t.Cleanup(server.Close)
+
+	mapping := `{
+		"dead-alias": "missing-target",
+		"live-alias": "gpt-5",
+		"keep": "gpt-5"
+	}`
+	baseURL := server.URL
+	channel := &model.Channel{
+		Name:         "prune",
+		Type:         constant.ChannelTypeOpenAI,
+		Key:          "secret-key",
+		BaseURL:      &baseURL,
+		Models:       " gpt-5, gpt-5,gone-model, dead-alias, live-alias ",
+		Group:        "default",
+		Status:       common.ChannelStatusEnabled,
+		ModelMapping: &mapping,
+	}
+	settings := dto.ChannelOtherSettings{UpstreamModelUpdateCheckEnabled: true}
+	channel.SetOtherSettings(settings)
+	require.NoError(t, db.Create(channel).Error)
+	require.NoError(t, channel.AddAbilities(nil))
+
+	modelsChanged, autoAdded, pruned, err := checkAndPersistChannelUpstreamModelUpdates(channel, &settings, true, false)
+	require.NoError(t, err)
+	require.True(t, modelsChanged)
+	require.Zero(t, autoAdded)
+	require.Equal(t, []string{"gone-model", "dead-alias"}, pruned)
+
+	reloaded, err := model.GetChannelById(channel.Id, true)
+	require.NoError(t, err)
+	require.Equal(t, "gpt-5,live-alias", reloaded.Models)
+	kept := map[string]string{}
+	require.NoError(t, common.UnmarshalJsonStr(reloaded.GetModelMapping(), &kept))
+	require.Equal(t, map[string]string{"live-alias": "gpt-5", "keep": "gpt-5"}, kept)
+
+	persisted := reloaded.GetOtherSettings()
+	require.Equal(t, []string{"gone-model", "dead-alias"}, persisted.UpstreamModelUpdateLastPrunedModels)
+	require.Equal(t, []string{"dead-alias -> missing-target"}, persisted.UpstreamModelUpdateLastDroppedMappings)
+	require.Empty(t, persisted.UpstreamModelUpdateLastRemovedModels)
+	require.Equal(t, []string{"claude-haiku-4-5"}, persisted.UpstreamModelUpdateLastDetectedModels)
+	require.NotContains(t, reloaded.Models, "secret-key")
+
+	var abilities []model.Ability
+	require.NoError(t, db.Where("channel_id = ?", channel.Id).Find(&abilities).Error)
+	require.Len(t, abilities, 2)
+	abilityModels := []string{abilities[0].Model, abilities[1].Model}
+	require.ElementsMatch(t, []string{"gpt-5", "live-alias"}, abilityModels)
+
+	var catalog int64
+	require.NoError(t, db.Model(&model.Model{}).Count(&catalog).Error)
+	require.Zero(t, catalog, "pruning a channel model list must not delete catalog rows")
+}
+
+func TestUpstreamModelCheckRefusesEmptyUpstreamList(t *testing.T) {
+	db := setupModelListControllerTestDB(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	t.Cleanup(server.Close)
+
+	baseURL := server.URL
+	channel := &model.Channel{
+		Name:    "empty-upstream",
+		Type:    constant.ChannelTypeOpenAI,
+		Key:     "secret-key",
+		BaseURL: &baseURL,
+		Models:  "gpt-5,o3",
+		Group:   "default",
+		Status:  common.ChannelStatusEnabled,
+	}
+	settings := dto.ChannelOtherSettings{
+		UpstreamModelUpdateCheckEnabled:      true,
+		UpstreamModelUpdateLastRemovedModels: []string{"already-recorded"},
+	}
+	channel.SetOtherSettings(settings)
+	require.NoError(t, db.Create(channel).Error)
+
+	modelsChanged, autoAdded, pruned, err := checkAndPersistChannelUpstreamModelUpdates(channel, &settings, true, true)
+	require.ErrorContains(t, err, "refusing to remove channel models")
+	require.False(t, modelsChanged)
+	require.Zero(t, autoAdded)
+	require.Empty(t, pruned)
+
+	reloaded, err := model.GetChannelById(channel.Id, true)
+	require.NoError(t, err)
+	require.Equal(t, "gpt-5,o3", reloaded.Models)
+	require.Equal(t, []string{"already-recorded"}, reloaded.GetOtherSettings().UpstreamModelUpdateLastRemovedModels)
+}
+
+func TestChannelSaveDeduplicatesModelListAndAbilities(t *testing.T) {
+	db := setupModelListControllerTestDB(t)
+	channel := &model.Channel{
+		Name:   "dedupe",
+		Type:   constant.ChannelTypeOpenAI,
+		Key:    "secret-key",
+		Models: "gpt-5, gpt-5, claude ",
+		Group:  "default",
+		Status: common.ChannelStatusEnabled,
+	}
+	require.NoError(t, channel.Insert())
+	require.Equal(t, "gpt-5,claude", channel.Models)
+
+	channel.Models = "gpt-5,gpt-5,claude,claude"
+	require.NoError(t, channel.Update())
+
+	reloaded, err := model.GetChannelById(channel.Id, true)
+	require.NoError(t, err)
+	require.Equal(t, "gpt-5,claude", reloaded.Models)
+
+	var abilities []model.Ability
+	require.NoError(t, db.Where("channel_id = ?", channel.Id).Find(&abilities).Error)
+	require.Len(t, abilities, 2)
+	abilityModels := []string{abilities[0].Model, abilities[1].Model}
+	require.ElementsMatch(t, []string{"claude", "gpt-5"}, abilityModels)
 }
 
 func TestDetectAllChannelUpstreamModelUpdatesRejectsExistingActiveTask(t *testing.T) {
