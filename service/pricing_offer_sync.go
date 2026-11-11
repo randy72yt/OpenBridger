@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -51,7 +52,10 @@ type upstreamPricingResponse struct {
 	GroupRatio      map[string]float64            `json:"group_ratio"`
 	ModelGroupRatio map[string]map[string]float64 `json:"model_group_ratio"`
 	AutoGroups      []string                      `json:"auto_groups"`
+	UsableGroup     map[string]string             `json:"usable_group"`
 	Data            []upstreamPriceItem           `json:"data"`
+	// KeyGroup is the upstream account group. "auto" walks AutoGroups.
+	KeyGroup string `json:"-"`
 }
 
 type upstreamPriceItem struct {
@@ -176,7 +180,7 @@ func upstreamPricingEndpoint(channel *model.Channel, baseURL *url.URL) (*url.URL
 	return &resolved, nil
 }
 
-func fetchPricingOffersForChannel(ctx context.Context, channel *model.Channel) ([]model.UpstreamModelOffer, []string, error) {
+func loadUpstreamPricing(ctx context.Context, channel *model.Channel) (*upstreamPricingResponse, *url.URL, error) {
 	baseURL, err := url.Parse(strings.TrimSpace(channel.GetBaseURL()))
 	if err != nil || baseURL.Scheme == "" || baseURL.Host == "" {
 		return nil, nil, errors.New("channel has no valid upstream base URL")
@@ -185,7 +189,6 @@ func fetchPricingOffersForChannel(ctx context.Context, channel *model.Channel) (
 	if err != nil {
 		return nil, nil, err
 	}
-
 	key, _, keyErr := channel.GetNextEnabledKey()
 	if keyErr != nil || strings.TrimSpace(key) == "" {
 		return nil, nil, errors.New("channel has no enabled API key")
@@ -213,6 +216,15 @@ func fetchPricingOffersForChannel(ctx context.Context, channel *model.Channel) (
 			payload.Message = "upstream pricing request failed"
 		}
 		return nil, nil, errors.New(payload.Message)
+	}
+	payload.KeyGroup = lookupNewAPIKeyGroup(ctx, channel)
+	return &payload, pricingURL, nil
+}
+
+func fetchPricingOffersForChannel(ctx context.Context, channel *model.Channel) ([]model.UpstreamModelOffer, []string, error) {
+	payload, pricingURL, err := loadUpstreamPricing(ctx, channel)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	allowedModels := make(map[string]struct{})
@@ -250,7 +262,7 @@ func fetchPricingOffersForChannel(ctx context.Context, channel *model.Channel) (
 		if len(allowedModels) > 0 && !upstreamAllowed && !publicAllowed {
 			continue
 		}
-		groupRatio, warningsForModel := resolveUpstreamGroupRatio(&payload, item, policy)
+		groupRatio, warningsForModel := resolveUpstreamGroupRatio(payload, item, policy)
 		if len(warningsForModel) > 0 {
 			warnings = append(warnings, warningsForModel...)
 			continue
@@ -298,26 +310,23 @@ const (
 )
 
 // pricingGroupRatioPolicy selects how the settlement multiplier is chosen when
-// an upstream model is served by several groups. A static /api/pricing response
-// does not reveal which group a runtime request will settle on, so operators
-// must state the assumption explicitly.
+// an upstream model is served by several groups.
 //
-// key_group follows the provider's own auto_groups order, max/min bound the
-// uncertainty, and median is the neutral estimate. Median is the default
-// because measuring real traffic showed per-model ratios spanning 0.002-1.0 on
-// the same response: max over-priced models by up to 15x while the private
-// settlement group sat near the median. Calibration supersedes this guess as
-// soon as a model has traffic.
+// The default, key_group, uses the account group. For group "auto" that is the
+// first auto_groups entry that lists the model in enable_groups and that
+// usable_group allows. max, min, and median remain explicit overrides.
+// Calibration still replaces this ratio once a model has measured traffic.
+// Choosing a ratio never publishes a sell price.
 func pricingGroupRatioPolicy() string {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("PRICING_GROUP_RATIO_POLICY"))) {
 	case pricingGroupRatioPolicyMax:
 		return pricingGroupRatioPolicyMax
 	case pricingGroupRatioPolicyMin:
 		return pricingGroupRatioPolicyMin
-	case pricingGroupRatioPolicyKeyGroup:
-		return pricingGroupRatioPolicyKeyGroup
-	default:
+	case pricingGroupRatioPolicyMedian:
 		return pricingGroupRatioPolicyMedian
+	default:
+		return pricingGroupRatioPolicyKeyGroup
 	}
 }
 
@@ -421,15 +430,58 @@ func resolveUpstreamGroupRatio(payload *upstreamPricingResponse, item upstreamPr
 		chosen.Ratio = median
 		return chosen, nil
 	default:
-		for _, autoGroup := range payload.AutoGroups {
-			for _, candidate := range candidates {
-				if candidate.Group == autoGroup {
-					return candidate, nil
-				}
-			}
+		if choice, ok := effectiveUpstreamGroup(payload, item); ok {
+			return choice, nil
 		}
 		return upstreamRatioChoice{}, []string{ratioWarning(item, payload, candidates)}
 	}
+}
+
+func groupUsable(payload *upstreamPricingResponse, group string) bool {
+	if payload == nil || len(payload.UsableGroup) == 0 {
+		return true
+	}
+	_, ok := payload.UsableGroup[group]
+	return ok
+}
+
+func groupServesModel(item upstreamPriceItem, group string) bool {
+	for _, enabled := range item.EnableGroups {
+		enabled = strings.TrimSpace(enabled)
+		if enabled == "all" || enabled == group {
+			return true
+		}
+	}
+	return false
+}
+
+// effectiveUpstreamGroup is the group a new-api key actually settles on.
+// A concrete key group is used directly. Group "auto" walks auto_groups and
+// picks the first group that can serve the model and that the key can use.
+func effectiveUpstreamGroup(payload *upstreamPricingResponse, item upstreamPriceItem) (upstreamRatioChoice, bool) {
+	if payload == nil {
+		return upstreamRatioChoice{}, false
+	}
+	keyGroup := strings.TrimSpace(payload.KeyGroup)
+	if keyGroup != "" && !strings.EqualFold(keyGroup, "auto") {
+		if groupServesModel(item, keyGroup) && groupUsable(payload, keyGroup) {
+			return payload.ratioFor(item.ModelName, keyGroup)
+		}
+		return upstreamRatioChoice{}, false
+	}
+	for _, group := range payload.AutoGroups {
+		group = strings.TrimSpace(group)
+		if group == "" || strings.EqualFold(group, "auto") {
+			continue
+		}
+		if !groupUsable(payload, group) || !groupServesModel(item, group) {
+			continue
+		}
+		if choice, ok := payload.ratioFor(item.ModelName, group); ok {
+			return choice, true
+		}
+	}
+	return upstreamRatioChoice{}, false
 }
 
 func ratioWarning(item upstreamPriceItem, payload *upstreamPricingResponse, candidates []upstreamRatioChoice) string {
@@ -446,6 +498,183 @@ func ratioWarning(item upstreamPriceItem, payload *upstreamPricingResponse, cand
 
 func trimFloat(value float64) string {
 	return strconv.FormatFloat(value, 'f', -1, 64)
+}
+
+func lookupNewAPIKeyGroup(ctx context.Context, channel *model.Channel) string {
+	if channel == nil || channel.Type != constant.ChannelTypeNewAPI {
+		return "auto"
+	}
+	token := strings.TrimSpace(channel.UpstreamAccessToken)
+	if token == "" || channel.UpstreamUserID <= 0 {
+		return "auto"
+	}
+	baseURL, err := url.Parse(strings.TrimSpace(channel.GetBaseURL()))
+	if err != nil || baseURL.Scheme == "" || baseURL.Host == "" {
+		return "auto"
+	}
+	endpoint := *baseURL
+	endpoint.Path = "/api/user/self"
+	endpoint.RawQuery = ""
+	endpoint.Fragment = ""
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+	if err != nil {
+		return "auto"
+	}
+	req.Header.Set("Authorization", token)
+	req.Header.Set("New-Api-User", strconv.Itoa(channel.UpstreamUserID))
+	client := &http.Client{Timeout: 20 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "auto"
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return "auto"
+	}
+	var envelope struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Group string `json:"group"`
+		} `json:"data"`
+	}
+	if err := common.DecodeJson(io.LimitReader(resp.Body, pricingOfferSyncResponseLimit), &envelope); err != nil || !envelope.Success {
+		return "auto"
+	}
+	group := strings.TrimSpace(envelope.Data.Group)
+	if group == "" {
+		return "auto"
+	}
+	return group
+}
+
+func upstreamCostUSD(item upstreamPriceItem, ratio float64) (float64, float64, error) {
+	input, output, _, err := normalizedUpstreamTokenCosts(item)
+	if err != nil {
+		return 0, 0, err
+	}
+	if ratio <= 0 || !validPriceNumber(ratio) {
+		return 0, 0, errors.New("group ratio is not positive")
+	}
+	return input * ratio, output * ratio, nil
+}
+
+// UpstreamCostRow is a read-only comparison of one channel model's upstream
+// cost and the current published sell price. It does not change either price.
+type UpstreamCostRow struct {
+	Model             string   `json:"model"`
+	EffectiveGroup    string   `json:"effective_group,omitempty"`
+	GroupRatio        float64  `json:"group_ratio,omitempty"`
+	UpstreamInputUSD  float64  `json:"upstream_input_usd,omitempty"`
+	UpstreamOutputUSD float64  `json:"upstream_output_usd,omitempty"`
+	SellInputUSD      *float64 `json:"sell_input_usd,omitempty"`
+	SellOutputUSD     *float64 `json:"sell_output_usd,omitempty"`
+	InputMarginBPS    *int     `json:"input_margin_bps,omitempty"`
+	OutputMarginBPS   *int     `json:"output_margin_bps,omitempty"`
+	Note              string   `json:"note,omitempty"`
+}
+
+type UpstreamCostReport struct {
+	KeyGroup string            `json:"key_group"`
+	Models   []UpstreamCostRow `json:"models"`
+}
+
+// CompareChannelUpstreamCosts reads upstream /api/pricing and the published
+// sell price. It does not import offers, create proposals, or publish prices.
+func CompareChannelUpstreamCosts(ctx context.Context, channel *model.Channel) (UpstreamCostReport, error) {
+	payload, _, err := loadUpstreamPricing(ctx, channel)
+	if err != nil {
+		return UpstreamCostReport{}, err
+	}
+	byName := make(map[string]upstreamPriceItem, len(payload.Data))
+	for _, item := range payload.Data {
+		name := strings.TrimSpace(item.ModelName)
+		if name == "" {
+			continue
+		}
+		if _, exists := byName[name]; !exists {
+			byName[name] = item
+		}
+	}
+	modelMapping := make(map[string]string)
+	if raw := strings.TrimSpace(channel.GetModelMapping()); raw != "" {
+		if err := common.UnmarshalJsonStr(raw, &modelMapping); err != nil {
+			return UpstreamCostReport{}, fmt.Errorf("invalid channel model mapping: %w", err)
+		}
+	}
+	modelNames := normalizePricingModelNames(channel.Models)
+	snapshot, err := model.GetModelPricingSnapshot(modelNames)
+	if err != nil {
+		return UpstreamCostReport{}, err
+	}
+	prices := make(map[string]model.ModelPricingEntry, len(snapshot.Entries))
+	for _, entry := range snapshot.Entries {
+		prices[entry.ModelName] = entry
+	}
+	policy := pricingGroupRatioPolicy()
+	report := UpstreamCostReport{KeyGroup: payload.KeyGroup, Models: make([]UpstreamCostRow, 0, len(modelNames))}
+	for _, name := range modelNames {
+		row := UpstreamCostRow{Model: name}
+		upstreamName := strings.TrimSpace(modelMapping[name])
+		if upstreamName == "" {
+			upstreamName = name
+		}
+		item, ok := byName[upstreamName]
+		if !ok {
+			row.Note = "upstream pricing has no row for this model"
+			report.Models = append(report.Models, row)
+			continue
+		}
+		choice, warnings := resolveUpstreamGroupRatio(payload, item, policy)
+		if len(warnings) > 0 {
+			row.Note = warnings[0]
+			report.Models = append(report.Models, row)
+			continue
+		}
+		input, output, priceErr := upstreamCostUSD(item, choice.Ratio)
+		if priceErr != nil {
+			row.Note = priceErr.Error()
+			row.EffectiveGroup = choice.Group
+			row.GroupRatio = choice.Ratio
+			report.Models = append(report.Models, row)
+			continue
+		}
+		row.EffectiveGroup = choice.Group
+		row.GroupRatio = choice.Ratio
+		row.UpstreamInputUSD = roundPricingValue(input)
+		row.UpstreamOutputUSD = roundPricingValue(output)
+		if entry, exists := prices[name]; exists {
+			if sellInput, sellOutput, sellOK := publishedTokenUnitPrices(entry); sellOK {
+				row.SellInputUSD = floatPtr(roundPricingValue(sellInput))
+				row.SellOutputUSD = floatPtr(roundPricingValue(sellOutput))
+				row.InputMarginBPS = marginBPS(sellInput, row.UpstreamInputUSD)
+				row.OutputMarginBPS = marginBPS(sellOutput, row.UpstreamOutputUSD)
+			}
+		}
+		report.Models = append(report.Models, row)
+	}
+	return report, nil
+}
+
+func normalizePricingModelNames(models string) []string {
+	seen := make(map[string]struct{})
+	names := make([]string, 0)
+	for _, name := range strings.Split(models, ",") {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		names = append(names, name)
+	}
+	return names
+}
+
+func floatPtr(value float64) *float64 {
+	return &value
 }
 
 // pricingOfferTTLSeconds is the lifetime of a collected offer. It must be at

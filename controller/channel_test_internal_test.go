@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -465,4 +466,128 @@ func TestTestAllChannelsRejectsExistingActiveTask(t *testing.T) {
 	require.Equal(t, http.StatusConflict, recorder.Code)
 	require.Contains(t, recorder.Body.String(), existing.TaskID)
 	require.Contains(t, recorder.Body.String(), "已有通道测试任务正在运行或等待中")
+}
+
+func TestNewAPIBalanceUsesAccessTokenNotAPIKey(t *testing.T) {
+	db := setupModelListControllerTestDB(t)
+	const token = "access-token-value"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/status":
+			assert.Empty(t, r.Header.Get("Authorization"))
+			_, _ = w.Write([]byte(`{"success":true,"data":{"quota_per_unit":500000}}`))
+		case "/api/user/self":
+			if r.Header.Get("Authorization") != token || r.Header.Get("New-Api-User") != "9" {
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"success":false,"message":"ACCESS_TOKEN_LEGACY_RETIRED"}`))
+				return
+			}
+			assert.NotContains(t, r.Header.Get("Authorization"), "sk-")
+			_, _ = w.Write([]byte(`{"success":true,"data":{"quota":1500000,"used_quota":500000,"group":"auto"}}`))
+		default:
+			if strings.Contains(r.URL.Path, "billing") {
+				t.Errorf("OpenAI billing path must not be used, got %s", r.URL.Path)
+			}
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	baseURL := server.URL
+	channel := &model.Channel{
+		Name:                "dddai",
+		Type:                constant.ChannelTypeNewAPI,
+		Key:                 "sk-secret",
+		BaseURL:             &baseURL,
+		Status:              common.ChannelStatusEnabled,
+		Models:              "gpt-5",
+		Group:               "default",
+		UpstreamAccessToken: token,
+		UpstreamUserID:      9,
+	}
+	require.NoError(t, db.Create(channel).Error)
+
+	balance, err := updateNewAPIChannelBalance(channel)
+	require.NoError(t, err)
+	assert.InDelta(t, 2, balance, 1e-9)
+
+	reloaded, err := model.GetChannelById(channel.Id, true)
+	require.NoError(t, err)
+	assert.InDelta(t, 2, reloaded.Balance, 1e-9)
+	assert.Greater(t, reloaded.BalanceUpdatedTime, int64(0))
+}
+
+func TestNewAPIBalanceMissingCredential(t *testing.T) {
+	baseURL := "https://upstream.example"
+	channel := &model.Channel{
+		Type:    constant.ChannelTypeNewAPI,
+		Key:     "sk-secret",
+		BaseURL: &baseURL,
+	}
+	_, err := updateNewAPIChannelBalance(channel)
+	require.EqualError(t, err, newAPIBalanceNotConfiguredMessage)
+}
+
+func TestNewAPIBalanceDoesNotEchoAccessToken(t *testing.T) {
+	const token = "access-token-value"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/status" {
+			_, _ = w.Write([]byte(`{"success":true,"data":{"quota_per_unit":500000}}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"success":false,"message":"rejected ` + token + `"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	baseURL := server.URL
+	channel := &model.Channel{
+		Type:                constant.ChannelTypeNewAPI,
+		Key:                 "sk-secret",
+		BaseURL:             &baseURL,
+		UpstreamAccessToken: token,
+		UpstreamUserID:      9,
+	}
+	_, err := updateNewAPIChannelBalance(channel)
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), token)
+}
+
+func TestUpstreamAccessTokenIsNotSerialized(t *testing.T) {
+	_ = setupModelListControllerTestDB(t)
+	channel := &model.Channel{
+		Name:                     "secret-channel",
+		Type:                     constant.ChannelTypeNewAPI,
+		Key:                      "sk-secret",
+		Models:                   "gpt-5",
+		Group:                    "default",
+		UpstreamAccessTokenWrite: "super-secret-token",
+		UpstreamUserID:           9,
+	}
+	require.NoError(t, channel.Insert())
+
+	raw, err := common.Marshal(channel)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "super-secret-token")
+	require.NotContains(t, string(raw), `"upstream_access_token":`)
+	require.Contains(t, string(raw), `"upstream_access_token_configured":true`)
+	require.Contains(t, string(raw), `"upstream_user_id":9`)
+
+	reloaded, err := model.GetChannelById(channel.Id, true)
+	require.NoError(t, err)
+	require.Equal(t, "super-secret-token", reloaded.UpstreamAccessToken)
+	require.True(t, reloaded.UpstreamAccessTokenConfigured)
+	raw, err = common.Marshal(reloaded)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "super-secret-token")
+
+	reloaded.Name = "renamed"
+	reloaded.UpstreamAccessTokenWrite = ""
+	reloaded.UpstreamUserID = 0
+	require.NoError(t, reloaded.Update())
+	kept, err := model.GetChannelById(channel.Id, true)
+	require.NoError(t, err)
+	require.Equal(t, "renamed", kept.Name)
+	require.Equal(t, "super-secret-token", kept.UpstreamAccessToken)
+	require.Equal(t, 9, kept.UpstreamUserID)
 }

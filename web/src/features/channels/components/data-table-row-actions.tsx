@@ -59,7 +59,7 @@ import {
 } from '@/lib/admin-permissions'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { MODEL_FETCHABLE_TYPES } from '../constants'
+import { CHANNEL_TYPE_NEW_API, MODEL_FETCHABLE_TYPES } from '../constants'
 import {
   channelsQueryKeys,
   handleDeleteChannel,
@@ -72,6 +72,7 @@ import { parseUpstreamUpdateMeta } from '../lib/upstream-update-utils'
 import type { Channel } from '../types'
 import { ChannelRowActionsLayoutContext } from './channel-row-actions-context'
 import { useChannels } from './channels-provider'
+import { UpstreamCostDialog } from './dialogs/upstream-cost-dialog'
 
 interface DataTableRowActionsProps {
   row: Row<Channel>
@@ -85,6 +86,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.auth.user)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [upstreamCostOpen, setUpstreamCostOpen] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
   const [isTogglingStatus, setIsTogglingStatus] = useState(false)
 
@@ -281,6 +283,15 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
             </DropdownMenuShortcut>
           </DropdownMenuItem>
 
+          {channel.type === CHANNEL_TYPE_NEW_API && (
+            <DropdownMenuItem onClick={() => setUpstreamCostOpen(true)}>
+              {t('Upstream cost')}
+              <DropdownMenuShortcut>
+                <DollarSign size={16} />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
+
           {/* Query Balance */}
           <DropdownMenuItem onClick={handleQueryBalance}>
             {t('Query Balance')}
@@ -381,6 +392,13 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <UpstreamCostDialog
+        open={upstreamCostOpen}
+        channelId={channel.id}
+        channelName={channel.name}
+        onOpenChange={setUpstreamCostOpen}
+      />
 
       <ConfirmDialog
         open={deleteConfirmOpen}

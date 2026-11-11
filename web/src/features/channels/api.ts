@@ -234,6 +234,31 @@ export async function testChannel(
 /**
  * Update channel balance
  */
+export type UpstreamCostRow = {
+  model: string
+  effective_group?: string
+  group_ratio?: number
+  upstream_input_usd?: number
+  upstream_output_usd?: number
+  sell_input_usd?: number | null
+  sell_output_usd?: number | null
+  input_margin_bps?: number | null
+  output_margin_bps?: number | null
+  note?: string
+}
+
+export async function getChannelUpstreamCost(id: number): Promise<{
+  success: boolean
+  message?: string
+  data?: { key_group?: string; models?: UpstreamCostRow[] }
+}> {
+  const res = await api.get(
+    `/api/channel/${id}/upstream_cost`,
+    channelActionConfig()
+  )
+  return res.data
+}
+
 export async function updateChannelBalance(
   id: number
 ): Promise<ChannelBalanceResponse> {

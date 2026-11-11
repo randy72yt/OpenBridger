@@ -33,6 +33,10 @@ export type UpstreamModelOffer = {
   collected_at: number
   expires_at: number
   enabled: boolean
+  sell_input_usd?: number | null
+  sell_output_usd?: number | null
+  input_margin_bps?: number | null
+  output_margin_bps?: number | null
 }
 
 export type PricingOfferPage = {
