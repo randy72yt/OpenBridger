@@ -277,6 +277,48 @@ func GetTokenById(id int) (*Token, error) {
 	return &token, err
 }
 
+// GetAdminTokenByName returns the token with the given name owned by an
+// admin/root user. Token names are not unique across users, so a plain
+// name lookup would let any user impersonate privileged tokens (e.g. the
+// perf probe token); the join keeps those out. The raw join bypasses GORM's
+// soft-delete scoping, so deleted rows are filtered explicitly.
+func GetAdminTokenByName(name string) (*Token, error) {
+	if name == "" {
+		return nil, errors.New("name 为空！")
+	}
+	token := Token{}
+	err := DB.Joins("JOIN users ON users.id = tokens.user_id AND users.deleted_at IS NULL").
+		Where("tokens.name = ? AND tokens.deleted_at IS NULL AND users.role >= ?", name, common.RoleAdminUser).
+		Order("tokens.id").
+		First(&token).Error
+	if err != nil {
+		return nil, err
+	}
+	return &token, nil
+}
+
+// GetTokenOwnerInfoById returns the token's name and whether its owner holds
+// an admin/root role, in one joined query. The perf sampler uses it so that
+// name-based internal/probe classification only applies to privileged tokens.
+func GetTokenOwnerInfoById(tokenId int) (name string, adminOwned bool, err error) {
+	if tokenId == 0 {
+		return "", false, errors.New("id 为空！")
+	}
+	var row struct {
+		Name string
+		Role int
+	}
+	err = DB.Table("tokens").
+		Select("tokens.name as name, users.role as role").
+		Joins("JOIN users ON users.id = tokens.user_id AND users.deleted_at IS NULL").
+		Where("tokens.id = ? AND tokens.deleted_at IS NULL", tokenId).
+		Take(&row).Error
+	if err != nil {
+		return "", false, err
+	}
+	return row.Name, row.Role >= common.RoleAdminUser, nil
+}
+
 func GetTokenByKey(key string, fromDB bool) (token *Token, err error) {
 	if !fromDB && common.RedisEnabled {
 		// Try Redis first

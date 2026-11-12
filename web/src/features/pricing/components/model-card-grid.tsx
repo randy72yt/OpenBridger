@@ -48,8 +48,8 @@ export function ModelCardGrid(props: ModelCardGridProps) {
   const currentPage = Math.min(page, totalPages)
 
   const perfQuery = useQuery({
-    queryKey: ['perf-metrics-summary', 24],
-    queryFn: () => getPerfMetricsSummary(24),
+    queryKey: ['perf-metrics-summary', 24, 48],
+    queryFn: () => getPerfMetricsSummary(24, 48),
     staleTime: 60 * 1000,
     retry: false,
   })

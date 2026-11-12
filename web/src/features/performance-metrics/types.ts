@@ -52,6 +52,13 @@ export type PerfModelSummary = {
   avg_tps: number
   recent_success_series?: SuccessRatePoint[]
   request_count?: number
+  // v2-only fields: present only when perf_metrics_setting.public_v2 is on.
+  avg_ttft_ms?: number
+  availability_24h?: number
+  availability_7d?: number
+  sample_count?: number
+  probe_share?: number
+  insufficient?: boolean
 }
 
 export type PerfSummaryAllData = {
@@ -59,5 +66,42 @@ export type PerfSummaryAllData = {
   message?: string
   data: {
     models: PerfModelSummary[]
+  }
+}
+
+export type AdminCounterView = {
+  requests: number
+  success: number
+  avg_latency_ms: number
+  avg_ttft_ms: number
+  avg_tps: number
+}
+
+export type AdminModelPerf = {
+  model_name: string
+  real: AdminCounterView
+  probe: AdminCounterView
+  internal: AdminCounterView
+  client_error: AdminCounterView
+  public_v1: PerfModelSummary
+  public_v2: PerfModelSummary
+  availability_24h: number
+  availability_7d: number
+  error_codes: Record<string, number>
+  series: PerformanceSeriesPoint[]
+  last_probe_at: number
+  probe_tier: string
+  probe_token_param: string
+}
+
+export type AdminPerfSummaryData = {
+  success: boolean
+  message?: string
+  data: {
+    models: AdminModelPerf[]
+    probe_budget_used_quota: number
+    probe_budget_quota: number
+    generated_at: number
+    error_codes_truncated?: boolean
   }
 }

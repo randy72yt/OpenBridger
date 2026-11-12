@@ -1,0 +1,224 @@
+package controller
+
+import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/QuantumNous/new-api/middleware"
+	"github.com/QuantumNous/new-api/model"
+	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
+	"github.com/QuantumNous/new-api/setting/config"
+	"github.com/QuantumNous/new-api/setting/perf_metrics_setting"
+	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+)
+
+func setupPerfControllerTest(t *testing.T) {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.PerfMetric{}, &model.PerfMetricAux{}, &model.Log{}))
+	origDB, origLogDB := model.DB, model.LOG_DB
+	model.DB = db
+	// InitLogDB points LOG_DB at DB and initializes the dialect column-name
+	// globals (commonGroupCol etc.) that group-filtered queries rely on.
+	require.NoError(t, model.InitLogDB())
+	t.Cleanup(func() { model.DB, model.LOG_DB = origDB, origLogDB })
+
+	// Drop cached summaries between tests so each case rebuilds.
+	perfSummaryCache.Range(func(key, _ any) bool {
+		perfSummaryCache.Delete(key)
+		return true
+	})
+	t.Cleanup(func() {
+		perfSummaryCache.Range(func(key, _ any) bool {
+			perfSummaryCache.Delete(key)
+			return true
+		})
+	})
+}
+
+func withPublicV2(t *testing.T, enabled bool) {
+	t.Helper()
+	raw := config.GlobalConfig.Get("perf_metrics_setting")
+	setting, ok := raw.(*perf_metrics_setting.PerfMetricsSetting)
+	require.True(t, ok)
+	orig := *setting
+	setting.PublicV2 = enabled
+	t.Cleanup(func() { *setting = orig })
+}
+
+func perfSummaryRequest(t *testing.T, query string) *httptest.ResponseRecorder {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/api/perf-metrics/summary", GetPerfMetricsSummary)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/perf-metrics/summary"+query, nil)
+	router.ServeHTTP(w, req)
+	return w
+}
+
+func TestGetPerfMetricsSummaryV1ShapeUnchanged(t *testing.T) {
+	setupPerfControllerTest(t)
+	withPublicV2(t, false)
+
+	require.NoError(t, model.UpsertPerfMetric(&model.PerfMetric{
+		ModelName: "m-ctl", Group: "default", BucketTs: nowHourTs(),
+		RequestCount: 2, SuccessCount: 2, TotalLatencyMs: 900, GenerationMs: 1000, OutputTokens: 50,
+	}))
+	require.NoError(t, model.UpsertPerfMetricAux(&model.PerfMetricAux{
+		ModelName: "m-ctl", Group: "default", Source: perfmetrics.SourceProbe, BucketTs: nowHourTs() - 3600,
+		RequestCount: 7, SuccessCount: 0,
+	}))
+
+	w := perfSummaryRequest(t, "")
+	require.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+	assert.Contains(t, body, `"model_name":"m-ctl"`)
+	for _, forbidden := range []string{"availability_24h", "avg_ttft_ms", "sample_count", "probe_share", "insufficient", "channel", "base_url", "\"key\""} {
+		assert.NotContains(t, body, forbidden)
+	}
+	// Probe failures live in the aux table and must not reach the v1 numbers.
+	assert.Contains(t, body, `"success_rate":100`)
+	assert.Equal(t, "public, max-age=60", w.Header().Get("Cache-Control"))
+}
+
+func TestGetPerfMetricsSummaryV2AddsFields(t *testing.T) {
+	setupPerfControllerTest(t)
+	withPublicV2(t, true)
+
+	require.NoError(t, model.UpsertPerfMetric(&model.PerfMetric{
+		ModelName: "m-ctl", Group: "default", BucketTs: nowHourTs(),
+		RequestCount: 4, SuccessCount: 3, TotalLatencyMs: 900, GenerationMs: 1000, OutputTokens: 50, TtftSumMs: 300, TtftCount: 3,
+	}))
+	require.NoError(t, model.UpsertPerfMetricAux(&model.PerfMetricAux{
+		ModelName: "m-ctl", Group: "default", Source: perfmetrics.SourceProbe, BucketTs: nowHourTs(),
+		RequestCount: 6, SuccessCount: 6, TotalLatencyMs: 600, TtftSumMs: 600, TtftCount: 6,
+	}))
+
+	w := perfSummaryRequest(t, "?bars=48")
+	require.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+	assert.Contains(t, body, `"availability_24h":90`)
+	assert.Contains(t, body, `"sample_count":10`)
+	assert.Contains(t, body, `"avg_ttft_ms":100`)
+	assert.Contains(t, body, `"probe_share":0.6`)
+
+	// bars is clamped to <= 72.
+	w = perfSummaryRequest(t, "?bars=999")
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"model_name":"m-ctl"`)
+}
+
+func TestGetAdminPerfSummaryRequiresAdmin(t *testing.T) {
+	setupPerfControllerTest(t)
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/api/perf-metrics/admin/summary", middleware.AdminAuth(), GetAdminPerfSummary)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/perf-metrics/admin/summary", nil)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func nowHourTs() int64 {
+	return time.Now().Unix() / 3600 * 3600
+}
+
+func perfCacheSize() int {
+	count := 0
+	perfSummaryCache.Range(func(_, _ any) bool {
+		count++
+		return true
+	})
+	return count
+}
+
+func TestSummaryCacheKeyIgnoresGroupOrder(t *testing.T) {
+	a := summaryCacheKey("summary", 24, 48, []string{"default", "vip", "auto"}, true)
+	b := summaryCacheKey("summary", 24, 48, []string{"auto", "vip", "default"}, true)
+	assert.Equal(t, a, b)
+
+	assert.NotEqual(t, a, summaryCacheKey("summary", 24, 48, []string{"default", "auto"}, true))
+	assert.NotEqual(t, a, summaryCacheKey("summary", 24, 48, []string{"default", "vip", "auto"}, false))
+}
+
+func TestGetPerfMetricsSummaryInvalidHoursAddsNoCacheEntry(t *testing.T) {
+	setupPerfControllerTest(t)
+	withPublicV2(t, false)
+
+	w := perfSummaryRequest(t, "")
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, 1, perfCacheSize())
+
+	// Junk or out-of-whitelist hours all fall back to 24: same cache key,
+	// so the cache cannot be inflated with hostile values.
+	for _, query := range []string{"?hours=999999", "?hours=abc", "?hours=0", "?hours=-5", "?hours=2", "?hours=48"} {
+		w := perfSummaryRequest(t, query)
+		require.Equal(t, http.StatusOK, w.Code, query)
+	}
+	require.Equal(t, 1, perfCacheSize())
+
+	// The whitelisted 168 window is a legitimate second entry.
+	w = perfSummaryRequest(t, "?hours=168")
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, 2, perfCacheSize())
+}
+
+func TestPerfCacheEvictionSweepsExpiredAndCapsSize(t *testing.T) {
+	setupPerfControllerTest(t)
+
+	// Expired entries are swept.
+	perfSummaryCache.Store("expired", perfCacheEntry{payload: 1, expireAt: time.Now().Add(-time.Second)})
+	storePerfCacheEntry("fresh", 2)
+	assert.Equal(t, 1, perfCacheSize())
+	_, cached := perfSummaryCache.Load("expired")
+	assert.False(t, cached)
+
+	// The cache never exceeds the cap.
+	for i := 0; i < perfSummaryCacheMaxEntries+20; i++ {
+		storePerfCacheEntry(fmt.Sprintf("bulk-%d", i), i)
+	}
+	assert.LessOrEqual(t, perfCacheSize(), perfSummaryCacheMaxEntries)
+	_, firstKept := perfSummaryCache.Load("fresh")
+	assert.False(t, firstKept, "oldest entries are evicted first")
+}
+
+func TestGetAdminPerfSummaryCachesAggregation(t *testing.T) {
+	setupPerfControllerTest(t)
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/api/perf-metrics/admin/summary", GetAdminPerfSummary)
+
+	require.NoError(t, model.UpsertPerfMetric(&model.PerfMetric{
+		ModelName: "m-admin-ctl", Group: "default", BucketTs: nowHourTs(),
+		RequestCount: 2, SuccessCount: 2, TotalLatencyMs: 600,
+	}))
+
+	for i := 0; i < 2; i++ {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/perf-metrics/admin/summary?hours=999", nil)
+		router.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code, "request %d", i)
+		require.Contains(t, w.Body.String(), "m-admin-ctl", "request %d", i)
+	}
+	// hours=999 falls back to 24 (single whitelisted key) and the second
+	// request is served from the cache: exactly one admin entry exists.
+	adminEntries := 0
+	perfSummaryCache.Range(func(k, _ any) bool {
+		if strings.HasPrefix(k.(string), "admin:") {
+			adminEntries++
+		}
+		return true
+	})
+	assert.Equal(t, 1, adminEntries)
+}
