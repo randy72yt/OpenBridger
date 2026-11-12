@@ -289,6 +289,7 @@ func GetAdminTokenByName(name string) (*Token, error) {
 	token := Token{}
 	err := DB.Joins("JOIN users ON users.id = tokens.user_id AND users.deleted_at IS NULL").
 		Where("tokens.name = ? AND tokens.deleted_at IS NULL AND users.role >= ?", name, common.RoleAdminUser).
+		Order("tokens.id").
 		First(&token).Error
 	if err != nil {
 		return nil, err

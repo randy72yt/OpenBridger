@@ -319,6 +319,16 @@ func TestResolveProbeTokenRequiresAdminOwner(t *testing.T) {
 	assert.Equal(t, 2, token.UserId)
 	assert.Equal(t, "sk-admin", token.Key)
 
+	// Two admin-owned same-name tokens resolve deterministically (lowest id),
+	// so probe identity and the id-based budget guard cannot flap between them.
+	require.NoError(t, db.Create(&model.User{Id: 3, Username: "root-admin", Role: common.RoleRootUser, AffCode: "u3"}).Error)
+	require.NoError(t, db.Create(&model.Token{Name: "ob-probe", UserId: 3, Key: "sk-root", Status: common.TokenStatusEnabled}).Error)
+	require.NoError(t, db.Exec("UPDATE tokens SET id = 500 WHERE user_id = ?", 3).Error)
+	token, err = ResolveProbeToken("ob-probe")
+	require.NoError(t, err)
+	assert.Equal(t, 2, token.UserId)
+	assert.Equal(t, "sk-admin", token.Key)
+
 	// Disabled admin tokens are rejected too.
 	require.NoError(t, db.Model(&model.Token{}).Where("user_id = ?", 2).Update("status", 2).Error)
 	_, err = ResolveProbeToken("ob-probe")
