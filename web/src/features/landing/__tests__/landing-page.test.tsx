@@ -34,9 +34,7 @@ import { useSystemConfigStore } from '@/stores/system-config-store'
 import { LandingPage } from '../index'
 
 vi.mock('@lobehub/icons', () => {
-  const IconStub = ({ size }: { size?: number }) => (
-    <span data-testid='provider-icon-stub' data-size={size} />
-  )
+  const IconStub = () => null
   const WithColor = Object.assign(IconStub, { Color: IconStub })
   return {
     OpenAI: WithColor,
@@ -45,6 +43,13 @@ vi.mock('@lobehub/icons', () => {
     DeepSeek: WithColor,
     Qwen: WithColor,
     Grok: WithColor,
+    Zhipu: WithColor,
+    Minimax: WithColor,
+    Moonshot: WithColor,
+    Doubao: WithColor,
+    Kling: WithColor,
+    Jimeng: WithColor,
+    ByteDance: WithColor,
   }
 })
 

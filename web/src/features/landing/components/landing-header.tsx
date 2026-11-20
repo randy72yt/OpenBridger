@@ -17,14 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link, useRouterState } from '@tanstack/react-router'
-import { ArrowRight, Menu, X } from 'lucide-react'
+import { ArrowUpRight, Menu, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { HeaderLogo } from '@/components/layout/components/header-logo'
 import { NotificationPopover } from '@/components/notification-popover'
-import { ProfileDropdown } from '@/components/profile-dropdown'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -34,6 +33,8 @@ import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 import { DEFAULT_SYSTEM_NAME } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
+
+import { LandingUserMenu } from './landing-user-menu'
 
 interface LandingHeaderProps {
   className?: string
@@ -86,9 +87,10 @@ export function LandingHeader(props: LandingHeaderProps) {
       <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
         <div
           className={cn(
-            'ob-header-bar flex h-14 items-center justify-between rounded-2xl border px-4 backdrop-blur-xl transition-all duration-300 sm:px-5',
-            scrolled &&
-              'shadow-[0_8px_32px_-12px_rgba(20,17,15,0.12)] dark:shadow-[0_8px_32px_-12px_rgba(0,0,0,0.45)]'
+            'ob-header-bar flex h-14 items-center justify-between rounded-full border border-black/[0.06] px-4 backdrop-blur-xl transition-all duration-300 sm:px-5 dark:border-white/[0.08]',
+            scrolled
+              ? 'shadow-[0_8px_32px_-12px_rgba(20,17,15,0.12)] dark:shadow-[0_8px_32px_-12px_rgba(0,0,0,0.45)]'
+              : 'shadow-[0_4px_24px_rgba(20,17,15,0.04)]'
           )}
         >
           {/* Brand Logo */}
@@ -96,9 +98,9 @@ export function LandingHeader(props: LandingHeaderProps) {
             to='/'
             className='group flex shrink-0 items-center gap-2.5 focus-visible:outline-none'
           >
-            <div className='ob-chip-primary flex size-8 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105'>
+            <div className='ob-chip-primary flex size-8 shrink-0 items-center justify-center rounded-full transition-transform duration-200 group-hover:scale-105'>
               {loading ? (
-                <Skeleton className='size-5 rounded-md' />
+                <Skeleton className='size-5 rounded-full' />
               ) : (
                 <HeaderLogo
                   src={systemLogo}
@@ -132,7 +134,7 @@ export function LandingHeader(props: LandingHeaderProps) {
                     href={link.href}
                     target='_blank'
                     rel='noopener noreferrer'
-                    className='text-muted-foreground hover:text-primary rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors'
+                    className='text-muted-foreground hover:text-primary rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors'
                   >
                     {link.title}
                   </a>
@@ -143,16 +145,13 @@ export function LandingHeader(props: LandingHeaderProps) {
                   key={link.href}
                   to={link.href}
                   className={cn(
-                    'relative rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors',
+                    'rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200',
                     isActive
-                      ? 'text-primary bg-[var(--ob-primary-soft)] font-semibold'
+                      ? 'text-primary bg-[var(--ob-primary-soft)] font-semibold shadow-xs'
                       : 'text-muted-foreground hover:text-primary'
                   )}
                 >
                   {link.title}
-                  {isActive && (
-                    <span className='bg-primary absolute inset-x-3 -bottom-1 h-0.5 rounded-full' />
-                  )}
                 </Link>
               )
             })}
@@ -172,19 +171,19 @@ export function LandingHeader(props: LandingHeaderProps) {
               announcements={notifications.announcements}
               loading={notifications.loading}
             />
-            <div className='bg-border mx-1.5 h-4 w-px' />
-            {loading && <Skeleton className='h-9 w-24 rounded-xl' />}
+            <div className='bg-border mx-1 h-4 w-px' />
+            {loading && <Skeleton className='h-9 w-24 rounded-full' />}
             {!loading && isAuthenticated && (
               <div className='flex items-center gap-2'>
                 <Button
                   size='sm'
-                  className='ob-btn-primary h-9 rounded-xl px-4 text-xs font-semibold'
+                  className='ob-btn-primary h-9 rounded-full px-4 text-xs font-semibold'
                   render={<Link to='/dashboard' />}
                 >
-                  {t('Go to Dashboard')}
-                  <ArrowRight className='ml-1 size-3.5' />
+                  {t('Console')}
+                  <ArrowUpRight className='ml-1 size-3.5' />
                 </Button>
-                <ProfileDropdown />
+                <LandingUserMenu />
               </div>
             )}
             {!loading && !isAuthenticated && (
@@ -192,18 +191,18 @@ export function LandingHeader(props: LandingHeaderProps) {
                 <Button
                   variant='ghost'
                   size='sm'
-                  className='text-foreground hover:text-primary h-9 rounded-xl px-3.5 text-xs font-medium'
+                  className='text-foreground hover:text-primary h-9 rounded-full px-3.5 text-xs font-medium'
                   render={<Link to='/sign-in' />}
                 >
                   {t('Sign in')}
                 </Button>
                 <Button
                   size='sm'
-                  className='ob-btn-primary h-9 rounded-xl px-4 text-xs font-semibold'
+                  className='ob-btn-primary h-9 rounded-full px-4 text-xs font-semibold'
                   render={<Link to='/sign-up' />}
                 >
-                  {t('Get Started')}
-                  <ArrowRight className='ml-1 size-3.5' />
+                  {t('Console')}
+                  <ArrowUpRight className='ml-1 size-3.5' />
                 </Button>
               </div>
             )}
@@ -265,28 +264,30 @@ export function LandingHeader(props: LandingHeaderProps) {
             <div className='border-border mt-3 flex flex-col gap-2 border-t pt-3'>
               {isAuthenticated ? (
                 <Button
-                  className='ob-btn-primary w-full rounded-xl'
+                  className='ob-btn-primary w-full rounded-full'
                   render={<Link to='/dashboard' />}
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  {t('Go to Dashboard')}
+                  {t('Console')}
+                  <ArrowUpRight className='ml-1.5 size-4' />
                 </Button>
               ) : (
                 <>
                   <Button
                     variant='outline'
-                    className='ob-btn-secondary w-full rounded-xl'
+                    className='ob-btn-secondary w-full rounded-full'
                     render={<Link to='/sign-in' />}
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     {t('Sign in')}
                   </Button>
                   <Button
-                    className='ob-btn-primary w-full rounded-xl'
+                    className='ob-btn-primary w-full rounded-full'
                     render={<Link to='/sign-up' />}
                     onClick={() => setMobileMenuOpen(false)}
                   >
-                    {t('Get Started')}
+                    {t('Console')}
+                    <ArrowUpRight className='ml-1.5 size-4' />
                   </Button>
                 </>
               )}

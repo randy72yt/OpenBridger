@@ -17,15 +17,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
-import { ArrowRight, BookOpen, ShieldCheck, Sparkles, Zap } from 'lucide-react'
+import { ArrowUpRight, BookOpen, ShieldCheck, Sparkles, Zap } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { useStatus } from '@/hooks/use-status'
 
-import { HERO_HIGHLIGHT_PILLS, HERO_METRICS } from '../../constants'
+import { HERO_HIGHLIGHT_PILLS } from '../../constants'
 import { HeroBackground } from '../hero-background'
+import { HeroBrandTicker } from '../hero-brand-ticker'
 import { LandingTerminalDemo } from '../landing-terminal-demo'
 import { ScrollReveal } from '../scroll-reveal'
 
@@ -40,7 +40,7 @@ export function LandingHero(props: LandingHeroProps) {
   const isExternalDocs = docsUrl.startsWith('http')
 
   return (
-    <section className='ob-section-bg relative isolate overflow-hidden pt-28 pb-16 sm:pt-32 sm:pb-24 lg:pt-36 lg:pb-28'>
+    <section className='ob-section-bg relative isolate overflow-hidden pt-28 pb-14 sm:pt-32 sm:pb-20 lg:pt-36 lg:pb-24'>
       <HeroBackground />
 
       <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
@@ -48,7 +48,7 @@ export function LandingHero(props: LandingHeroProps) {
           {/* Left Column: Brand pitch, CTAs, and capability pills */}
           <div className='flex min-w-0 flex-col items-start text-left lg:col-span-6'>
             {/* Status Pill */}
-            <div className='ob-chip-primary mb-6 inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold'>
+            <div className='ob-chip-primary mb-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold shadow-xs'>
               <span className='relative flex size-2'>
                 <span className='ob-dot-primary absolute inline-flex h-full w-full animate-ping rounded-full opacity-75' />
                 <span className='ob-dot-primary relative inline-flex size-2 rounded-full' />
@@ -64,7 +64,12 @@ export function LandingHero(props: LandingHeroProps) {
               </span>
             </h1>
 
-            <p className='text-muted-foreground mt-5 max-w-xl text-base leading-relaxed sm:text-lg'>
+            {/* Editorial Italic Subtitle */}
+            <p className='mt-2.5 text-base sm:text-lg font-medium italic text-muted-foreground/90 tracking-tight'>
+              {t('landing.hero.italicSubtitle')}
+            </p>
+
+            <p className='text-muted-foreground mt-4 max-w-xl text-sm leading-relaxed sm:text-base'>
               {t('landing.hero.subtitle')}
             </p>
 
@@ -73,7 +78,7 @@ export function LandingHero(props: LandingHeroProps) {
               {HERO_HIGHLIGHT_PILLS.map((pillKey, idx) => (
                 <span
                   key={pillKey}
-                  className='ob-chip-primary inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium'
+                  className='ob-chip-primary inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium'
                 >
                   <span className='ob-dot-primary size-1.5 rounded-full' />
                   {idx === 0 && <Sparkles className='size-3.5' />}
@@ -89,27 +94,27 @@ export function LandingHero(props: LandingHeroProps) {
               {props.isAuthenticated ? (
                 <Button
                   size='lg'
-                  className='ob-btn-primary group h-12 rounded-xl px-6 text-sm font-semibold'
+                  className='ob-btn-primary group h-11 rounded-full px-6 text-sm font-semibold shadow-md shadow-orange-500/20 hover:shadow-orange-500/30'
                   render={<Link to='/dashboard' />}
                 >
-                  {t('Go to Dashboard')}
-                  <ArrowRight className='ml-1.5 size-4 transition-transform duration-200 group-hover:translate-x-0.5' />
+                  {t('Console')}
+                  <ArrowUpRight className='ml-1.5 size-4 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5' />
                 </Button>
               ) : (
                 <Button
                   size='lg'
-                  className='ob-btn-primary group h-12 rounded-xl px-6 text-sm font-semibold'
+                  className='ob-btn-primary group h-11 rounded-full px-6 text-sm font-semibold shadow-md shadow-orange-500/20 hover:shadow-orange-500/30'
                   render={<Link to='/sign-up' />}
                 >
                   {t('landing.hero.ctaPrimary')}
-                  <ArrowRight className='ml-1.5 size-4 transition-transform duration-200 group-hover:translate-x-0.5' />
+                  <ArrowUpRight className='ml-1.5 size-4 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5' />
                 </Button>
               )}
 
               <Button
                 variant='outline'
                 size='lg'
-                className='ob-btn-secondary h-12 rounded-xl px-5 text-sm font-semibold'
+                className='ob-btn-secondary h-11 rounded-full border border-black/10 dark:border-white/10 bg-white dark:bg-card px-5 text-sm font-semibold text-foreground hover:bg-black/[0.03]'
                 render={<Link to='/pricing' />}
               >
                 {t('Model Square')}
@@ -119,7 +124,7 @@ export function LandingHero(props: LandingHeroProps) {
                 <Button
                   variant='outline'
                   size='lg'
-                  className='ob-btn-secondary h-12 rounded-xl px-4 text-sm font-medium'
+                  className='ob-btn-secondary h-11 rounded-full border border-primary/20 bg-[var(--ob-surf-warm)] dark:bg-primary/10 px-4 text-sm font-medium text-primary hover:bg-[var(--ob-primary-soft)]'
                   render={
                     <a
                       href={docsUrl}
@@ -135,13 +140,44 @@ export function LandingHero(props: LandingHeroProps) {
                 <Button
                   variant='outline'
                   size='lg'
-                  className='ob-btn-secondary h-12 rounded-xl px-4 text-sm font-medium'
+                  className='ob-btn-secondary h-11 rounded-full border border-primary/20 bg-[var(--ob-surf-warm)] dark:bg-primary/10 px-4 text-sm font-medium text-primary hover:bg-[var(--ob-primary-soft)]'
                   render={<Link to={docsUrl} />}
                 >
                   <BookOpen className='mr-1.5 size-4' />
                   {t('Practical tutorials')}
                 </Button>
               )}
+            </div>
+
+            {/* Metrics Bar with vertical dividers */}
+            <div className='mt-10 w-full grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-y-0 sm:divide-x divide-black/[0.08] dark:divide-white/[0.08] border-t sm:border-t-0 pt-4 sm:pt-0'>
+              <div className='sm:pr-5 pb-3 sm:pb-0'>
+                <div className='text-xl sm:text-2xl font-extrabold text-foreground tracking-tight'>
+                  200+{' '}
+                  <span className='text-sm sm:text-base font-semibold text-foreground/90'>
+                    {t('landing.hero.metric1.title')}
+                  </span>
+                </div>
+                <p className='text-xs text-muted-foreground mt-0.5'>
+                  {t('landing.hero.metric1.desc')}
+                </p>
+              </div>
+              <div className='sm:px-5 py-3 sm:py-0'>
+                <div className='text-xl sm:text-2xl font-extrabold text-foreground tracking-tight'>
+                  {t('landing.hero.metric2.title')}
+                </div>
+                <p className='text-xs text-muted-foreground mt-0.5'>
+                  {t('landing.hero.metric2.desc')}
+                </p>
+              </div>
+              <div className='sm:pl-5 pt-3 sm:pt-0'>
+                <div className='text-xl sm:text-2xl font-extrabold text-foreground tracking-tight'>
+                  {t('landing.hero.metric3.title')}
+                </div>
+                <p className='text-xs text-muted-foreground mt-0.5'>
+                  {t('landing.hero.metric3.desc')}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -151,25 +187,9 @@ export function LandingHero(props: LandingHeroProps) {
           </div>
         </div>
 
-        {/* Bottom Metric Bar */}
-        <ScrollReveal delay={0.2} className='mt-14 sm:mt-16'>
-          <Card className='ob-card rounded-2xl py-0 shadow-none'>
-            <CardContent className='grid grid-cols-2 gap-6 p-6 sm:grid-cols-4 sm:p-8'>
-              {HERO_METRICS.map((item) => (
-                <div
-                  key={item.labelKey}
-                  className='flex flex-col items-start sm:items-center sm:text-center'
-                >
-                  <span className='text-primary ob-mono text-2xl font-extrabold tracking-tight tabular-nums sm:text-3xl'>
-                    {item.value}
-                  </span>
-                  <span className='text-muted-foreground mt-1 text-xs font-medium sm:text-sm'>
-                    {t(item.labelKey)}
-                  </span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+        {/* Bottom Provider Brand Logo Ticker from Image 3 */}
+        <ScrollReveal delay={0.2}>
+          <HeroBrandTicker />
         </ScrollReveal>
       </div>
     </section>
