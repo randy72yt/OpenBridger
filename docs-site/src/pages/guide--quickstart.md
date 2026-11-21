@@ -1,6 +1,6 @@
 # 完成第一次调用
 
-这条路径只做四件事：注册并登录、确认钱包里有额度、创建一把 API Key、用 curl 打通 `POST /v1/chat/completions`。
+按这个顺序做完一次：注册并登录、按钱包上的人民币面额充值、创建 API Key、确认 Base URL、从模型广场复制模型 ID、用 curl 打通 `POST /v1/chat/completions`，再在使用日志里对上这一笔。AI 体验台只能验证登录会话，不能代替 curl。
 
 ## 开始之前
 
@@ -14,7 +14,7 @@
 
 ## 步骤
 
-<div class="steps"><div class="step"><strong>注册并登录</strong><p>打开 <a href="{{CONSOLE_URL}}">{{CONSOLE_URL}}</a>，完成注册后进入控制台。登录失败次数过多会被临时限制，等一会儿再试，不要连续撞密码。</p></div><div class="step"><strong>看钱包余额</strong><p>打开 <a href="{{CONSOLE_URL}}/wallet">钱包</a>。余额以人民币显示。注册不赠送额度，新用户余额是 0。要先用页面上的在线充值或兑换码，见 <a href="/guide/account/redeem/">充值与兑换</a>，余额够一次短对话再继续。</p></div><div class="step"><strong>复制模型 ID</strong><p>打开 <a href="{{CONSOLE_URL}}/pricing">模型广场</a>，选一个你的分组能用的对话模型，复制完整模型 ID。不要自己缩短版本号。</p></div><div class="step"><strong>创建 API Key</strong><p>打开 <a href="{{CONSOLE_URL}}/keys">API 密钥</a>，新建一把名为 <code>curl-test</code> 的密钥。复制出来的值以 <code>sk-</code> 开头。细节见 <a href="/guide/api-key/">创建 API Key</a>。</p></div><div class="step"><strong>发送一条短请求</strong><p>把下面命令里的密钥和模型 ID 换成你自己的，然后执行。</p></div></div>
+<div class="steps"><div class="step"><strong>注册并登录</strong><p>打开 <a href="{{CONSOLE_URL}}/sign-up">注册</a>。已有账号则打开 <a href="{{CONSOLE_URL}}/sign-in">登录</a>。登录失败次数过多会被临时限制，等一会儿再试，不要连续撞密码。</p></div><div class="step"><strong>充值</strong><p>打开 <a href="{{CONSOLE_URL}}/wallet">钱包</a>。注册不赠送额度，新用户余额是 0。面额是人民币；默认档位和「实付人民币」与「余额增加的人民币」为什么可以不同，见 <a href="/guide/account/redeem/">充值与兑换</a>。余额够一次短对话再继续。</p></div><div class="step"><strong>复制模型 ID</strong><p>打开 <a href="{{CONSOLE_URL}}/pricing">模型广场</a>，选一个你的分组能用的对话模型，复制完整模型 ID。不要自己缩短版本号。</p></div><div class="step"><strong>创建 API Key</strong><p>打开 <a href="{{CONSOLE_URL}}/keys">API 密钥</a>，新建一把名为 <code>curl-test</code> 的密钥。复制出来的值以 <code>sk-</code> 开头。细节见 <a href="/guide/api-key/">创建 API Key</a>。</p></div><div class="step"><strong>确认 Base URL</strong><p>OpenAI 兼容调用的 Base URL 是 <code>{{API_BASE_URL}}</code>，已经包含 <code>/v1</code>。下面的 curl 接在这个地址后面，不要再写一层 <code>/v1</code>。</p></div><div class="step"><strong>发送一条短请求</strong><p>把下面命令里的密钥和模型 ID 换成你自己的，然后执行。这是核对过的调用方式。SDK 示例只说明参数形状，见 <a href="/guide/clients/sdk/">SDK 与 LangChain</a>，不能代替这条 curl。</p></div></div>
 
 ```bash
 export OPENBRIDGER_API_KEY="sk-把控制台复制的密钥贴在这里"

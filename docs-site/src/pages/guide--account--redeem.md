@@ -14,7 +14,7 @@
 
 ## 在线充值
 
-<div class="steps"><div class="step"><strong>打开钱包</strong><p>确认账号。页面标题在可充值时是「添加资金」。</p></div><div class="step"><strong>选择金额</strong><p>金额是人民币。默认最低 ¥10。快捷档位是 ¥10、¥20、¥50、¥100、¥200、¥500、¥1000、¥5000。页面若显示别的下限，以下限为准。低于下限时下单会失败，文案是「充值数量不能小于 …」。</p></div><div class="step"><strong>核对确认页</strong><p>确认页上的人民币金额就是将要从支付宝或微信扣除的金额。付完后刷新钱包，余额也按人民币显示。不要自己乘汇率。</p></div><div class="step"><strong>完成支付</strong><p>支付结束会回到 <code>/wallet?pay=success</code>。回到钱包刷新余额和充值记录。订单还在处理时不要再付一笔同样的。</p></div></div>
+<div class="steps"><div class="step"><strong>打开钱包</strong><p>确认账号。页面标题在可充值时是「添加资金」。</p></div><div class="step"><strong>选择金额</strong><p>面额是人民币。代码默认最低 ¥10，默认快捷档位是 ¥10、¥20、¥50、¥100、¥200、¥500。管理员如果改过档位或下限，以钱包页面为准。低于下限时下单会失败，文案是「充值数量不能小于 …」。</p></div><div class="step"><strong>核对确认页</strong><p>确认页上的人民币是这次要从收银台扣的钱。这笔钱按充值单价（Price）换成美元额度入账：面额除以 Price。钱包、模型广场和日志再用展示汇率（USDExchangeRate）把美元额度显示成人民币。这两个设置不是同一个数，所以实付人民币和余额增加的人民币可以不一样。对照确认页和到账后的余额，不要自己拿一个汇率去乘，文档也不写这两个数的当前值。</p></div><div class="step"><strong>完成支付</strong><p>支付结束会回到 <code>/wallet?pay=success</code>。回到钱包刷新余额和充值记录。订单还在处理时不要再付一笔同样的。</p></div></div>
 
 支付由 epay 协议接到你看到的支付宝或微信收银台。OpenBridger 客服不会向你要支付密码、短信验证码或完整卡号。
 

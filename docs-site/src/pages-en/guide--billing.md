@@ -4,7 +4,7 @@ The wallet balance is the credit used for calls. Model Square prices decide how 
 
 ## The credit unit
 
-The wallet, Usage Logs, and Model Square show amounts in yuan (¥). The ledger still stores an integer credit. The code default is **500000 credits = 1 US dollar**, and the page converts that into yuan. Pay, balance, and per-call charges are the yuan figures on the page. Do not multiply by an exchange rate yourself.
+The wallet, Usage Logs, and Model Square show amounts in yuan (¥). The ledger stores an integer credit. The code default is **500000 credits = 1 US dollar** (`QuotaPerUnit`). A top-up amount becomes US-dollar credit at the recharge price (Price): amount divided by Price. The yuan balance, model prices, and log amounts are that credit shown with the display rate (USDExchangeRate). Price and USDExchangeRate are different settings and need not be equal, so the yuan you pay and the yuan added to the balance can differ. Reconcile the confirmation page with the balance. Do not treat them as one exchange rate, and this guide does not publish the current values.
 
 ## How one request is charged
 
