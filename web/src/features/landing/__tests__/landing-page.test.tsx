@@ -273,8 +273,14 @@ describe('LandingPage (P0)', { timeout: 15000 }, () => {
 
     // 6. Excludes video-creation / lottery / invoice copy
     expect(
-      screen.queryByText(/快跑影创|快跑画布|一镜到底/)
+      screen.queryByText(
+        /快跑|快跑影创|快跑画布|一镜到底|短剧|抽奖|开票|返现加盟/
+      )
     ).not.toBeInTheDocument()
+    const homeLink = screen.getAllByRole('link', { name: 'Home' })[0]
+    expect(homeLink?.className).toContain('rounded-full')
+    expect(homeLink?.className).toContain('bg-[var(--ob-primary-soft)]')
+    expect(homeLink?.className).not.toContain('underline')
 
     client.clear()
   })

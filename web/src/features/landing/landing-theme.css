@@ -17,36 +17,40 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 .ob-landing-theme {
-  /* Core design tokens — Light mode (default) */
+  /* Core design tokens — Light mode (default). Scoped to this page. */
   --ob-bg: #fffbf7;
   --ob-surf-warm: #fff6ed;
   --ob-card: #ffffff;
   --ob-ink: #14110f;
-  --ob-muted: #57534e;
+  --ob-ink-muted: #6e6259;
+  --ob-muted: var(--ob-ink-muted);
   --ob-iron: #8a817c;
-  --ob-line: rgba(20, 17, 15, 0.09);
+  --ob-border: rgba(20, 17, 15, 0.08);
+  --ob-line: var(--ob-border);
   --ob-line-strong: rgba(20, 17, 15, 0.16);
   --ob-primary: #ff6b00;
   --ob-primary-light: #ff8533;
   --ob-primary-active: #e05a00;
-  --ob-primary-soft: #fff7ed;
+  --ob-primary-soft: #fff0e6;
   --ob-amber: #f59e0b;
   --ob-success: #10b981;
   --ob-danger: #ef4444;
   --ob-header-bg: rgba(255, 251, 247, 0.8);
-  --ob-code-bg: #14110f;
-  --ob-code-surface: #1c1917;
-  --ob-code-ink: #f5f5f4;
+  --ob-terminal-bg: #14110f;
+  --ob-code-bg: var(--ob-terminal-bg);
+  --ob-code-surface: #1c1815;
+  --ob-code-ink: #fdfdfc;
   --ob-code-str: #fdba74;
   --ob-code-line: rgba(255, 255, 255, 0.08);
   --ob-footer-bg: #14110f;
-  --ob-footer-ink: #f5f5f4;
-  --ob-footer-muted: #a8a29e;
+  --ob-footer-ink: #fdfdfc;
+  --ob-footer-muted: #a69b91;
   --ob-footer-line: rgba(255, 255, 255, 0.08);
 
   /* Typography stacks */
   --ob-font-serif:
-    'Lora Variable', 'Noto Serif SC', 'Songti SC', 'STSong', Georgia, serif;
+    'Songti SC', 'Noto Serif SC', 'STSong', 'SimSun', 'Lora Variable', 'Lora',
+    Georgia, serif;
   --ob-font-sans:
     -apple-system, 'PingFang SC', 'Noto Sans SC', 'Inter', sans-serif;
   --ob-font-mono:
@@ -80,17 +84,19 @@ For commercial licensing, please contact support@quantumnous.com
 .dark .ob-landing-theme,
 .ob-landing-theme.dark {
   --ob-bg: #14110f;
-  --ob-surf-warm: #1c1917;
-  --ob-card: #1c1917;
-  --ob-ink: #f5f5f4;
-  --ob-muted: #a8a29e;
+  --ob-surf-warm: #1c1815;
+  --ob-card: #1c1815;
+  --ob-ink: #fdfdfc;
+  --ob-ink-muted: #a69b91;
+  --ob-muted: var(--ob-ink-muted);
   --ob-iron: #8a817c;
-  --ob-line: rgba(255, 255, 255, 0.08);
+  --ob-border: rgba(255, 255, 255, 0.08);
+  --ob-line: var(--ob-border);
   --ob-line-strong: rgba(255, 255, 255, 0.16);
   --ob-primary: #ff6b00;
   --ob-primary-light: #ff8533;
   --ob-primary-active: #e05a00;
-  --ob-primary-soft: rgba(255, 107, 0, 0.12);
+  --ob-primary-soft: rgba(255, 107, 0, 0.15);
   --ob-amber: #f59e0b;
   --ob-success: #10b981;
   --ob-danger: #ef4444;
@@ -298,4 +304,15 @@ For commercial licensing, please contact support@quantumnous.com
   color: var(--ob-primary);
   text-decoration: underline;
   text-underline-offset: 4px;
+}
+
+/* Header icon buttons stay circular without changing the shared controls. */
+.ob-landing-theme .ob-header-bar [data-slot='button'] {
+  border-radius: 9999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ob-landing-theme .animate-ping {
+    animation: none;
+  }
 }

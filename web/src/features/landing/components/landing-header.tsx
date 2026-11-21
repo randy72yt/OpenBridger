@@ -115,7 +115,7 @@ export function LandingHeader(props: LandingHeaderProps) {
                 {loading ? <Skeleton className='h-4 w-24' /> : displaySiteName}
               </span>
               <span className='ob-chip-primary ob-mono hidden rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase sm:inline-block'>
-                API Gateway
+                {t('API Gateway')}
               </span>
             </div>
           </Link>
@@ -134,7 +134,7 @@ export function LandingHeader(props: LandingHeaderProps) {
                     href={link.href}
                     target='_blank'
                     rel='noopener noreferrer'
-                    className='text-muted-foreground hover:text-primary rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors'
+                    className='text-foreground/80 hover:text-primary rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors'
                   >
                     {link.title}
                   </a>
@@ -145,10 +145,10 @@ export function LandingHeader(props: LandingHeaderProps) {
                   key={link.href}
                   to={link.href}
                   className={cn(
-                    'rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200',
+                    'rounded-full py-1.5 text-sm transition-colors',
                     isActive
-                      ? 'text-primary bg-[var(--ob-primary-soft)] font-semibold shadow-xs'
-                      : 'text-muted-foreground hover:text-primary'
+                      ? 'bg-[var(--ob-primary-soft)] text-primary px-4 font-semibold'
+                      : 'text-foreground/80 hover:text-primary px-3.5 font-medium'
                   )}
                 >
                   {link.title}
@@ -216,7 +216,7 @@ export function LandingHeader(props: LandingHeaderProps) {
               type='button'
               variant='ghost'
               size='icon'
-              className='size-9 rounded-xl'
+              className='size-9 rounded-full'
               onClick={() => setMobileMenuOpen((prev) => !prev)}
               aria-expanded={mobileMenuOpen}
               aria-label={t('Toggle navigation menu')}
@@ -235,6 +235,7 @@ export function LandingHeader(props: LandingHeaderProps) {
           <div className='ob-card mt-2 rounded-2xl p-4 shadow-xl backdrop-blur-xl md:hidden'>
             <nav className='flex flex-col gap-1'>
               {navLinks.map((link) => {
+                const isActive = pathname === link.href
                 if ('external' in link && link.external) {
                   return (
                     <a
@@ -243,7 +244,7 @@ export function LandingHeader(props: LandingHeaderProps) {
                       target='_blank'
                       rel='noopener noreferrer'
                       onClick={() => setMobileMenuOpen(false)}
-                      className='text-muted-foreground hover:text-primary rounded-xl px-3 py-2.5 text-sm font-medium'
+                      className='text-foreground/80 hover:text-primary rounded-full px-3.5 py-2 text-sm font-medium'
                     >
                       {link.title}
                     </a>
@@ -254,7 +255,12 @@ export function LandingHeader(props: LandingHeaderProps) {
                     key={link.href}
                     to={link.href}
                     onClick={() => setMobileMenuOpen(false)}
-                    className='text-muted-foreground hover:text-primary rounded-xl px-3 py-2.5 text-sm font-medium'
+                    className={cn(
+                      'rounded-full px-4 py-2 text-sm',
+                      isActive
+                        ? 'bg-[var(--ob-primary-soft)] text-primary font-semibold'
+                        : 'text-foreground/80 hover:text-primary font-medium'
+                    )}
                   >
                     {link.title}
                   </Link>

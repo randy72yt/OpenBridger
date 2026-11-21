@@ -17,12 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 
 interface ApiDemoConfig {
   id: string
-  label: string
+  labelKey: string
   method: 'POST' | 'GET'
   endpoint: string
   headers: string[]
@@ -35,7 +36,7 @@ interface ApiDemoConfig {
 const API_DEMOS: ApiDemoConfig[] = [
   {
     id: 'gpt-chat',
-    label: 'Chat',
+    labelKey: 'landing.terminal.tab.chat',
     method: 'POST',
     endpoint: '/v1/chat/completions',
     headers: ['"Authorization: Bearer sk-••••"'],
@@ -56,7 +57,7 @@ const API_DEMOS: ApiDemoConfig[] = [
   },
   {
     id: 'responses',
-    label: 'Responses',
+    labelKey: 'landing.terminal.tab.responses',
     method: 'POST',
     endpoint: '/v1/responses',
     headers: ['"Authorization: Bearer sk-••••"'],
@@ -72,7 +73,7 @@ const API_DEMOS: ApiDemoConfig[] = [
   },
   {
     id: 'claude',
-    label: 'Claude',
+    labelKey: 'landing.terminal.tab.claude',
     method: 'POST',
     endpoint: '/v1/messages',
     headers: ['"x-api-key: sk-••••"', '"anthropic-version: 2023-06-01"'],
@@ -94,7 +95,7 @@ const API_DEMOS: ApiDemoConfig[] = [
   },
   {
     id: 'gemini',
-    label: 'Gemini',
+    labelKey: 'landing.terminal.tab.gemini',
     method: 'POST',
     endpoint: '/v1beta/models/{model}:generateContent',
     headers: ['"x-goog-api-key: sk-••••"'],
@@ -125,6 +126,7 @@ interface LandingTerminalDemoProps {
 }
 
 export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
+  const { t } = useTranslation()
   const [activeIndex, setActiveIndex] = useState(0)
   const [transitioning, setTransitioning] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined)
@@ -183,7 +185,7 @@ export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
                     : 'border-transparent text-[var(--ob-iron)] hover:text-[var(--ob-code-ink)]'
                 )}
               >
-                {item.label}
+                {t(item.labelKey)}
               </button>
             )
           })}
@@ -225,7 +227,7 @@ export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
           {/* Request */}
           <div className='relative px-5 py-4'>
             <span className='ob-code-iron font-sans text-[10px] font-semibold tracking-[0.18em] uppercase'>
-              Request
+              {t('landing.terminal.request')}
             </span>
             <div
               className={cn(
@@ -271,7 +273,7 @@ export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
             }}
           >
             <span className='ob-code-iron font-sans text-[10px] font-semibold tracking-[0.18em] uppercase'>
-              Response
+              {t('landing.terminal.response')}
             </span>
             <div
               className={cn(
@@ -303,7 +305,9 @@ export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
             </span>
             <span className='size-1 rounded-full bg-[var(--ob-iron)] opacity-50' />
             <span className='flex items-center gap-1'>
-              <span className='tracking-wider uppercase'>cost</span>
+              <span className='tracking-wider uppercase'>
+                {t('landing.terminal.cost')}
+              </span>
               <span className='ob-mono'>
                 ${(demo.tokens * 0.00003).toFixed(5)}
               </span>

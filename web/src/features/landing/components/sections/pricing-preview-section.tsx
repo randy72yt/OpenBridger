@@ -97,7 +97,7 @@ export function PricingPreviewSection() {
           </div>
           <Button
             variant='outline'
-            className='ob-btn-secondary group shrink-0 rounded-xl px-5'
+            className='ob-btn-secondary group shrink-0 rounded-full px-5'
             render={<Link to='/pricing' />}
           >
             <span>{t('landing.pricing.exploreAll')}</span>

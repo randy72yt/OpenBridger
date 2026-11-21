@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
-import { ArrowRight, HelpCircle } from 'lucide-react'
+import { ArrowUpRight, HelpCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -93,7 +93,7 @@ export function FaqSection(props: FaqSectionProps) {
               <div className='flex shrink-0 flex-wrap items-center gap-3'>
                 <Button
                   size='lg'
-                  className='ob-btn-primary h-11 rounded-xl px-6 text-sm font-semibold'
+                  className='ob-btn-primary h-11 rounded-full px-6 text-sm font-semibold shadow-md shadow-orange-500/20'
                   render={
                     <Link
                       to={props.isAuthenticated ? '/dashboard' : '/sign-up'}
@@ -103,12 +103,12 @@ export function FaqSection(props: FaqSectionProps) {
                   {props.isAuthenticated
                     ? t('Go to Dashboard')
                     : t('landing.hero.ctaPrimary')}
-                  <ArrowRight className='ml-1.5 size-4' />
+                  <ArrowUpRight className='ml-1.5 size-4' />
                 </Button>
                 <Button
                   variant='outline'
                   size='lg'
-                  className='ob-btn-secondary h-11 rounded-xl px-5 text-sm font-medium'
+                  className='ob-btn-secondary h-11 rounded-full px-5 text-sm font-medium'
                   render={<Link to='/pricing' />}
                 >
                   {t('Model Square')}

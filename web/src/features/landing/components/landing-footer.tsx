@@ -135,7 +135,7 @@ export function LandingFooter(props: LandingFooterProps) {
             &copy; {currentYear} {displayName}. {t('footer.defaultCopyright')}
           </div>
           <div className='flex flex-wrap items-center gap-1.5'>
-            <span>Powered by</span>
+            <span>{t('Powered by')}</span>
             <a
               href='https://github.com/QuantumNous/new-api'
               target='_blank'
@@ -146,7 +146,7 @@ export function LandingFooter(props: LandingFooterProps) {
             </a>
             <span>·</span>
             <span>
-              Frontend design and development by New API contributors.
+              {t('Frontend design and development by New API contributors.')}
             </span>
           </div>
         </div>

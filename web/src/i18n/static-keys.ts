@@ -713,4 +713,8 @@ export const STATIC_I18N_KEYS = [
   'landing.faq.q4.answer',
   'landing.faq.q5.question',
   'landing.faq.q5.answer',
+  'landing.terminal.tab.chat',
+  'landing.terminal.tab.responses',
+  'landing.terminal.tab.claude',
+  'landing.terminal.tab.gemini',
 ] as const
