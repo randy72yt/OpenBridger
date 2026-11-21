@@ -18,14 +18,13 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
-import { PublicLayout } from '@/components/layout'
-import { Footer } from '@/components/layout/components/footer'
 import { Card, CardContent } from '@/components/ui/card'
+import { PublicShell } from '@/features/landing/components/public-shell'
 
 export function Tutorials() {
   const { t } = useTranslation()
   return (
-    <PublicLayout showMainContainer={false}>
+    <PublicShell>
       <main className='mx-auto min-h-[70vh] max-w-4xl px-6 pt-32 pb-16'>
         <Card className='rounded-3xl shadow-none'>
           <CardContent className='space-y-5 p-8 md:p-12'>
@@ -43,7 +42,6 @@ export function Tutorials() {
           </CardContent>
         </Card>
       </main>
-      <Footer />
-    </PublicLayout>
+    </PublicShell>
   )
 }

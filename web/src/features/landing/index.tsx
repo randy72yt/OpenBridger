@@ -27,8 +27,7 @@ import { isLikelyHtml } from '@/lib/content-format'
 import { getCookie } from '@/lib/cookies'
 import { useAuthStore } from '@/stores/auth-store'
 
-import { LandingFooter } from './components/landing-footer'
-import { LandingHeader } from './components/landing-header'
+import { PublicShell } from './components/public-shell'
 import { CodeIntegrationSection } from './components/sections/code-integration-section'
 import { FaqSection } from './components/sections/faq-section'
 import { LandingHero } from './components/sections/landing-hero'
@@ -125,8 +124,7 @@ export function LandingPage() {
   }
 
   return (
-    <div className='ob-landing-theme bg-background text-foreground relative min-h-svh overflow-x-clip'>
-      <LandingHeader />
+    <PublicShell>
       <main>
         <LandingHero isAuthenticated={isAuthenticated} />
         <MultiModelSection />
@@ -135,7 +133,6 @@ export function LandingPage() {
         <CodeIntegrationSection />
         <FaqSection isAuthenticated={isAuthenticated} />
       </main>
-      <LandingFooter />
-    </div>
+    </PublicShell>
   )
 }

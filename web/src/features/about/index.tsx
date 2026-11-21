@@ -19,13 +19,12 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
-import { PublicLayout } from '@/components/layout'
-import { Footer } from '@/components/layout/components/footer'
 import { PlatformContact } from '@/components/platform-contact'
 import { RichContent } from '@/components/rich-content'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PublicShell } from '@/features/landing/components/public-shell'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { isHttpUrl, isLikelyHtml } from '@/lib/content-format'
 
@@ -137,61 +136,60 @@ export function About() {
 
   if (isLoading) {
     return (
-      <PublicLayout>
-        <div className='mx-auto flex max-w-4xl flex-col gap-4 py-12'>
+      <PublicShell>
+        <div className='mx-auto flex max-w-4xl flex-col gap-4 px-5 pt-28 pb-16'>
           <Skeleton className='h-8 w-[45%]' />
           <Skeleton className='h-4 w-full' />
           <Skeleton className='h-4 w-[90%]' />
           <Skeleton className='h-4 w-[80%]' />
         </div>
-      </PublicLayout>
+      </PublicShell>
     )
   }
 
   if (!hasContent) {
     return (
-      <PublicLayout showMainContainer={false}>
+      <PublicShell>
         <DefaultAboutContent />
-        <Footer />
-      </PublicLayout>
+      </PublicShell>
     )
   }
 
   if (isUrl) {
     return (
-      <PublicLayout showMainContainer={false}>
+      <PublicShell>
         <iframe
           src={rawContent}
-          className='h-[calc(100vh-3.5rem)] w-full border-0'
+          className='h-[calc(100svh-5.5rem)] w-full border-0 pt-20'
           title={t('About')}
           sandbox='allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts'
         />
-      </PublicLayout>
+      </PublicShell>
     )
   }
 
   if (contentIsHtml) {
     return (
-      <PublicLayout showMainContainer={false}>
+      <PublicShell>
         <RichContent
           mode='html'
           htmlVariant='isolated'
           content={rawContent}
-          className='prose-neutral dark:prose-invert max-w-none'
+          className='prose-neutral dark:prose-invert max-w-none px-5 pt-28 pb-16'
         />
-      </PublicLayout>
+      </PublicShell>
     )
   }
 
   return (
-    <PublicLayout>
-      <div className='mx-auto max-w-6xl px-4 py-8'>
+    <PublicShell>
+      <div className='mx-auto max-w-6xl px-4 pt-28 pb-16'>
         <RichContent
           mode='markdown'
           content={rawContent}
           className='prose-neutral dark:prose-invert max-w-none'
         />
       </div>
-    </PublicLayout>
+    </PublicShell>
   )
 }
