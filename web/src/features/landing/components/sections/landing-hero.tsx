@@ -159,7 +159,6 @@ export function LandingHero(props: LandingHeroProps) {
             <div className='mt-10 grid w-full grid-cols-1 divide-y divide-black/[0.08] border-t pt-4 sm:grid-cols-3 sm:divide-x sm:divide-y-0 sm:border-t-0 sm:pt-0 dark:divide-white/[0.08]'>
               <div className='pb-3 sm:pr-5 sm:pb-0'>
                 <div className='text-foreground text-xl font-extrabold tracking-tight sm:text-2xl'>
-                  200+{' '}
                   <span className='text-foreground/90 text-sm font-semibold sm:text-base'>
                     {t('landing.hero.metric1.title')}
                   </span>

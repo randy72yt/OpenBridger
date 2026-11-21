@@ -30,7 +30,6 @@ interface ApiDemoConfig {
   request: string[]
   response: string[]
   tokens: number
-  latency: number
 }
 
 const API_DEMOS: ApiDemoConfig[] = [
@@ -53,7 +52,6 @@ const API_DEMOS: ApiDemoConfig[] = [
       '}',
     ],
     tokens: 27,
-    latency: 142,
   },
   {
     id: 'responses',
@@ -69,7 +67,6 @@ const API_DEMOS: ApiDemoConfig[] = [
       '}',
     ],
     tokens: 31,
-    latency: 168,
   },
   {
     id: 'claude',
@@ -91,7 +88,6 @@ const API_DEMOS: ApiDemoConfig[] = [
       '}',
     ],
     tokens: 29,
-    latency: 156,
   },
   {
     id: 'gemini',
@@ -112,7 +108,6 @@ const API_DEMOS: ApiDemoConfig[] = [
       '}',
     ],
     tokens: 25,
-    latency: 93,
   },
 ]
 
@@ -190,9 +185,8 @@ export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
             )
           })}
           <div className='ml-auto flex items-center gap-2 pr-2 sm:pr-3'>
-            <span className='ob-dot-success inline-block size-1.5 rounded-full' />
-            <span className='ob-mono ob-code-success text-[10px] font-semibold tracking-wider uppercase'>
-              200 OK
+            <span className='ob-mono ob-code-iron text-[10px] font-semibold tracking-wider uppercase'>
+              {t('Example')}
             </span>
           </div>
         </div>
@@ -288,35 +282,6 @@ export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
           </div>
         </div>
 
-        {/* Footer metrics */}
-        <div
-          className='ob-code-header flex items-center justify-between border-t px-5 py-2.5'
-          style={{ borderColor: 'var(--ob-code-line)' }}
-        >
-          <div className='ob-code-iron flex items-center gap-3 text-[10px] tabular-nums'>
-            <span className='flex items-center gap-1'>
-              <span className='ob-mono'>{demo.latency}</span>
-              <span className='tracking-wider uppercase'>ms</span>
-            </span>
-            <span className='size-1 rounded-full bg-[var(--ob-iron)] opacity-50' />
-            <span className='flex items-center gap-1'>
-              <span className='ob-mono'>{demo.tokens}</span>
-              <span className='tracking-wider uppercase'>tokens</span>
-            </span>
-            <span className='size-1 rounded-full bg-[var(--ob-iron)] opacity-50' />
-            <span className='flex items-center gap-1'>
-              <span className='tracking-wider uppercase'>
-                {t('landing.terminal.cost')}
-              </span>
-              <span className='ob-mono'>
-                ${(demo.tokens * 0.00003).toFixed(5)}
-              </span>
-            </span>
-          </div>
-          <span className='ob-mono ob-code-iron text-[10px] tracking-wider uppercase'>
-            stream · sse
-          </span>
-        </div>
       </div>
     </div>
   )

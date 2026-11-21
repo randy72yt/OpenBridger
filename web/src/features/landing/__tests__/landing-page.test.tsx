@@ -24,7 +24,7 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -74,17 +74,19 @@ vi.mock('@/features/home/hooks', () => ({
   }),
 }))
 
+const pricingData = vi.hoisted(() => ({
+  models: [] as Array<Record<string, unknown>>,
+  vendors: [] as unknown[],
+  groupRatio: {} as Record<string, number>,
+  usableGroup: {} as Record<string, string>,
+  supportedEndpoint: {} as Record<string, unknown>,
+  autoGroups: [] as string[],
+  isLoading: false,
+  error: null as Error | null,
+}))
+
 vi.mock('@/features/pricing/hooks/use-pricing-data', () => ({
-  usePricingData: () => ({
-    models: [],
-    vendors: [],
-    groupRatio: {},
-    usableGroup: {},
-    supportedEndpoint: {},
-    autoGroups: [],
-    isLoading: false,
-    error: null,
-  }),
+  usePricingData: () => pricingData,
 }))
 
 const originalConfig = useSystemConfigStore.getState()
@@ -191,6 +193,10 @@ function renderLandingPage() {
 
 beforeEach(() => {
   localStorage.clear()
+  pricingData.models = []
+  pricingData.groupRatio = {}
+  pricingData.isLoading = false
+  pricingData.error = null
   useSystemConfigStore
     .getState()
     .setConfig({ systemName: 'OpenBridger', footerHtml: '' })
@@ -242,11 +248,19 @@ describe('LandingPage (P0)', { timeout: 15000 }, () => {
     // Scoped warm-orange theme wrapper is mounted
     expect(document.querySelector('.ob-landing-theme')).toBeInTheDocument()
 
-    // 2. Pricing preview section
+    // 2. Pricing preview has no fallback prices when the catalog is empty
     expect(screen.getAllByText('claude-sonnet-4-6').length).toBeGreaterThan(0)
+    expect(screen.getByText('Prices are unavailable right now.')).toBeVisible()
+    expect(screen.queryByText('$3.00')).not.toBeInTheDocument()
+    expect(screen.queryByText('$15.00')).not.toBeInTheDocument()
 
-    // 3. Real-time model status section
-    expect(screen.getByText('99.94%')).toBeVisible()
+    // 3. Model health has no fabricated sample
+    expect(screen.getByText('No sample data yet.')).toBeVisible()
+    expect(screen.queryByText('99.94%')).not.toBeInTheDocument()
+    expect(screen.queryByText('420ms')).not.toBeInTheDocument()
+    expect(screen.queryByText('200+')).not.toBeInTheDocument()
+    expect(screen.getByText('Example')).toBeVisible()
+    expect(screen.queryByText('landing.terminal.cost')).not.toBeInTheDocument()
 
     // 4. 3-line code integration tabs
     const tsTab = screen.getByRole('tab', { name: 'TypeScript / Node.js' })
@@ -283,5 +297,40 @@ describe('LandingPage (P0)', { timeout: 15000 }, () => {
     expect(homeLink?.className).not.toContain('underline')
 
     client.clear()
+  })
+
+  it('shows catalog prices from the pricing API and hides them when that request fails', async () => {
+    mockViewportAndMotion({ isDesktop: false, reducedMotion: true })
+    pricingData.groupRatio = { default: 1 }
+    pricingData.models = [
+      {
+        model_name: 'catalog-model',
+        vendor_name: 'Catalog',
+        quota_type: 0,
+        model_ratio: 1.11,
+        completion_ratio: 2,
+        cache_ratio: 0.5,
+        enable_groups: ['default'],
+        tags: 'Tools',
+      },
+    ]
+    const loaded = renderLandingPage()
+    expect(await screen.findByText('catalog-model')).toBeVisible()
+    expect(screen.getByText(/\$2\.22/)).toBeVisible()
+    expect(screen.queryByText('Prices are unavailable right now.')).not.toBeInTheDocument()
+    expect(screen.queryByText('$3.00')).not.toBeInTheDocument()
+    loaded.client.clear()
+    cleanup()
+
+    pricingData.models = []
+    pricingData.error = new Error('pricing down')
+    const failed = renderLandingPage()
+    expect(
+      await screen.findByText('Prices are unavailable right now.')
+    ).toBeVisible()
+    expect(screen.queryByText('catalog-model')).not.toBeInTheDocument()
+    expect(screen.queryByText(/\$2\.22/)).not.toBeInTheDocument()
+    expect(screen.queryByText('$3.00')).not.toBeInTheDocument()
+    failed.client.clear()
   })
 })

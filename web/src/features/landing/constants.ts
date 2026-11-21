@@ -19,9 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import type {
   CodeSnippetItem,
   LandingFaqItem,
-  LandingModelHealthItem,
-  LandingModelHealthSlot,
-  LandingPricingPreviewRow,
   LandingProviderItem,
 } from './types'
 
@@ -29,25 +26,6 @@ export const HERO_HIGHLIGHT_PILLS = [
   'landing.hero.pill.multiProtocol',
   'landing.hero.pill.liveProbe',
   'landing.hero.pill.payAsYouGo',
-] as const
-
-export const HERO_METRICS = [
-  {
-    value: '40+',
-    labelKey: 'landing.hero.metric.providers',
-  },
-  {
-    value: '99.9%',
-    labelKey: 'landing.hero.metric.availability',
-  },
-  {
-    value: '< 120ms',
-    labelKey: 'landing.hero.metric.gatewayOverhead',
-  },
-  {
-    value: '100%',
-    labelKey: 'landing.hero.metric.transparentPricing',
-  },
 ] as const
 
 export const LANDING_PROVIDERS: LandingProviderItem[] = [
@@ -108,117 +86,6 @@ export const SUPPORTED_CLI_TOOLS = [
   { name: 'Cline / Roo Code', protocol: 'OpenAI / Anthropic' },
   { name: 'LangChain / Vercel AI SDK', protocol: 'Multi-SDK' },
 ] as const
-
-export const FALLBACK_PRICING_ROWS: LandingPricingPreviewRow[] = [
-  {
-    modelName: 'claude-sonnet-4-6',
-    vendorName: 'Anthropic',
-    groupName: 'default',
-    groupRatio: 1.0,
-    inputPerMillionUsd: 3.0,
-    outputPerMillionUsd: 15.0,
-    cacheReadPerMillionUsd: 0.3,
-    tags: ['Coding', 'Agent', '200K'],
-  },
-  {
-    modelName: 'gpt-4.1',
-    vendorName: 'OpenAI',
-    groupName: 'default',
-    groupRatio: 1.0,
-    inputPerMillionUsd: 2.0,
-    outputPerMillionUsd: 8.0,
-    cacheReadPerMillionUsd: 0.5,
-    tags: ['General', '1M Context', 'Tools'],
-  },
-  {
-    modelName: 'gemini-2.5-pro',
-    vendorName: 'Google',
-    groupName: 'default',
-    groupRatio: 1.0,
-    inputPerMillionUsd: 1.25,
-    outputPerMillionUsd: 10.0,
-    cacheReadPerMillionUsd: 0.31,
-    tags: ['Multimodal', '1M Context', 'Reasoning'],
-  },
-  {
-    modelName: 'deepseek-r1',
-    vendorName: 'DeepSeek',
-    groupName: 'default',
-    groupRatio: 1.0,
-    inputPerMillionUsd: 0.55,
-    outputPerMillionUsd: 2.19,
-    cacheReadPerMillionUsd: 0.14,
-    tags: ['Reasoning', 'Math', 'Open Weights'],
-  },
-  {
-    modelName: 'gpt-4.1-mini',
-    vendorName: 'OpenAI',
-    groupName: 'default',
-    groupRatio: 1.0,
-    inputPerMillionUsd: 0.4,
-    outputPerMillionUsd: 1.6,
-    cacheReadPerMillionUsd: 0.1,
-    tags: ['Fast', 'High Throughput'],
-  },
-]
-
-const HEALTHY_24H: LandingModelHealthSlot[] = Array.from(
-  { length: 24 },
-  (_, index) => ({
-    id: `h-${index}`,
-    level: 'healthy',
-  })
-)
-const DEGRADED_SLOT_24H: LandingModelHealthSlot[] = Array.from(
-  { length: 24 },
-  (_, index) => ({
-    id: `d-${index}`,
-    level: index === 17 ? 'degraded' : 'healthy',
-  })
-)
-
-export const DEFAULT_MODEL_HEALTH_ITEMS: LandingModelHealthItem[] = [
-  {
-    modelName: 'claude-sonnet-4-6',
-    provider: 'Anthropic',
-    groupName: 'default',
-    status: 'healthy',
-    successRate: 99.94,
-    ttftMs: 420,
-    tps: 78,
-    hourlySlots: HEALTHY_24H,
-  },
-  {
-    modelName: 'gpt-4.1',
-    provider: 'OpenAI',
-    groupName: 'default',
-    status: 'healthy',
-    successRate: 99.96,
-    ttftMs: 310,
-    tps: 94,
-    hourlySlots: HEALTHY_24H,
-  },
-  {
-    modelName: 'gemini-2.5-pro',
-    provider: 'Google',
-    groupName: 'default',
-    status: 'healthy',
-    successRate: 99.89,
-    ttftMs: 480,
-    tps: 86,
-    hourlySlots: HEALTHY_24H,
-  },
-  {
-    modelName: 'deepseek-r1',
-    provider: 'DeepSeek',
-    groupName: 'default',
-    status: 'degraded',
-    successRate: 99.42,
-    ttftMs: 690,
-    tps: 52,
-    hourlySlots: DEGRADED_SLOT_24H,
-  },
-]
 
 export function getCodeSnippets(baseUrl: string): CodeSnippetItem[] {
   const normalizedBase = baseUrl.replace(/\/+$/, '')

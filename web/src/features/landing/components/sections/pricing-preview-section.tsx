@@ -26,24 +26,23 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
 
-import { FALLBACK_PRICING_ROWS } from '../../constants'
 import type { LandingPricingPreviewRow } from '../../types'
 import { ScrollReveal } from '../scroll-reveal'
 
 export function PricingPreviewSection() {
   const { t } = useTranslation()
-  const { models, groupRatio } = usePricingData()
+  const { models, groupRatio, isLoading, error } = usePricingData()
 
   const previewRows = useMemo<LandingPricingPreviewRow[]>(() => {
     if (!models || models.length === 0) {
-      return FALLBACK_PRICING_ROWS
+      return []
     }
 
     const tokenModels = models.filter(
       (item) => item.quota_type === 0 && item.model_ratio > 0
     )
     if (tokenModels.length === 0) {
-      return FALLBACK_PRICING_ROWS
+      return []
     }
 
     return tokenModels.slice(0, 5).map((item) => {
@@ -173,8 +172,16 @@ export function PricingPreviewSection() {
           </Card>
         </ScrollReveal>
 
-        {/* Live Model Square Preview Table */}
         <ScrollReveal delay={0.14} className='mt-6'>
+          {previewRows.length === 0 ? (
+            <Card className='ob-card rounded-2xl py-0 shadow-none'>
+              <CardContent className='text-muted-foreground px-5 py-10 text-center text-sm'>
+                {isLoading && !error
+                  ? t('Loading prices.')
+                  : t('Prices are unavailable right now.')}
+              </CardContent>
+            </Card>
+          ) : (
           <Card className='ob-card overflow-hidden rounded-2xl py-0 shadow-none'>
             <div className='overflow-x-auto'>
               <table className='w-full border-collapse text-left text-sm'>
@@ -253,6 +260,7 @@ export function PricingPreviewSection() {
               </table>
             </div>
           </Card>
+          )}
         </ScrollReveal>
       </div>
     </section>

@@ -16,8 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export type ModelStatusLevel = 'healthy' | 'degraded' | 'down'
-
 export type LandingProviderItem = {
   id: string
   name: string
@@ -36,22 +34,6 @@ export type LandingPricingPreviewRow = {
   outputPerMillionUsd: number
   cacheReadPerMillionUsd: number
   tags: string[]
-}
-
-export type LandingModelHealthSlot = {
-  id: string
-  level: ModelStatusLevel
-}
-
-export type LandingModelHealthItem = {
-  modelName: string
-  provider: string
-  groupName: string
-  status: ModelStatusLevel
-  successRate: number
-  ttftMs: number
-  tps: number
-  hourlySlots: LandingModelHealthSlot[]
 }
 
 export type CodeLanguage = 'python' | 'typescript' | 'curl'

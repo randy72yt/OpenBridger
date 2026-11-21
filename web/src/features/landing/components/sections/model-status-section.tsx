@@ -16,35 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Activity, Clock, RefreshCw, Shield } from 'lucide-react'
+import { Activity, RefreshCw, Shield } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { cn } from '@/lib/utils'
 
-import { DEFAULT_MODEL_HEALTH_ITEMS } from '../../constants'
-import type { ModelStatusLevel } from '../../types'
 import { ScrollReveal } from '../scroll-reveal'
-
-function getSlotColorClass(level: ModelStatusLevel): string {
-  if (level === 'healthy') {
-    return 'ob-status-bar-healthy'
-  }
-  if (level === 'degraded') {
-    return 'ob-status-bar-degraded'
-  }
-  return 'ob-status-bar-down'
-}
-
-function getStatusTextColorClass(level: ModelStatusLevel): string {
-  if (level === 'healthy') {
-    return 'ob-status-text-healthy'
-  }
-  if (level === 'degraded') {
-    return 'ob-status-text-degraded'
-  }
-  return 'ob-status-text-down'
-}
 
 export function ModelStatusSection() {
   const { t } = useTranslation()
@@ -114,81 +91,13 @@ export function ModelStatusSection() {
           {/* Right Column: Real-Time Model Health Telemetry Board */}
           <ScrollReveal delay={0.1} className='min-w-0 lg:col-span-7'>
             <Card className='ob-card overflow-hidden rounded-2xl py-0 shadow-none'>
-              <CardHeader className='ob-section-warm border-border flex flex-row items-center justify-between border-b px-5 py-4'>
-                <div className='flex items-center gap-2.5'>
-                  <span className='relative flex size-2.5'>
-                    <span className='ob-dot-success absolute inline-flex h-full w-full animate-ping rounded-full opacity-75' />
-                    <span className='ob-dot-success relative inline-flex size-2.5 rounded-full' />
-                  </span>
-                  <span className='text-sm font-semibold'>
-                    {t('landing.status.boardTitle')}
-                  </span>
-                </div>
-                <div className='text-muted-foreground ob-mono flex items-center gap-1.5 text-xs'>
-                  <Clock className='size-3.5' />
-                  <span>{t('landing.status.window24h')}</span>
-                </div>
+              <CardHeader className='ob-section-warm border-border border-b px-5 py-4'>
+                <span className='text-sm font-semibold'>
+                  {t('landing.status.boardTitle')}
+                </span>
               </CardHeader>
-
-              <CardContent className='divide-border divide-y p-0'>
-                {DEFAULT_MODEL_HEALTH_ITEMS.map((item) => (
-                  <div
-                    key={item.modelName}
-                    className='flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between'
-                  >
-                    <div className='min-w-0 space-y-1'>
-                      <div className='flex items-center gap-2'>
-                        <span className='ob-mono truncate text-sm font-semibold'>
-                          {item.modelName}
-                        </span>
-                        <span className='ob-chip-primary ob-mono rounded px-1.5 py-0.5 text-[10px] font-semibold'>
-                          {item.groupName}
-                        </span>
-                      </div>
-                      <div className='text-muted-foreground ob-mono flex items-center gap-3 text-xs tabular-nums'>
-                        <span>
-                          TTFT{' '}
-                          <strong className='text-foreground'>
-                            {item.ttftMs}ms
-                          </strong>
-                        </span>
-                        <span>·</span>
-                        <span>
-                          TPS{' '}
-                          <strong className='text-foreground'>
-                            {item.tps}
-                          </strong>
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* 24-hour status bars + success rate */}
-                    <div className='flex items-center justify-between gap-4 sm:justify-end'>
-                      <div
-                        className='flex items-center gap-0.5'
-                        aria-label={`${item.modelName} 24h status`}
-                      >
-                        {item.hourlySlots.map((slot) => (
-                          <span
-                            key={slot.id}
-                            className={cn(
-                              'h-5 w-1.5 rounded-[2px] transition-opacity hover:opacity-80',
-                              getSlotColorClass(slot.level)
-                            )}
-                          />
-                        ))}
-                      </div>
-                      <span
-                        className={cn(
-                          'ob-mono w-16 text-right text-xs font-bold tabular-nums',
-                          getStatusTextColorClass(item.status)
-                        )}
-                      >
-                        {item.successRate.toFixed(2)}%
-                      </span>
-                    </div>
-                  </div>
-                ))}
+              <CardContent className='text-muted-foreground px-5 py-10 text-center text-sm'>
+                {t('No sample data yet.')}
               </CardContent>
             </Card>
           </ScrollReveal>
