@@ -16,6 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   createMemoryHistory,
@@ -332,5 +336,37 @@ describe('LandingPage (P0)', { timeout: 15000 }, () => {
     expect(screen.queryByText(/\$2\.22/)).not.toBeInTheDocument()
     expect(screen.queryByText('$3.00')).not.toBeInTheDocument()
     failed.client.clear()
+  })
+
+  it('keeps the example label and the non-numeric catalog wording in every locale', () => {
+    const required = [
+      'Example',
+      'No sample data yet.',
+      'No rate-limit data yet.',
+      'Prices are unavailable right now.',
+      'Loading prices.',
+    ]
+    for (const locale of ['en', 'zh', 'zh-TW'] as const) {
+      const translation = JSON.parse(
+        readFileSync(
+          resolve(
+            dirname(fileURLToPath(import.meta.url)),
+            `../../../i18n/locales/${locale}.json`
+          ),
+          'utf8'
+        )
+      ).translation as Record<string, string>
+      for (const key of required) {
+        expect(translation[key]?.trim().length).toBeGreaterThan(0)
+      }
+      expect(translation['landing.hero.subtitle']).not.toContain('200+')
+      if (locale !== 'en') {
+        expect(translation.Example).not.toBe('Example')
+        expect(translation['No sample data yet.']).not.toBe('No sample data yet.')
+        expect(translation['Prices are unavailable right now.']).not.toBe(
+          'Prices are unavailable right now.'
+        )
+      }
+    }
   })
 })

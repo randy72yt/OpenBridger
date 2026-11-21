@@ -2915,7 +2915,7 @@
     "landing.hero.pill.liveProbe": "Real-Time Health Probing & Failover",
     "landing.hero.pill.multiProtocol": "OpenAI / Claude / Gemini Native Protocols",
     "landing.hero.pill.payAsYouGo": "Pay-As-You-Go · No Hidden Markup",
-    "landing.hero.subtitle": "Aggregate 40+ leading providers and 200+ production models with native OpenAI, Anthropic, and Gemini wire protocols. One unified base URL and API key.",
+    "landing.hero.subtitle": "Aggregate 40+ leading providers and production models with native OpenAI, Anthropic, and Gemini wire protocols. One unified base URL and API key.",
     "landing.hero.titleLine1": "One Standard Interface,",
     "landing.hero.titleLine2": "Powering Full-Stack AI.",
     "landing.multiModel.description": "Stop juggling multiple accounts, regional payment cards, and incompatible SDKs. Switch between models simply by changing the model parameter.",
@@ -2949,7 +2949,7 @@
     "landing.pricing.group.standardDesc": "Directly bound to verified upstream channels with 1:1 transparent cost calculation for daily development.",
     "landing.pricing.group.standardTitle": "Standard Group (default)",
     "landing.pricing.title": "Clear Group Multipliers, Per-Token Accountability",
-    "landing.status.boardTitle": "Live Model Telemetry Preview",
+    "landing.status.boardTitle": "Model health",
     "landing.status.description": "We monitor time-to-first-token (TTFT), token generation speed, and success rates across channels so you always know how your models are performing.",
     "landing.status.eyebrow": "Stability & Telemetry",
     "landing.status.feature.failoverDesc": "When an upstream endpoint experiences rate limits or regional jitter, requests automatically reroute to healthy backup channels.",
@@ -6353,6 +6353,10 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Loading prices.": "Loading prices.",
+    "No rate-limit data yet.": "No rate-limit data yet.",
+    "No sample data yet.": "No sample data yet.",
+    "Prices are unavailable right now.": "Prices are unavailable right now."
   }
 }

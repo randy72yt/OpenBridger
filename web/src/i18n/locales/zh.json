@@ -2915,7 +2915,7 @@
     "landing.hero.pill.liveProbe": "实时健康拨测与多通道容灾",
     "landing.hero.pill.multiProtocol": "OpenAI / Claude / Gemini 多协议原生兼容",
     "landing.hero.pill.payAsYouGo": "按量计费 · 明码标价",
-    "landing.hero.subtitle": "聚合全球 40+ 核心厂商、200+ 生产级大模型，原生兼容 OpenAI / Anthropic / Gemini 接口规范。无论是代码流式输出、8K 超清生图，还是自动化工作流，替换一行地址即可稳定调用。",
+    "landing.hero.subtitle": "聚合全球 40+ 核心厂商与生产级大模型，原生兼容 OpenAI / Anthropic / Gemini 接口规范。无论是代码流式输出、8K 超清生图，还是自动化工作流，替换一行地址即可稳定调用。",
     "landing.hero.titleLine1": "一套标准接口，",
     "landing.hero.titleLine2": "驱动全栈大模型。",
     "landing.multiModel.description": "告别繁琐的多平台账号管理、海外支付卡限制与异构 SDK 适配。只需修改 model 参数，即可在不同厂商模型间自由切换。",
@@ -2949,7 +2949,7 @@
     "landing.pricing.group.standardDesc": "一一对应稳定上游渠道，按该渠道成本透明折算，适合日常研发与生产调用。",
     "landing.pricing.group.standardTitle": "标准分组 (default)",
     "landing.pricing.title": "分组按成本独立定价，每一分消耗清晰可查",
-    "landing.status.boardTitle": "实时模型健康状态预览",
+    "landing.status.boardTitle": "模型健康",
     "landing.status.description": "实时追踪各渠道首字延迟（TTFT）、输出速率（TPS）与请求成功率，让你在调用前就能掌握每个模型的真实健康状态。",
     "landing.status.eyebrow": "高可用与实时状态",
     "landing.status.feature.failoverDesc": "当单一上游出现限流或网络抖动时，智能路由自动切换至健康备用通道，保障业务连续性。",
@@ -6353,6 +6353,10 @@
     "Zhipu": "智谱",
     "Zhipu GLM": "智谱 GLM",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "Loading prices.": "正在加载价格。",
+    "No rate-limit data yet.": "暂无限流数据。",
+    "No sample data yet.": "暂无样本数据。",
+    "Prices are unavailable right now.": "当前无法显示价格。"
   }
 }
