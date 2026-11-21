@@ -28,12 +28,18 @@ export function Tutorials() {
   const { status, loading } = useStatus()
   const href = resolveDocsHref(
     status?.docs_link as string | undefined,
-    i18n.language
+    i18n.language,
+    typeof window === 'undefined' ? undefined : window.location.origin
   )
 
   useEffect(() => {
-    if (loading) return
-    if (href === '/docs' || href === '/docs/') return
+    if (loading || typeof window === 'undefined') return
+    const next = new URL(href, window.location.origin)
+    const here = new URL(window.location.href)
+    if (next.origin === here.origin && next.pathname.replace(/\/+$/, '') === '/docs') {
+      return
+    }
+    if (next.href === here.href) return
     window.location.replace(href)
   }, [href, loading])
 

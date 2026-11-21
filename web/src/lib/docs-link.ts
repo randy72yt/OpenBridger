@@ -45,12 +45,13 @@ export function isExternalHref(href: string): boolean {
  */
 export function resolveDocsHref(
   docsLink: string | undefined | null,
-  language: string | undefined
+  language: string | undefined,
+  currentOrigin?: string
 ): string {
   const prefix = docsLanguagePrefix(language)
   const trimmed = (docsLink ?? '').trim()
   const defaultHref = `${DEFAULT_DOCS_ORIGIN}${prefix}`
-  if (trimmed === '' || trimmed === '/docs' || trimmed === '/docs/') {
+  if (trimmed === '' || isAppDocsPath(trimmed)) {
     return defaultHref
   }
   if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
@@ -71,5 +72,29 @@ export function resolveDocsHref(
     url.search === '' &&
     url.hash === ''
   if (bareRoot) return `${url.origin}${prefix}`
+  if (isSameOriginAppDocs(url, currentOrigin)) return defaultHref
   return trimmed
+}
+
+function isAppDocsPath(value: string): boolean {
+  if (!value.startsWith('/') || value.startsWith('//')) return false
+  try {
+    return isDocsPathname(new URL(value, 'https://local.invalid').pathname)
+  } catch {
+    return false
+  }
+}
+
+function isDocsPathname(pathname: string): boolean {
+  const normalized = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
+  return normalized === '/docs'
+}
+
+function isSameOriginAppDocs(url: URL, currentOrigin: string | undefined): boolean {
+  if (!currentOrigin || !isDocsPathname(url.pathname)) return false
+  try {
+    return url.origin === new URL(currentOrigin).origin
+  } catch {
+    return false
+  }
 }

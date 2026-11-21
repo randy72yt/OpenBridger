@@ -74,6 +74,32 @@ describe('resolveDocsHref', () => {
     )
   })
 
+  test('does not send a same-origin or relative /docs link back to /docs', () => {
+    const origin = 'https://openbridger.com'
+    for (const input of [
+      '/docs',
+      '/docs/',
+      '/docs?next=1',
+      '/docs/#top',
+      'https://openbridger.com/docs',
+      'https://openbridger.com/docs/',
+      'https://openbridger.com/docs?next=1#top',
+      'http://localhost:5175/docs',
+    ]) {
+      const href = resolveDocsHref(
+        input,
+        'zhCN',
+        input.startsWith('http://localhost') ? 'http://localhost:5175' : origin
+      )
+      expect(href).toBe('https://docs.openbridger.com/zh/')
+      expect(new URL(href, origin).pathname).not.toBe('/docs')
+    }
+    expect(resolveDocsHref('/help?x=1#h', 'en', origin)).toBe('/help?x=1#h')
+    expect(
+      resolveDocsHref('https://example.com/docs', 'zhCN', origin)
+    ).toBe('https://example.com/docs')
+  })
+
   test('keeps a custom relative path and does not send /docs back to itself', () => {
     expect(resolveDocsHref('/help/start', 'zhCN')).toBe('/help/start')
     for (const language of ['en', 'zhCN', 'zhTW']) {
