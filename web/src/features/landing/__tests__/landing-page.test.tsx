@@ -359,7 +359,19 @@ describe('LandingPage (P0)', { timeout: 15000 }, () => {
       for (const key of required) {
         expect(translation[key]?.trim().length).toBeGreaterThan(0)
       }
-      expect(translation['landing.hero.subtitle']).not.toContain('200+')
+      expect(translation['landing.hero.subtitle']).not.toMatch(/200\+|40\+|8K/)
+      expect(translation['landing.hero.metric1.desc']).not.toMatch(/\d/)
+      expect(translation['landing.hero.metric2.desc']).not.toMatch(/\d|8K/)
+      expect(translation['landing.hero.metric3.desc']).not.toMatch(
+        /sub-second|毫秒/i
+      )
+      expect(translation['landing.hero.italicSubtitle']).not.toMatch(
+        /sub-second|毫秒/i
+      )
+      expect(translation['landing.multiModel.tag.longContext']).not.toMatch(
+        /1M|百万|百萬/
+      )
+      expect(translation['landing.code.title']).not.toMatch(/3 Lines|三行/)
       if (locale !== 'en') {
         expect(translation.Example).not.toBe('Example')
         expect(translation['No sample data yet.']).not.toBe('No sample data yet.')
