@@ -61,7 +61,7 @@ describe('marketing homepage', () => {
     expect(within(tools).queryByRole('link')).not.toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Practical tutorials' })
-    ).toHaveAttribute('href', '/docs')
+    ).toHaveAttribute('href', 'https://docs.openbridger.com/en/')
 
     expect(screen.queryByText('Cherry Studio')).not.toBeInTheDocument()
     expect(screen.queryByText('CC Switch')).not.toBeInTheDocument()

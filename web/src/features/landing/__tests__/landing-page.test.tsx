@@ -264,6 +264,13 @@ describe('LandingPage (P0)', { timeout: 15000 }, () => {
     expect(screen.queryByText('420ms')).not.toBeInTheDocument()
     expect(screen.queryByText('200+')).not.toBeInTheDocument()
     expect(screen.getByText('Example')).toBeVisible()
+    const tutorialLinks = screen.getAllByRole('link', {
+      name: 'Practical tutorials',
+    })
+    expect(tutorialLinks.length).toBeGreaterThan(1)
+    for (const link of tutorialLinks) {
+      expect(link).toHaveAttribute('href', 'https://docs.openbridger.com/en/')
+    }
     expect(screen.queryByText('landing.terminal.cost')).not.toBeInTheDocument()
 
     // 4. 3-line code integration tabs

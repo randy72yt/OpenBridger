@@ -16,31 +16,31 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Card, CardContent } from '@/components/ui/card'
 import { PublicShell } from '@/features/landing/components/public-shell'
+import { useStatus } from '@/hooks/use-status'
+import { resolveDocsHref } from '@/lib/docs-link'
 
 export function Tutorials() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const { status, loading } = useStatus()
+  const href = resolveDocsHref(
+    status?.docs_link as string | undefined,
+    i18n.language
+  )
+
+  useEffect(() => {
+    if (loading) return
+    if (href === '/docs' || href === '/docs/') return
+    window.location.replace(href)
+  }, [href, loading])
+
   return (
     <PublicShell>
       <main className='mx-auto min-h-[70vh] max-w-4xl px-6 pt-32 pb-16'>
-        <Card className='rounded-3xl shadow-none'>
-          <CardContent className='space-y-5 p-8 md:p-12'>
-            <p className='text-primary text-xs font-semibold tracking-widest'>
-              OpenBridger
-            </p>
-            <h1 className='text-3xl font-semibold'>
-              {t('Practical tutorials')}
-            </h1>
-            <p className='text-muted-foreground leading-8'>
-              {t(
-                'Tool configuration guides and SDK examples are being prepared. This page will host our practical tutorials.'
-              )}
-            </p>
-          </CardContent>
-        </Card>
+        <a href={href}>{t('Practical tutorials')}</a>
       </main>
     </PublicShell>
   )

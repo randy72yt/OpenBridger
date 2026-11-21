@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { useStatus } from '@/hooks/use-status'
+import { isExternalHref, resolveDocsHref } from '@/lib/docs-link'
 
 import { HeroTerminalDemo } from '../hero-terminal-demo'
 
@@ -32,12 +33,15 @@ interface HeroProps {
 }
 
 export function Hero(props: HeroProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { status } = useStatus()
-  const docsUrl = (status?.docs_link as string | undefined) || '/docs'
+  const docsUrl = resolveDocsHref(
+    status?.docs_link as string | undefined,
+    i18n.language
+  )
 
   const renderDocsButton = () => {
-    const isExternal = docsUrl.startsWith('http')
+    const isExternal = isExternalHref(docsUrl)
     if (isExternal) {
       return (
         <Button

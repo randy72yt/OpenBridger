@@ -22,8 +22,11 @@ import { useTranslation } from 'react-i18next'
 import { HtmlContent } from '@/components/html-content'
 import { HeaderLogo } from '@/components/layout/components/header-logo'
 import { PlatformContact } from '@/components/platform-contact'
+import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
+import { isExternalHref, resolveDocsHref } from '@/lib/docs-link'
 import { DEFAULT_SYSTEM_NAME } from '@/lib/constants'
+import { parseHeaderNavModulesFromStatus } from '@/lib/nav-modules'
 import { cn } from '@/lib/utils'
 
 interface LandingFooterProps {
@@ -31,7 +34,16 @@ interface LandingFooterProps {
 }
 
 export function LandingFooter(props: LandingFooterProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const { status } = useStatus()
+  const docsEnabled =
+    parseHeaderNavModulesFromStatus(
+      status as Record<string, unknown> | null
+    ).docs !== false
+  const docsHref = resolveDocsHref(
+    status?.docs_link as string | undefined,
+    i18n.language
+  )
   const {
     systemName,
     logo: systemLogo,
@@ -90,11 +102,24 @@ export function LandingFooter(props: LandingFooterProps) {
                   {t('Console')}
                 </Link>
               </li>
-              <li>
-                <Link to='/docs' className='ob-footer-link'>
-                  {t('Practical tutorials')}
-                </Link>
-              </li>
+              {docsEnabled ? (
+                <li>
+                  {isExternalHref(docsHref) ? (
+                    <a
+                      href={docsHref}
+                      className='ob-footer-link'
+                      target='_blank'
+                      rel='noopener noreferrer'
+                    >
+                      {t('Practical tutorials')}
+                    </a>
+                  ) : (
+                    <Link to={docsHref} className='ob-footer-link'>
+                      {t('Practical tutorials')}
+                    </Link>
+                  )}
+                </li>
+              ) : null}
               <li>
                 <Link to='/about' className='ob-footer-link'>
                   {t('About')}

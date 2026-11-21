@@ -28,6 +28,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { useStatus } from '@/hooks/use-status'
+import { isExternalHref, resolveDocsHref } from '@/lib/docs-link'
 
 import { HERO_HIGHLIGHT_PILLS } from '../../constants'
 import { HeroBackground } from '../hero-background'
@@ -40,10 +41,13 @@ interface LandingHeroProps {
 }
 
 export function LandingHero(props: LandingHeroProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { status } = useStatus()
-  const docsUrl = (status?.docs_link as string | undefined) || '/docs'
-  const isExternalDocs = docsUrl.startsWith('http')
+  const docsUrl = resolveDocsHref(
+    status?.docs_link as string | undefined,
+    i18n.language
+  )
+  const isExternalDocs = isExternalHref(docsUrl)
 
   return (
     <section className='ob-section-bg relative isolate overflow-hidden pt-28 pb-14 sm:pt-32 sm:pb-20 lg:pt-36 lg:pb-24'>

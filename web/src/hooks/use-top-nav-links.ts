@@ -20,6 +20,7 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useStatus } from '@/hooks/use-status'
+import { isExternalHref, resolveDocsHref } from '@/lib/docs-link'
 import { parseHeaderNavModulesFromStatus } from '@/lib/nav-modules'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -44,7 +45,7 @@ export type TopNavLink = {
  * }
  */
 export function useTopNavLinks(): TopNavLink[] {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { status } = useStatus()
   const { auth } = useAuthStore()
 
@@ -86,17 +87,13 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Rankings'), href: '/rankings', requiresAuth })
   }
 
-  // Docs (supports external links)
   if (modules?.docs !== false) {
-    if (docsLink) {
-      links.push({
-        title: t('Practical tutorials'),
-        href: docsLink,
-        external: /^https?:\/\//.test(docsLink),
-      })
-    } else {
-      links.push({ title: t('Practical tutorials'), href: '/docs' })
-    }
+    const href = resolveDocsHref(docsLink, i18n.language)
+    links.push({
+      title: t('Practical tutorials'),
+      href,
+      external: isExternalHref(href),
+    })
   }
 
   // About

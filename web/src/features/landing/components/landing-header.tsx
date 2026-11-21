@@ -30,6 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useNotifications } from '@/hooks/use-notifications'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
+import { isExternalHref, resolveDocsHref } from '@/lib/docs-link'
 import { DEFAULT_SYSTEM_NAME } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
@@ -41,7 +42,7 @@ interface LandingHeaderProps {
 }
 
 export function LandingHeader(props: LandingHeaderProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [scrolled, setScrolled] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -67,10 +68,15 @@ export function LandingHeader(props: LandingHeaderProps) {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  const fallbackDocsHref = resolveDocsHref(undefined, i18n.language)
   const fallbackLinks = [
     { title: t('Home'), href: '/' },
     { title: t('Model Square'), href: '/pricing' },
-    { title: t('Practical tutorials'), href: '/docs' },
+    {
+      title: t('Practical tutorials'),
+      href: fallbackDocsHref,
+      external: isExternalHref(fallbackDocsHref),
+    },
     { title: t('About'), href: '/about' },
   ]
 
