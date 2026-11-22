@@ -306,6 +306,14 @@ For commercial licensing, please contact support@quantumnous.com
   text-underline-offset: 4px;
 }
 
+/* Login verification is portaled outside the public shell. The class is
+   applied only on that dialog, so console dialogs keep the app theme.
+   The shell rule also paints the page background; the dialog stays a card. */
+.ob-landing-theme[data-slot='dialog-content'] {
+  background-color: var(--ob-card);
+  color: var(--ob-ink);
+}
+
 /* Header icon buttons stay circular without changing the shared controls. */
 .ob-landing-theme .ob-header-bar [data-slot='button'] {
   border-radius: 9999px;

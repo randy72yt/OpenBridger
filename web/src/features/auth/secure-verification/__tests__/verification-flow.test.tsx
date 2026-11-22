@@ -285,6 +285,7 @@ it('shows query errors and reloads requirements only when the user retries', asy
   expect(
     await screen.findByLabelText('Password', { selector: 'input' })
   ).toBeVisible()
+  expect(screen.getByRole('dialog')).not.toHaveClass('ob-landing-theme')
   expect(requests).toHaveBeenCalledTimes(2)
   await user.click(screen.getByRole('button', { name: 'Cancel' }))
   await waitFor(() => expect(result).toHaveBeenCalledWith(null))

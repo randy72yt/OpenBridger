@@ -208,6 +208,8 @@ it('cancels verification with Escape and returns to sign-in without authenticati
   const { router } = renderLoginVerification()
   const user = userEvent.setup()
   await screen.findByLabelText('Authenticator code or backup code')
+  expect(screen.getByRole('dialog')).toHaveClass('ob-landing-theme')
+  expect(screen.getByRole('button', { name: 'Verify' })).toBeDisabled()
   await user.keyboard('{Escape}')
   await waitFor(() => expect(router.state.location.pathname).toBe('/sign-in'))
   expect(post).not.toHaveBeenCalled()
