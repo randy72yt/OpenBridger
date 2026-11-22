@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Loader2 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -83,23 +83,15 @@ export function UserInfoDialog({
     </div>
   )
 
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title={t('User Information')}
-      description={t(
-        'View detailed information about this user including balance, usage statistics, and invitation details.'
-      )}
-      contentClassName='sm:max-w-lg'
-      contentHeight='auto'
-      bodyClassName='space-y-4'
-    >
-      {isLoading ? (
-        <div className='flex items-center justify-center py-8'>
-          <Loader2 className='text-muted-foreground size-6 animate-spin' />
-        </div>
-      ) : userInfo ? (
+  let dialogBody: ReactNode
+  if (isLoading) {
+    dialogBody = (
+      <div className='flex items-center justify-center py-8'>
+        <Loader2 className='text-muted-foreground size-6 animate-spin' />
+      </div>
+    )
+  } else if (userInfo) {
+    dialogBody = (
         <div className='space-y-4 py-4'>
           {/* Basic Info */}
           <div className='grid grid-cols-2 gap-4'>
@@ -176,11 +168,28 @@ export function UserInfoDialog({
             </div>
           )}
         </div>
-      ) : (
-        <div className='text-muted-foreground py-8 text-center text-sm'>
-          {t('No user information available')}
-        </div>
+    )
+  } else {
+    dialogBody = (
+      <div className='text-muted-foreground py-8 text-center text-sm'>
+        {t('No user information available')}
+      </div>
+    )
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('User Information')}
+      description={t(
+        'View detailed information about this user including balance, usage statistics, and invitation details.'
       )}
+      contentClassName='sm:max-w-lg'
+      contentHeight='auto'
+      bodyClassName='space-y-4'
+    >
+      {dialogBody}
     </Dialog>
   )
 }
