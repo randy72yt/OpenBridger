@@ -121,7 +121,7 @@ export function TagBatchEditDialog({
     if (modelMapping.trim()) {
       try {
         JSON.parse(modelMapping)
-      } catch (_error) {
+      } catch {
         toast.error(t('Model mapping must be valid JSON'))
         return
       }

@@ -120,7 +120,7 @@ export function ModelMappingEditor(props: ModelMappingEditorProps) {
       })
       setJsonError(null)
       return true
-    } catch (_error) {
+    } catch {
       setJsonError(t('Model mapping must be valid JSON format'))
       return false
     }

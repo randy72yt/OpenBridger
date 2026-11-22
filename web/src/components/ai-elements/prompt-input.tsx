@@ -760,7 +760,7 @@ export const PromptInput = ({
             controller.textInput.clear()
           }
         }
-      } catch (_error) {
+      } catch {
         // Don't clear on error - user may want to retry
       }
     })
