@@ -21,6 +21,8 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { SiGithub, SiLinux, SiWechat } from 'react-icons/si'
 
+import { cn } from '@/lib/utils'
+
 import { AuthLayout } from '../auth-layout'
 
 type OAuthCallbackScreenProps = {
@@ -60,7 +62,7 @@ export function OAuthCallbackScreen({
   provider,
   mode,
 }: OAuthCallbackScreenProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { label, Icon } = useMemo(() => {
     const normalized = provider?.toLowerCase() ?? ''
     return (
@@ -105,10 +107,15 @@ export function OAuthCallbackScreen({
             <Icon className='h-8 w-8' />
           </div>
           <div className='space-y-2'>
-            <h2 className='text-center text-2xl font-semibold tracking-tight'>
+            <h2 className='ob-serif-heading text-center text-2xl font-semibold tracking-tight'>
               {headline}
             </h2>
-            <p className='text-muted-foreground text-sm sm:text-base'>
+            <p
+              className={cn(
+                'text-muted-foreground text-sm sm:text-base',
+                i18n.language === 'en' && 'italic'
+              )}
+            >
               {description}
             </p>
           </div>

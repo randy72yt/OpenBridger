@@ -28,26 +28,29 @@ type AuthLayoutProps = {
 }
 
 export function AuthLayout({ children, showcase = false }: AuthLayoutProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const englishSubtitle = i18n.language === 'en'
 
   return (
-    <PublicShell>
+    <PublicShell footer={false}>
       <div className='bg-background relative grid min-h-svh max-w-none'>
         <div
           className={cn(
-            'container mx-auto flex items-center px-5 pt-24 pb-10 sm:px-8',
+            'container mx-auto flex min-w-0 items-center px-5 pt-24 pb-10 sm:px-8',
             showcase && 'max-w-6xl gap-16 lg:grid lg:grid-cols-2'
           )}
         >
           {showcase && (
-            <section className='hidden space-y-8 lg:block'>
-              <p className='text-primary text-sm font-semibold tracking-wider'>
+            <section className='hidden min-w-0 space-y-8 lg:block'>
+              <p className='ob-chip-primary inline-flex rounded-full px-3 py-1 text-xs font-semibold'>
                 {t('AI application infrastructure')}
               </p>
-              <h2 className='text-4xl leading-tight font-semibold tracking-tight xl:text-5xl'>
+              <h2 className='ob-serif-heading text-4xl leading-tight font-semibold tracking-tight xl:text-5xl'>
                 {t('Connect to world-class AI,')}
                 <br />
-                {t('build limitless possibilities')}
+                <span className={cn(englishSubtitle && 'italic')}>
+                  {t('build limitless possibilities')}
+                </span>
               </h2>
               <div className='bg-primary h-1 w-12 rounded-full' />
               <div className='max-w-md space-y-3'>
@@ -56,7 +59,12 @@ export function AuthLayout({ children, showcase = false }: AuthLayoutProps) {
                     'From inspiration to creation, make AI your creative power.'
                   )}
                 </p>
-                <p className='text-muted-foreground text-sm leading-7'>
+                <p
+                  className={cn(
+                    'text-muted-foreground text-sm leading-7',
+                    englishSubtitle && 'italic'
+                  )}
+                >
                   {t(
                     'Access multiple AI models with one account for coding assistance, learning and exploration, and application development.'
                   )}
@@ -66,7 +74,7 @@ export function AuthLayout({ children, showcase = false }: AuthLayoutProps) {
           )}
           <Card
             className={cn(
-              'mx-auto w-full max-w-[480px] rounded-3xl py-0 shadow-none',
+              'ob-card mx-auto w-full min-w-0 max-w-[480px] rounded-3xl py-0 shadow-none',
               !showcase && 'bg-transparent ring-0'
             )}
           >

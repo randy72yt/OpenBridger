@@ -59,4 +59,6 @@ it('keeps form content available and limits the promotional panel to large scree
   expect(
     screen.getByText('AI application infrastructure').closest('section')
   ).toHaveClass('hidden', 'lg:block')
+  expect(screen.queryByRole('link', { name: 'New API' })).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Home' })).toBeVisible()
 })

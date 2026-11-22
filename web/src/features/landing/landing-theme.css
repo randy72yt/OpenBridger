@@ -312,7 +312,8 @@ For commercial licensing, please contact support@quantumnous.com
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ob-landing-theme .animate-ping {
+  .ob-landing-theme .animate-ping,
+  .ob-landing-theme .animate-spin {
     animation: none;
   }
 }

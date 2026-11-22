@@ -29,6 +29,7 @@ import { Label } from '@/components/ui/label'
 import { useCountdown } from '@/hooks/use-countdown'
 import { api } from '@/lib/api'
 import { copyToClipboard } from '@/lib/copy-to-clipboard'
+import { cn } from '@/lib/utils'
 
 import { AuthLayout } from '../auth-layout'
 
@@ -43,7 +44,7 @@ export function ResetPasswordConfirm({
   email,
   token,
 }: ResetPasswordConfirmProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const [newPassword, setNewPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -109,10 +110,15 @@ export function ResetPasswordConfirm({
     <AuthLayout>
       <div className='w-full space-y-8'>
         <div className='space-y-2'>
-          <h2 className='text-center text-2xl font-semibold tracking-tight sm:text-left'>
+          <h2 className='ob-serif-heading text-center text-2xl font-semibold tracking-tight sm:text-left'>
             {t('Reset password')}
           </h2>
-          <p className='text-muted-foreground text-left text-sm sm:text-base'>
+          <p
+            className={cn(
+              'text-muted-foreground text-left text-sm sm:text-base',
+              i18n.language === 'en' && 'italic'
+            )}
+          >
             {newPassword
               ? t('auth.resetPasswordConfirm.success')
               : t('auth.resetPasswordConfirm.description')}
@@ -169,7 +175,7 @@ export function ResetPasswordConfirm({
           )}
 
           <Button
-            className='w-full'
+            className='h-11 w-full rounded-full'
             onClick={
               newPassword
                 ? () => navigate({ to: '/sign-in', replace: true })

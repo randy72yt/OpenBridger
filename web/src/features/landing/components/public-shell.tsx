@@ -27,6 +27,7 @@ import { LandingHeader } from './landing-header'
 interface PublicShellProps {
   children: ReactNode
   className?: string
+  footer?: boolean
 }
 
 export function PublicShell(props: PublicShellProps) {
@@ -39,7 +40,7 @@ export function PublicShell(props: PublicShellProps) {
     >
       <LandingHeader />
       {props.children}
-      <LandingFooter />
+      {props.footer === false ? null : <LandingFooter />}
     </div>
   )
 }
