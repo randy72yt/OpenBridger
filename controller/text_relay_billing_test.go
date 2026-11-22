@@ -25,7 +25,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -39,9 +41,11 @@ import (
 	"github.com/QuantumNous/new-api/relaykit/dto"
 	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/alicebob/miniredis/v2"
 	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -436,12 +440,13 @@ func insertTextRelayAccount(t *testing.T) (*model.User, *model.Token) {
 	t.Helper()
 	seq := textRelayBillingSeq.Add(1)
 	user := &model.User{
-		Username: fmt.Sprintf("r%x", seq),
-		AffCode:  fmt.Sprintf("c%x", seq),
-		Status:   common.UserStatusEnabled,
-		Group:    "default",
-		Quota:    textRelayBillingStartQuota,
-		Role:     common.RoleCommonUser,
+		Username:    fmt.Sprintf("r%x", seq),
+		AffCode:     fmt.Sprintf("c%x", seq),
+		Status:      common.UserStatusEnabled,
+		Group:       "default",
+		Quota:       textRelayBillingStartQuota,
+		Role:        common.RoleCommonUser,
+		AuthVersion: 1,
 	}
 	require.NoError(t, model.DB.Create(user).Error)
 	token := &model.Token{
@@ -520,4 +525,335 @@ func countTextRelayConsumeLogs(t *testing.T, userID int) int64 {
 	var count int64
 	require.NoError(t, model.LOG_DB.Model(&model.Log{}).Where("user_id = ? AND type = ?", userID, model.LogTypeConsume).Count(&count).Error)
 	return count
+}
+
+// textRelayEvalHook records EVAL keys. The billing methods themselves still
+// run against miniredis; this only observes which keys the Lua scripts touch.
+type textRelayEvalHook struct {
+	mu    sync.Mutex
+	calls []textRelayEvalCall
+}
+
+type textRelayEvalCall struct {
+	key    string
+	script string
+}
+
+func (hook *textRelayEvalHook) BeforeProcess(ctx context.Context, cmd redis.Cmder) (context.Context, error) {
+	if cmd.Name() == "eval" {
+		args := cmd.Args()
+		if len(args) >= 4 {
+			key, _ := args[3].(string)
+			script, _ := args[1].(string)
+			hook.mu.Lock()
+			hook.calls = append(hook.calls, textRelayEvalCall{key: key, script: script})
+			hook.mu.Unlock()
+		}
+	}
+	return ctx, nil
+}
+
+func (hook *textRelayEvalHook) AfterProcess(context.Context, redis.Cmder) error { return nil }
+
+func (hook *textRelayEvalHook) BeforeProcessPipeline(ctx context.Context, _ []redis.Cmder) (context.Context, error) {
+	return ctx, nil
+}
+
+func (hook *textRelayEvalHook) AfterProcessPipeline(context.Context, []redis.Cmder) error { return nil }
+
+func (hook *textRelayEvalHook) quotaMutations(key string) int {
+	hook.mu.Lock()
+	defer hook.mu.Unlock()
+	count := 0
+	for _, call := range hook.calls {
+		if call.key == key && strings.Contains(call.script, "HINCRBY") {
+			count++
+		}
+	}
+	return count
+}
+
+func ensureTextRelaySQLiteColumnNames(t *testing.T) {
+	t.Helper()
+	previousMaster := common.IsMasterNode
+	previousPath := common.SQLitePath
+	previousDSN, hadDSN := os.LookupEnv("SQL_DSN")
+	common.IsMasterNode = false
+	common.SQLitePath = filepath.Join(t.TempDir(), "columns.db")
+	require.NoError(t, os.Setenv("SQL_DSN", "local"))
+	require.NoError(t, model.InitDB())
+	if sqlDB, err := model.DB.DB(); err == nil {
+		_ = sqlDB.Close()
+	}
+	common.IsMasterNode = previousMaster
+	common.SQLitePath = previousPath
+	if hadDSN {
+		require.NoError(t, os.Setenv("SQL_DSN", previousDSN))
+	} else {
+		require.NoError(t, os.Unsetenv("SQL_DSN"))
+	}
+}
+
+func enableTextRelayMiniRedis(t *testing.T) (*miniredis.Miniredis, *textRelayEvalHook) {
+	t.Helper()
+	server := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	hook := &textRelayEvalHook{}
+	client.AddHook(hook)
+	previous := common.RDB
+	common.RDB = client
+	common.RedisEnabled = true
+	t.Cleanup(func() {
+		_ = client.Close()
+		if common.RDB == client {
+			common.RDB = previous
+		}
+	})
+	return server, hook
+}
+
+func textRelayHashInt(t *testing.T, key string, field string) int {
+	t.Helper()
+	parsed, err := readTextRelayHashInt(key, field)
+	require.NoError(t, err)
+	return parsed
+}
+
+func readTextRelayHashInt(key string, field string) (int, error) {
+	value, err := common.RDB.HGet(context.Background(), key, field).Result()
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(value)
+}
+
+func textRelayTokenCacheKey(t *testing.T, server *miniredis.Miniredis) string {
+	t.Helper()
+	found := ""
+	for _, key := range server.Keys() {
+		if strings.HasPrefix(key, "token:") && !strings.HasPrefix(key, "token:fence:") {
+			require.Empty(t, found)
+			found = key
+		}
+	}
+	require.NotEmpty(t, found)
+	return found
+}
+
+func warmTextRelayQuotaCache(t *testing.T, user *model.User, token *model.Token) {
+	t.Helper()
+	cachedUser, err := model.GetUserCache(user.Id)
+	require.NoError(t, err)
+	require.Equal(t, textRelayBillingStartQuota, cachedUser.Quota)
+	cachedToken, err := model.GetTokenByKey(token.Key, true)
+	require.NoError(t, err)
+	require.Equal(t, textRelayBillingStartQuota, cachedToken.RemainQuota)
+}
+
+func waitTextRelayWorkers(baseline int32) {
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && gopool.WorkerCount() > baseline {
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestTextRelayRedisBalanceMatchesDatabase(t *testing.T) {
+	ensureTextRelaySQLiteColumnNames(t)
+
+	t.Run("upstream error refunds once", func(t *testing.T) {
+		db, trace := useTextRelayBillingDatabase(t)
+		serverRedis, evals := enableTextRelayMiniRedis(t)
+		user, token := insertTextRelayAccount(t)
+		trace.bind(user.Id, token.Id)
+		warmTextRelayQuotaCache(t, user, token)
+		userKey := fmt.Sprintf("user:%d", user.Id)
+		tokenKey := textRelayTokenCacheKey(t, serverRedis)
+		require.Equal(t, textRelayBillingStartQuota, textRelayHashInt(t, userKey, "Quota"))
+		require.Equal(t, textRelayBillingStartQuota, textRelayHashInt(t, tokenKey, "RemainQuota"))
+
+		var snapMu sync.Mutex
+		var saw bool
+		var readErr error
+		var heldUser, heldToken, cacheUser, cacheToken int
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var storedUser model.User
+			var storedToken model.Token
+			if err := db.First(&storedUser, user.Id).Error; err != nil {
+				snapMu.Lock()
+				readErr = err
+				snapMu.Unlock()
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if err := db.First(&storedToken, token.Id).Error; err != nil {
+				snapMu.Lock()
+				readErr = err
+				snapMu.Unlock()
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			userNow, userErr := readTextRelayHashInt(userKey, "Quota")
+			tokenNow, tokenErr := readTextRelayHashInt(tokenKey, "RemainQuota")
+			snapMu.Lock()
+			saw = true
+			if userErr != nil {
+				readErr = userErr
+			} else if tokenErr != nil {
+				readErr = tokenErr
+			}
+			heldUser = storedUser.Quota
+			heldToken = storedToken.RemainQuota
+			cacheUser = userNow
+			cacheToken = tokenNow
+			snapMu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte(`{"error":{"message":"upstream failed before any output","type":"upstream_error"}}`))
+		}))
+		t.Cleanup(upstream.Close)
+		poolBaseline := gopool.WorkerCount()
+		recorder := callTextRelay(t, user, token, upstream.URL, false)
+		snapMu.Lock()
+		gotErr, gotSaw := readErr, saw
+		gotHeldUser, gotHeldToken := heldUser, heldToken
+		gotCacheUser, gotCacheToken := cacheUser, cacheToken
+		snapMu.Unlock()
+		require.NoError(t, gotErr)
+		require.True(t, gotSaw, recorder.Body.String())
+		require.Equal(t, gotHeldUser, gotCacheUser)
+		require.Equal(t, gotHeldToken, gotCacheToken)
+		require.Less(t, gotCacheUser, textRelayBillingStartQuota)
+		heldUser, heldToken = gotHeldUser, gotHeldToken
+		waitTextRelayWorkers(poolBaseline)
+
+		require.GreaterOrEqual(t, evals.quotaMutations(userKey), 2)
+		require.GreaterOrEqual(t, evals.quotaMutations(tokenKey), 2)
+		assert.Equal(t, textRelayBillingStartQuota, reloadTextRelayQuota(t, user.Id))
+		assert.Equal(t, textRelayBillingStartQuota, reloadTextRelayTokenQuota(t, token.Id))
+		assert.Equal(t, textRelayBillingStartQuota, textRelayHashInt(t, userKey, "Quota"))
+		assert.Equal(t, textRelayBillingStartQuota, textRelayHashInt(t, tokenKey, "RemainQuota"))
+		assert.Equal(t, int64(0), countTextRelayConsumeLogs(t, user.Id))
+		userSteps, tokenSteps := trace.snapshot()
+		assert.Equal(t, []int{heldUser, textRelayBillingStartQuota}, userSteps)
+		assert.Equal(t, []int{heldToken, textRelayBillingStartQuota}, tokenSteps)
+	})
+
+	t.Run("success settles the difference once", func(t *testing.T) {
+		runTextRelayRedisSettlement(t, false)
+	})
+
+	t.Run("flushed stream scanner error settles once", func(t *testing.T) {
+		runTextRelayRedisSettlement(t, true)
+	})
+}
+
+func runTextRelayRedisSettlement(t *testing.T, stream bool) {
+	t.Helper()
+	db, trace := useTextRelayBillingDatabase(t)
+	serverRedis, evals := enableTextRelayMiniRedis(t)
+	user, token := insertTextRelayAccount(t)
+	trace.bind(user.Id, token.Id)
+	warmTextRelayQuotaCache(t, user, token)
+	userKey := fmt.Sprintf("user:%d", user.Id)
+	tokenKey := textRelayTokenCacheKey(t, serverRedis)
+	previousRetry := common.RetryTimes
+	previousStreamTimeout := constant.StreamingTimeout
+	common.RetryTimes = 1
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() {
+		common.RetryTimes = previousRetry
+		constant.StreamingTimeout = previousStreamTimeout
+	})
+
+	var calls atomic.Int32
+	var snapMu sync.Mutex
+	var saw bool
+	var readErr error
+	var heldUser, heldToken, cacheUser, cacheToken int
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		var storedUser model.User
+		var storedToken model.Token
+		if err := db.First(&storedUser, user.Id).Error; err != nil {
+			snapMu.Lock()
+			readErr = err
+			snapMu.Unlock()
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := db.First(&storedToken, token.Id).Error; err != nil {
+			snapMu.Lock()
+			readErr = err
+			snapMu.Unlock()
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		userNow, userErr := readTextRelayHashInt(userKey, "Quota")
+		tokenNow, tokenErr := readTextRelayHashInt(tokenKey, "RemainQuota")
+		snapMu.Lock()
+		saw = true
+		if userErr != nil {
+			readErr = userErr
+		} else if tokenErr != nil {
+			readErr = tokenErr
+		}
+		heldUser = storedUser.Quota
+		heldToken = storedToken.RemainQuota
+		cacheUser = userNow
+		cacheToken = tokenNow
+		snapMu.Unlock()
+		if !stream {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"chatcmpl-fixture","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":8,"completion_tokens":1,"total_tokens":9}}`))
+			return
+		}
+		hijacker, ok := w.(http.Hijacker)
+		if !ok {
+			http.Error(w, "hijack unsupported", http.StatusInternalServerError)
+			return
+		}
+		conn, writer, err := hijacker.Hijack()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer conn.Close()
+		frame := "data: {\"id\":\"chatcmpl-sse\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"ok\"}}]}\n\n"
+		_, _ = fmt.Fprintf(writer, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n%x\r\n%s\r\n", len(frame), frame)
+		_ = writer.Flush()
+	}))
+	t.Cleanup(upstream.Close)
+
+	poolBaseline := gopool.WorkerCount()
+	recorder := callTextRelay(t, user, token, upstream.URL, stream)
+	snapMu.Lock()
+	gotErr, gotSaw := readErr, saw
+	gotHeldUser, gotHeldToken := heldUser, heldToken
+	gotCacheUser, gotCacheToken := cacheUser, cacheToken
+	snapMu.Unlock()
+	require.NoError(t, gotErr)
+	require.True(t, gotSaw, recorder.Body.String())
+	require.Equal(t, gotHeldUser, gotCacheUser)
+	require.Equal(t, gotHeldToken, gotCacheToken)
+	require.Less(t, gotHeldUser, textRelayBillingStartQuota)
+	heldUser, heldToken = gotHeldUser, gotHeldToken
+	if stream {
+		require.Equal(t, int32(1), calls.Load(), recorder.Body.String())
+		require.Contains(t, recorder.Body.String(), `"content":"ok"`)
+	}
+	waitTextRelayWorkers(poolBaseline)
+
+	finalUser := reloadTextRelayQuota(t, user.Id)
+	finalToken := reloadTextRelayTokenQuota(t, token.Id)
+	require.Less(t, finalUser, textRelayBillingStartQuota)
+	require.Greater(t, finalUser, heldUser)
+	require.Equal(t, textRelayBillingStartQuota-finalUser, textRelayBillingStartQuota-finalToken)
+	require.Equal(t, finalUser, textRelayHashInt(t, userKey, "Quota"))
+	require.Equal(t, finalToken, textRelayHashInt(t, tokenKey, "RemainQuota"))
+	require.GreaterOrEqual(t, evals.quotaMutations(userKey), 2)
+	require.GreaterOrEqual(t, evals.quotaMutations(tokenKey), 2)
+	assert.Equal(t, int64(1), countTextRelayConsumeLogs(t, user.Id))
+	userSteps, tokenSteps := trace.snapshot()
+	require.Equal(t, []int{heldUser, finalUser}, userSteps)
+	require.Equal(t, []int{heldToken, finalToken}, tokenSteps)
 }
