@@ -20,6 +20,8 @@ For commercial licensing, please contact support@quantumnous.com
 package controller
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -50,16 +52,19 @@ import (
 // PreConsumeBilling / SettleBilling / Refund path against an isolated SQLite
 // file. Redis is off, so the assertion store is the database.
 //
-// A failure that happens after the response has already been flushed to the
-// client (SSE) is not covered here.
+// TestTextRelayStreamFlushThenDisconnectDoesNotDoubleCharge covers an OpenAI
+// SSE frame that is flushed and then cut off without a normal EOF. It checks
+// one upstream call and one balance drop. It does not decide whether the
+// partial output should be refunded or kept.
 
 const textRelayBillingStartQuota = 1_000_000
 
 var textRelayBillingSeq atomic.Uint64
 
 func TestTextRelayUpstreamFailureRefundsPreConsume(t *testing.T) {
-	db := useTextRelayBillingDatabase(t)
+	db, trace := useTextRelayBillingDatabase(t)
 	user, token := insertTextRelayAccount(t)
+	trace.bind(user.Id, token.Id)
 	var snapMu sync.Mutex
 	var sawUpstream bool
 	var upstreamReadErr error
@@ -93,7 +98,7 @@ func TestTextRelayUpstreamFailureRefundsPreConsume(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	recorder := callTextRelay(t, user, token, server.URL)
+	recorder := callTextRelay(t, user, token, server.URL, false)
 	snapMu.Lock()
 	readErr, saw, heldUser, heldToken := upstreamReadErr, sawUpstream, preConsumedUser, preConsumedToken
 	snapMu.Unlock()
@@ -112,15 +117,20 @@ func TestTextRelayUpstreamFailureRefundsPreConsume(t *testing.T) {
 	assert.Equal(t, textRelayBillingStartQuota, reloadTextRelayQuota(t, user.Id))
 	assert.Equal(t, textRelayBillingStartQuota, reloadTextRelayTokenQuota(t, token.Id))
 	assert.Equal(t, int64(0), countTextRelayConsumeLogs(t, user.Id))
+	userSteps, tokenSteps := trace.snapshot()
+	assert.Equal(t, []int{heldUser, textRelayBillingStartQuota}, userSteps)
+	assert.Equal(t, []int{heldToken, textRelayBillingStartQuota}, tokenSteps)
 }
 
 func TestTextRelayPreConsumeDiffersFromSettlement(t *testing.T) {
-	db := useTextRelayBillingDatabase(t)
+	db, trace := useTextRelayBillingDatabase(t)
 	user, token := insertTextRelayAccount(t)
+	trace.bind(user.Id, token.Id)
 	var snapMu sync.Mutex
 	var sawUpstream bool
 	var upstreamReadErr error
 	var preConsumedUser, preConsumedToken int
+	var userStepsAtUpstream, tokenStepsAtUpstream []int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var storedUser model.User
 		var storedToken model.Token
@@ -138,10 +148,13 @@ func TestTextRelayPreConsumeDiffersFromSettlement(t *testing.T) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		userNow, tokenNow := trace.snapshot()
 		snapMu.Lock()
 		sawUpstream = true
 		preConsumedUser = storedUser.Quota
 		preConsumedToken = storedToken.RemainQuota
+		userStepsAtUpstream = userNow
+		tokenStepsAtUpstream = tokenNow
 		upstreamReadErr = nil
 		snapMu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
@@ -149,9 +162,11 @@ func TestTextRelayPreConsumeDiffersFromSettlement(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	recorder := callTextRelay(t, user, token, server.URL)
+	recorder := callTextRelay(t, user, token, server.URL, false)
 	snapMu.Lock()
 	readErr, saw, heldUser, heldToken := upstreamReadErr, sawUpstream, preConsumedUser, preConsumedToken
+	userAtUpstream := append([]int(nil), userStepsAtUpstream...)
+	tokenAtUpstream := append([]int(nil), tokenStepsAtUpstream...)
 	snapMu.Unlock()
 	require.NoError(t, readErr)
 	require.True(t, saw, "upstream was never called; body=%s", recorder.Body.String())
@@ -160,6 +175,8 @@ func TestTextRelayPreConsumeDiffersFromSettlement(t *testing.T) {
 	preConsumed := textRelayBillingStartQuota - heldUser
 	require.Greater(t, preConsumed, 0)
 	assert.Equal(t, preConsumed, textRelayBillingStartQuota-heldToken)
+	require.Equal(t, []int{heldUser}, userAtUpstream)
+	require.Equal(t, []int{heldToken}, tokenAtUpstream)
 
 	finalUser := reloadTextRelayQuota(t, user.Id)
 	finalToken := reloadTextRelayTokenQuota(t, token.Id)
@@ -174,9 +191,117 @@ func TestTextRelayPreConsumeDiffersFromSettlement(t *testing.T) {
 	assert.Equal(t, settled, logs[0].Quota)
 	assert.Equal(t, 8, logs[0].PromptTokens)
 	assert.Equal(t, 1, logs[0].CompletionTokens)
+	userSteps, tokenSteps := trace.snapshot()
+	require.Equal(t, []int{heldUser, finalUser}, userSteps)
+	require.Equal(t, []int{heldToken, finalToken}, tokenSteps)
 }
 
-func useTextRelayBillingDatabase(t *testing.T) *gorm.DB {
+func TestTextRelayStreamFlushThenDisconnectDoesNotDoubleCharge(t *testing.T) {
+	_, trace := useTextRelayBillingDatabase(t)
+	user, token := insertTextRelayAccount(t)
+	trace.bind(user.Id, token.Id)
+	previousRetry := common.RetryTimes
+	previousStreamTimeout := constant.StreamingTimeout
+	common.RetryTimes = 1
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() {
+		common.RetryTimes = previousRetry
+		constant.StreamingTimeout = previousStreamTimeout
+	})
+	poolBaseline := gopool.WorkerCount()
+
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		hijacker, ok := w.(http.Hijacker)
+		if !ok {
+			http.Error(w, "hijack unsupported", http.StatusInternalServerError)
+			return
+		}
+		conn, writer, err := hijacker.Hijack()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer conn.Close()
+		frame := "data: {\"id\":\"chatcmpl-sse\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"ok\"}}]}\n\n"
+		if _, err = fmt.Fprintf(writer, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n%x\r\n%s\r\n", len(frame), frame); err != nil {
+			return
+		}
+		if err = writer.Flush(); err != nil {
+			return
+		}
+		// Close without the terminating chunk. A finished chunked body would be a normal EOF.
+	}))
+	t.Cleanup(server.Close)
+
+	recorder := callTextRelay(t, user, token, server.URL, true)
+	require.Equal(t, int32(1), calls.Load(), "upstream calls after a flushed frame; body=%s", recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), `"content":"ok"`)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && gopool.WorkerCount() > poolBaseline {
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	finalUser := reloadTextRelayQuota(t, user.Id)
+	finalToken := reloadTextRelayTokenQuota(t, token.Id)
+	netUser := textRelayBillingStartQuota - finalUser
+	netToken := textRelayBillingStartQuota - finalToken
+	require.Equal(t, netUser, netToken)
+	userSteps, tokenSteps := trace.snapshot()
+	require.Equal(t, 1, countBalanceDrops(textRelayBillingStartQuota, userSteps))
+	require.Equal(t, 1, countBalanceDrops(textRelayBillingStartQuota, tokenSteps))
+	require.LessOrEqual(t, countBalanceRises(userSteps), 1)
+	require.LessOrEqual(t, countBalanceRises(tokenSteps), 1)
+
+	var logs []model.Log
+	require.NoError(t, model.LOG_DB.Where("user_id = ?", user.Id).Find(&logs).Error)
+	consume := 0
+	for _, item := range logs {
+		if item.Type == model.LogTypeConsume {
+			consume++
+			assert.Equal(t, netUser, item.Quota)
+		}
+	}
+	require.LessOrEqual(t, consume, 1)
+	if consume == 0 {
+		assert.Equal(t, 0, netUser)
+	} else {
+		assert.Greater(t, netUser, 0)
+	}
+	t.Logf("observed stream disconnect: http=%d upstream_calls=%d user_steps=%v token_steps=%v net=%d consume_logs=%d body=%s",
+		recorder.Code, calls.Load(), userSteps, tokenSteps, netUser, consume, recorder.Body.String())
+}
+
+func countBalanceDrops(start int, steps []int) int {
+	drops := 0
+	previous := start
+	for _, value := range steps {
+		if value < previous {
+			drops++
+		}
+		previous = value
+	}
+	return drops
+}
+
+func countBalanceRises(steps []int) int {
+	rises := 0
+	if len(steps) == 0 {
+		return 0
+	}
+	previous := steps[0]
+	for _, value := range steps[1:] {
+		if value > previous {
+			rises++
+		}
+		previous = value
+	}
+	return rises
+}
+
+func useTextRelayBillingDatabase(t *testing.T) (*gorm.DB, *textRelayBalanceTrace) {
 	t.Helper()
 	previousDB, previousLogDB := model.DB, model.LOG_DB
 	previousMain, previousLog := common.MainDatabaseType(), common.LogDatabaseType()
@@ -198,6 +323,13 @@ func useTextRelayBillingDatabase(t *testing.T) *gorm.DB {
 	model.DB, model.LOG_DB = db, db
 	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
 	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Token{}, &model.Channel{}, &model.Log{}))
+	trace := &textRelayBalanceTrace{}
+	require.NoError(t, db.Callback().Update().After("gorm:update").Register("textrelay:balance", func(tx *gorm.DB) {
+		if tx.Statement == nil || tx.Statement.Schema == nil {
+			return
+		}
+		trace.note(tx, tx.Statement.Schema.Table)
+	}))
 	poolBaseline := gopool.WorkerCount()
 	t.Cleanup(func() {
 		// Refund and perf sampling run on the shared pool and still read
@@ -215,7 +347,89 @@ func useTextRelayBillingDatabase(t *testing.T) *gorm.DB {
 		common.QuotaPerUnit = previousUnit
 		_ = sqlDB.Close()
 	})
-	return db
+	return db, trace
+}
+
+type textRelayBalanceTrace struct {
+	mu         sync.Mutex
+	userID     int
+	tokenID    int
+	userQuota  []int
+	tokenQuota []int
+}
+
+func (trace *textRelayBalanceTrace) bind(userID int, tokenID int) {
+	trace.mu.Lock()
+	trace.userID = userID
+	trace.tokenID = tokenID
+	trace.mu.Unlock()
+}
+
+func (trace *textRelayBalanceTrace) note(tx *gorm.DB, table string) {
+	trace.mu.Lock()
+	userID, tokenID := trace.userID, trace.tokenID
+	trace.mu.Unlock()
+	switch table {
+	case "users":
+		if userID == 0 {
+			return
+		}
+		quota, err := textRelayQueryQuota(tx, "SELECT quota FROM users WHERE id = ?", userID)
+		if err != nil {
+			return
+		}
+		trace.appendUser(quota)
+	case "tokens":
+		if tokenID == 0 {
+			return
+		}
+		quota, err := textRelayQueryQuota(tx, "SELECT remain_quota FROM tokens WHERE id = ?", tokenID)
+		if err != nil {
+			return
+		}
+		trace.appendToken(quota)
+	}
+}
+
+func textRelayQueryQuota(tx *gorm.DB, query string, id int) (int, error) {
+	if tx.Statement == nil || tx.Statement.ConnPool == nil {
+		return 0, fmt.Errorf("missing connection")
+	}
+	queryer, ok := tx.Statement.ConnPool.(interface {
+		QueryRowContext(context.Context, string, ...any) *sql.Row
+	})
+	if !ok {
+		return 0, fmt.Errorf("connection cannot query")
+	}
+	var quota int
+	err := queryer.QueryRowContext(context.Background(), query, id).Scan(&quota)
+	return quota, err
+}
+
+func (trace *textRelayBalanceTrace) appendUser(quota int) {
+	trace.mu.Lock()
+	defer trace.mu.Unlock()
+	if n := len(trace.userQuota); n > 0 && trace.userQuota[n-1] == quota {
+		return
+	}
+	trace.userQuota = append(trace.userQuota, quota)
+}
+
+func (trace *textRelayBalanceTrace) appendToken(quota int) {
+	trace.mu.Lock()
+	defer trace.mu.Unlock()
+	if n := len(trace.tokenQuota); n > 0 && trace.tokenQuota[n-1] == quota {
+		return
+	}
+	trace.tokenQuota = append(trace.tokenQuota, quota)
+}
+
+func (trace *textRelayBalanceTrace) snapshot() (userQuota []int, tokenQuota []int) {
+	trace.mu.Lock()
+	defer trace.mu.Unlock()
+	userQuota = append([]int(nil), trace.userQuota...)
+	tokenQuota = append([]int(nil), trace.tokenQuota...)
+	return userQuota, tokenQuota
 }
 
 func insertTextRelayAccount(t *testing.T) (*model.User, *model.Token) {
@@ -243,7 +457,7 @@ func insertTextRelayAccount(t *testing.T) (*model.User, *model.Token) {
 	return user, token
 }
 
-func callTextRelay(t *testing.T, user *model.User, token *model.Token, baseURL string) *httptest.ResponseRecorder {
+func callTextRelay(t *testing.T, user *model.User, token *model.Token, baseURL string, stream bool) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	autoBan := 0
@@ -260,7 +474,11 @@ func callTextRelay(t *testing.T, user *model.User, token *model.Token, baseURL s
 	}
 	require.NoError(t, model.DB.Create(channel).Error)
 
-	body := `{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}],"max_tokens":200}`
+	streamJSON := "false"
+	if stream {
+		streamJSON = "true"
+	}
+	body := fmt.Sprintf(`{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}],"max_tokens":200,"stream":%s}`, streamJSON)
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
