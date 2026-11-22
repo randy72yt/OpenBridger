@@ -219,8 +219,7 @@ export function TagBatchEditDialog({
           <Loader2 className='text-muted-foreground h-8 w-8 animate-spin' />
         </div>
       ) : (
-        <>
-          <div className='space-y-4 py-4'>
+        <div className='space-y-4 py-4'>
             <Alert>
               <AlertCircle className='h-4 w-4' />
               <AlertDescription>
@@ -295,7 +294,6 @@ export function TagBatchEditDialog({
               </p>
             </div>
           </div>
-        </>
       )}
     </Dialog>
   )

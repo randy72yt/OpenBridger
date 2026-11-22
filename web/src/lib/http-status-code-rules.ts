@@ -43,7 +43,7 @@ export function parseHttpStatusCodeRules(
     }
   }
 
-  const sanitized = raw.replace(/[，]/g, ',')
+  const sanitized = raw.replaceAll(/[，]/g, ',')
   const segments = sanitized
     .split(',')
     .map((s) => s.trim())
@@ -87,7 +87,7 @@ export function parseHttpStatusCodeRules(
 }
 
 function parseToken(token: string): StatusCodeRange | null {
-  const cleaned = token.trim().replace(/\s/g, '')
+  const cleaned = token.trim().replaceAll(/\s/g, '')
   if (!cleaned) return null
 
   const isValidCode = (code: number) =>
