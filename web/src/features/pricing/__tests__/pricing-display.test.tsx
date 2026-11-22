@@ -179,8 +179,11 @@ describe('pricing display skin', () => {
     const user = userEvent.setup()
     renderSquare('?group=premium&tokenUnit=K&view=table&rechargePrice=true')
 
-    expect(await screen.findByText('fixture-model')).toBeVisible()
-    expect(screen.queryByText('other-model')).not.toBeInTheDocument()
+    const table = await screen.findByRole('table')
+    await waitFor(() => {
+      expect(table).toHaveTextContent('fixture-model')
+      expect(table).not.toHaveTextContent('other-model')
+    })
     expect(screen.getByRole('button', { name: 'Recharge' })).toHaveAttribute(
       'aria-pressed',
       'true'
@@ -233,7 +236,7 @@ describe('pricing display skin', () => {
     expect(cardPrices).not.toHaveTextContent(premiumRecharge.input)
 
     await user.click(screen.getByRole('button', { name: /^default/ }))
-    expect(await screen.findByText('other-model')).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'other-model' })).toBeVisible()
     const defaultGroup = formatPrice(
       pricedModel(fixtureModel),
       'input',
