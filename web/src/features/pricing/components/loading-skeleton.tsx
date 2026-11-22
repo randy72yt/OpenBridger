@@ -32,10 +32,10 @@ export function LoadingSkeleton(props: LoadingSkeletonProps) {
         <Skeleton className='h-[clamp(2.3rem,6.325vw,4.025rem)] w-48 max-w-full sm:w-64' />
         <Skeleton className='mt-3 h-5 w-56 max-w-full sm:mt-4 sm:h-6' />
         <Skeleton className='mt-2 h-5 w-full max-w-xl' />
-        <Skeleton className='mt-4 h-10 w-full max-w-2xl sm:mt-6' />
+        <Skeleton className='mt-4 h-11 w-full max-w-2xl rounded-full sm:mt-6' />
       </div>
       <div className='grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]'>
-        <div className='hidden self-start rounded-xl border p-3 xl:block'>
+        <div className='ob-card hidden self-start rounded-3xl p-3 xl:block'>
           <Skeleton className='mb-4 h-5 w-24' />
           {Array.from({ length: 5 }, (_, index) => (
             <div
@@ -52,7 +52,7 @@ export function LoadingSkeleton(props: LoadingSkeletonProps) {
           ))}
         </div>
         <div className='flex min-w-0 flex-col gap-4'>
-          <div className='flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3'>
+          <div className='ob-card flex flex-wrap items-center justify-between gap-3 rounded-3xl p-3'>
             <Skeleton className='h-7 w-20' />
             <div className='flex flex-wrap gap-2'>
               <Skeleton className='h-7 w-32' />
@@ -61,7 +61,7 @@ export function LoadingSkeleton(props: LoadingSkeletonProps) {
             </div>
           </div>
           {props.viewMode === VIEW_MODES.TABLE ? (
-            <div className='overflow-hidden rounded-xl border'>
+            <div className='ob-card overflow-hidden rounded-3xl'>
               {Array.from({ length: 10 }, (_, index) => (
                 <div
                   key={index}
@@ -76,7 +76,7 @@ export function LoadingSkeleton(props: LoadingSkeletonProps) {
           ) : (
             <div className='grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 2xl:grid-cols-3'>
               {Array.from({ length: 6 }, (_, index) => (
-                <Card key={index} className='gap-3'>
+                <Card key={index} className='ob-card gap-3 rounded-3xl shadow-none'>
                   <CardHeader className='flex flex-row gap-3'>
                     <Skeleton className='size-10 shrink-0' />
                     <div className='flex min-w-0 flex-1 flex-col gap-2'>

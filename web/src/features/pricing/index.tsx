@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 
 import { PageTransition } from '@/components/page-transition'
 import { PublicShell } from '@/features/landing/components/public-shell'
+import { cn } from '@/lib/utils'
 
 import {
   LoadingSkeleton,
@@ -37,7 +38,8 @@ import { useFilters } from './hooks/use-filters'
 import { usePricingData } from './hooks/use-pricing-data'
 
 export function Pricing() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const englishSubtitle = i18n.language === 'en'
   const [selectedModelName, setSelectedModelName] = useState<string | null>(
     null
   )
@@ -50,6 +52,7 @@ export function Pricing() {
     endpointMap,
     autoGroups,
     isLoading,
+    error,
     priceRate,
     usdExchangeRate,
   } = usePricingData()
@@ -158,12 +161,27 @@ export function Pricing() {
     )
   }
 
+  if (error && (models?.length ?? 0) === 0) {
+    return (
+      <PublicShell>
+        <div className='mx-auto w-full max-w-3xl px-5 pt-28 pb-16 text-center sm:px-8'>
+          <h1 className='ob-serif-heading text-[clamp(2rem,5.5vw,3.5rem)] leading-[1.15] font-semibold tracking-tight'>
+            {t('Model Square')}
+          </h1>
+          <p role='alert' className='text-destructive mt-6 text-sm'>
+            {t('Failed to load model pricing')}
+          </p>
+        </div>
+      </PublicShell>
+    )
+  }
+
   return (
     <PublicShell>
       <div className='relative'>
         <PageTransition className='relative mx-auto w-full max-w-[1800px] px-3 pt-24 pb-8 sm:px-6 sm:pt-28 sm:pb-10 xl:px-8'>
           <header className='mx-auto mb-5 max-w-3xl pt-5 text-center sm:mb-10 sm:pt-10'>
-            <h1 className='text-[clamp(2rem,5.5vw,3.5rem)] leading-[1.15] font-bold tracking-tight'>
+            <h1 className='ob-serif-heading text-[clamp(2rem,5.5vw,3.5rem)] leading-[1.15] font-semibold tracking-tight'>
               {t('Model Square')}
             </h1>
             <p className='text-muted-foreground/80 mt-3 text-sm sm:mt-4 sm:text-base'>
@@ -171,7 +189,12 @@ export function Pricing() {
                 count: models?.length || 0,
               })}
             </p>
-            <p className='text-muted-foreground/60 mx-auto mt-2 max-w-2xl text-xs leading-relaxed sm:text-sm'>
+            <p
+              className={cn(
+                'text-muted-foreground/80 mx-auto mt-2 max-w-2xl text-sm leading-relaxed sm:text-base',
+                englishSubtitle && 'italic'
+              )}
+            >
               {t(
                 'Discover curated AI models, compare pricing and capabilities, and choose the right model for every scenario.'
               )}

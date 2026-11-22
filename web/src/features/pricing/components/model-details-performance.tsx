@@ -195,7 +195,7 @@ export function ModelDetailsPerformance(props: { model: PricingModel }) {
 
   if (metricsQuery.isLoading || performances.length === 0) {
     return (
-      <div className='text-muted-foreground rounded-lg border p-6 text-center text-sm'>
+      <div className='ob-card text-muted-foreground rounded-3xl p-6 text-center text-sm'>
         {t('Performance data is not yet available for this model.')}
       </div>
     )

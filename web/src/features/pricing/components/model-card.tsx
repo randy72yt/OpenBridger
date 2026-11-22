@@ -212,11 +212,11 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   }
 
   return (
-    <Card className='hover:ring-foreground/20 h-full min-w-0 gap-3 transition-colors'>
+    <Card className='ob-card ob-card-interactive h-full min-w-0 gap-3 rounded-3xl shadow-none'>
       <CardHeader className='flex flex-row items-start gap-3'>
         <div
           aria-hidden
-          className='bg-muted/50 flex size-10 shrink-0 items-center justify-center rounded-lg'
+          className='bg-primary/10 flex size-10 shrink-0 items-center justify-center rounded-full'
         >
           {modelIcon || (
             <span className='text-muted-foreground text-sm font-bold'>
@@ -335,7 +335,12 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
           perf={props.perf}
           className='border-border/60 border-t pt-2'
         >
-          <Button variant='ghost' size='sm' onClick={props.onClick}>
+          <Button
+            variant='outline'
+            size='sm'
+            onClick={props.onClick}
+            className='rounded-full'
+          >
             {t('Details')}
             <ChevronRight aria-hidden className='size-3.5' />
           </Button>

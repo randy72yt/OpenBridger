@@ -100,11 +100,14 @@ function FilterChip(props: {
   return (
     <Button
       type='button'
-      variant={props.active ? 'secondary' : 'outline'}
+      variant='outline'
       size='sm'
       onClick={props.onClick}
       aria-pressed={props.active}
-      className='h-auto max-w-full gap-1.5 px-2 py-1 text-xs'
+      className={cn(
+        'h-auto max-w-full gap-1.5 rounded-full px-2.5 py-1 text-xs',
+        props.active && 'border-primary/30 bg-primary/10 text-primary'
+      )}
       title={props.option.label}
     >
       {props.option.icon && (
@@ -256,7 +259,7 @@ export function PricingSidebar(props: PricingSidebarProps) {
   ]
 
   return (
-    <aside className={cn('bg-card rounded-xl border p-3', props.className)}>
+    <aside className={cn('ob-card rounded-3xl p-3', props.className)}>
       <div className='mb-2.5 flex items-center justify-between gap-2'>
         <div>
           <h2 className='text-foreground text-sm font-bold'>{t('Filter')}</h2>
@@ -270,7 +273,7 @@ export function PricingSidebar(props: PricingSidebarProps) {
           size='sm'
           onClick={props.onClearFilters}
           disabled={!props.hasActiveFilters}
-          className='h-7 gap-1.5 px-2 text-xs'
+          className='h-7 gap-1.5 rounded-full px-2 text-xs'
         >
           <RotateCcw className='size-3.5' />
           {t('Reset')}

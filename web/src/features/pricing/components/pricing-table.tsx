@@ -88,7 +88,7 @@ export function PricingTable(props: PricingTableProps) {
   )
 
   return (
-    <div className='space-y-4'>
+    <div className='ob-card min-w-0 space-y-4 overflow-hidden rounded-3xl p-3'>
       <DataTableView
         table={table}
         isLoading={isLoading}
@@ -96,6 +96,7 @@ export function PricingTable(props: PricingTableProps) {
         emptyDescription={t('No models match your current filters.')}
         skeletonKeyPrefix='pricing-skeleton'
         applyHeaderSize
+        containerClassName='min-w-0 overflow-x-auto'
         getColumnClassName={(_columnId, kind) =>
           kind === 'header' ? 'text-muted-foreground font-medium' : undefined
         }

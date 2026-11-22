@@ -86,7 +86,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
   const sortLabels = getSortLabels(t)
 
   return (
-    <div className='bg-card rounded-xl border p-3'>
+    <div className='ob-card min-w-0 rounded-3xl p-3'>
       <div className='flex flex-wrap items-center justify-between gap-3'>
         <div className='flex items-center gap-2'>
           <Button
@@ -94,7 +94,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
             variant='outline'
             size='sm'
             onClick={() => setMobileFiltersOpen(true)}
-            className='gap-1.5 xl:hidden'
+            className='gap-1.5 rounded-full xl:hidden'
           >
             <Filter className='size-4' />
             {t('Filter')}
@@ -130,9 +130,14 @@ export function PricingToolbar(props: PricingToolbarProps) {
             variant='outline'
             size='sm'
             aria-label={t('Price display mode')}
+            className='rounded-full'
           >
-            <ToggleGroupItem value='standard'>{t('Standard')}</ToggleGroupItem>
-            <ToggleGroupItem value='recharge'>{t('Recharge')}</ToggleGroupItem>
+            <ToggleGroupItem value='standard' className='rounded-full'>
+              {t('Standard')}
+            </ToggleGroupItem>
+            <ToggleGroupItem value='recharge' className='rounded-full'>
+              {t('Recharge')}
+            </ToggleGroupItem>
           </ToggleGroup>
           <ToggleGroup
             value={[props.tokenUnit]}
@@ -144,9 +149,14 @@ export function PricingToolbar(props: PricingToolbarProps) {
             variant='outline'
             size='sm'
             aria-label={t('Token unit')}
+            className='rounded-full'
           >
-            <ToggleGroupItem value='M'>/1M</ToggleGroupItem>
-            <ToggleGroupItem value='K'>/1K</ToggleGroupItem>
+            <ToggleGroupItem value='M' className='rounded-full'>
+              /1M
+            </ToggleGroupItem>
+            <ToggleGroupItem value='K' className='rounded-full'>
+              /1K
+            </ToggleGroupItem>
           </ToggleGroup>
 
           <DropdownMenu>
@@ -156,7 +166,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
                   type='button'
                   variant='outline'
                   size='sm'
-                  className='h-8 gap-1.5 px-3 text-xs'
+                  className='h-8 gap-1.5 rounded-full px-3 text-xs'
                 />
               }
             >
@@ -187,6 +197,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
           <DataTableViewModeToggle
             value={props.viewMode}
             onChange={props.onViewModeChange}
+            className='rounded-full'
           />
         </div>
       </div>

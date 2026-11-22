@@ -37,7 +37,7 @@ import { CopyButton } from '@/components/copy-button'
 import { StaticDataTable } from '@/components/data-table'
 import { sideDrawerContentClassName } from '@/components/drawer-layout'
 import { GroupBadge } from '@/components/group-badge'
-import { PublicLayout } from '@/components/layout'
+import { PublicShell } from '@/features/landing/components/public-shell'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -1312,14 +1312,14 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
       <ModelHeader model={props.model} />
 
       <Tabs defaultValue='overview' className='gap-4'>
-        <TabsList className='bg-muted/60 grid w-full grid-cols-3 gap-1 rounded-lg p-1 group-data-horizontal/tabs:h-auto'>
+        <TabsList className='bg-muted/60 grid w-full grid-cols-3 gap-1 rounded-full p-1 group-data-horizontal/tabs:h-auto'>
           {TAB_VALUES.map((value) => {
             const Icon = TAB_META[value].icon
             return (
               <TabsTrigger
                 key={value}
                 value={value}
-                className='h-8 min-w-0 gap-1.5 rounded-md px-3 text-xs sm:text-sm'
+                className='h-8 min-w-0 gap-1.5 rounded-full px-3 text-xs sm:text-sm'
               >
                 <Icon className='size-3.5' />
                 <span className='truncate'>{t(TAB_META[value].labelKey)}</span>
@@ -1331,7 +1331,7 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
         <TabsContent value='overview' className='space-y-6 outline-none'>
           <OverviewSummaryGrid model={props.model} />
 
-          <section className='bg-card/60 space-y-5 rounded-xl border p-4 shadow-sm'>
+          <section className='ob-card space-y-5 rounded-3xl p-4'>
             <SectionTitle>{t('Pricing')}</SectionTitle>
             <PriceSection
               model={props.model}
@@ -1440,8 +1440,8 @@ export function ModelDetails() {
 
   if (isLoading) {
     return (
-      <PublicLayout>
-        <div className='mx-auto max-w-5xl px-4 sm:px-6'>
+      <PublicShell>
+        <div className='mx-auto max-w-5xl px-4 pt-24 pb-10 sm:px-6'>
           <Skeleton className='mb-4 h-5 w-16' />
           <div className='space-y-2'>
             <Skeleton className='h-7 w-64' />
@@ -1459,14 +1459,14 @@ export function ModelDetails() {
             ))}
           </div>
         </div>
-      </PublicLayout>
+      </PublicShell>
     )
   }
 
   if (!model) {
     return (
-      <PublicLayout>
-        <div className='mx-auto max-w-2xl px-4 text-center sm:px-6'>
+      <PublicShell>
+        <div className='mx-auto max-w-2xl px-4 pt-28 pb-16 text-center sm:px-6'>
           <h2 className='mb-1 text-base font-semibold'>
             {t('Model not found')}
           </h2>
@@ -1477,18 +1477,18 @@ export function ModelDetails() {
             {t('Back to Models')}
           </Button>
         </div>
-      </PublicLayout>
+      </PublicShell>
     )
   }
 
   return (
-    <PublicLayout>
-      <div className='mx-auto max-w-5xl px-4 sm:px-6'>
+    <PublicShell>
+      <div className='mx-auto max-w-5xl px-4 pt-24 pb-10 sm:px-6'>
         <Button
           variant='ghost'
           size='sm'
           onClick={handleBack}
-          className='text-muted-foreground hover:text-foreground mb-4 h-auto gap-1 px-0 py-1 text-xs'
+          className='text-muted-foreground hover:text-foreground mb-4 h-8 gap-1 rounded-full px-3 text-xs'
         >
           <ArrowLeft className='size-3.5' />
           {t('Back')}
@@ -1511,6 +1511,6 @@ export function ModelDetails() {
           }
         />
       </div>
-    </PublicLayout>
+    </PublicShell>
   )
 }

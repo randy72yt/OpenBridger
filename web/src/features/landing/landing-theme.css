@@ -316,4 +316,10 @@ For commercial licensing, please contact support@quantumnous.com
   .ob-landing-theme .animate-spin {
     animation: none;
   }
+
+  .ob-landing-theme .ob-card,
+  .ob-landing-theme .ob-btn-primary,
+  .ob-landing-theme .ob-btn-secondary {
+    transition: none;
+  }
 }

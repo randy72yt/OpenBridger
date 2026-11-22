@@ -51,7 +51,7 @@ export function SearchBar(props: SearchBarProps) {
 
   return (
     <div className={cn('relative', props.className)}>
-      <Search className='text-muted-foreground/60 pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2' />
+      <Search className='text-muted-foreground/60 pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2' />
       <input
         ref={inputRef}
         type='text'
@@ -62,7 +62,7 @@ export function SearchBar(props: SearchBarProps) {
           'border-border/60 bg-background placeholder:text-muted-foreground/50',
           'hover:border-border',
           'focus:border-primary/50 focus:ring-primary/20 focus:ring-2',
-          'h-10 w-full rounded-lg border pr-16 pl-10 text-sm transition-all outline-none'
+          'h-11 w-full rounded-full border pr-16 pl-11 text-sm transition-colors outline-none'
         )}
         aria-label={t('Search models')}
       />
