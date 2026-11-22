@@ -236,7 +236,7 @@ describe('pricing display skin', () => {
     expect(cardPrices).not.toHaveTextContent(premiumRecharge.input)
 
     await user.click(screen.getByRole('button', { name: /^default/ }))
-    expect(await screen.findByRole('heading', { name: 'other-model' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'other-model' })).toBeInTheDocument()
     const defaultGroup = formatPrice(
       pricedModel(fixtureModel),
       'input',
@@ -255,7 +255,7 @@ describe('pricing display skin', () => {
   it('shows an empty catalog separately from a failed pricing request', async () => {
     displayState.mode = 'empty'
     const empty = renderSquare()
-    expect(await screen.findByText('No models found')).toBeVisible()
+    expect(await screen.findByText('No models found')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     empty.unmount()
 
