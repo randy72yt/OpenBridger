@@ -23,6 +23,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -650,24 +651,113 @@ func warmTextRelayQuotaCache(t *testing.T, user *model.User, token *model.Token)
 	require.Equal(t, textRelayBillingStartQuota, cachedToken.RemainQuota)
 }
 
-func waitTextRelayWorkers(baseline int32) {
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) && gopool.WorkerCount() > baseline {
-		time.Sleep(5 * time.Millisecond)
-	}
+func waitTextRelayQuotaCache(t *testing.T, userID int, tokenID int, userKey string, tokenKey string, expectUser int, expectToken int) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		dbUser := reloadTextRelayQuota(t, userID)
+		dbToken := reloadTextRelayTokenQuota(t, tokenID)
+		cacheUser, userErr := readTextRelayHashInt(userKey, "Quota")
+		cacheToken, tokenErr := readTextRelayHashInt(tokenKey, "RemainQuota")
+		if userErr != nil || tokenErr != nil {
+			return false
+		}
+		return dbUser == expectUser && dbToken == expectToken && cacheUser == dbUser && cacheToken == dbToken
+	}, 2*time.Second, 5*time.Millisecond)
 }
 
 func TestTextRelayRedisBalanceMatchesDatabase(t *testing.T) {
+	runTextRelayRedisBalance(t, func(t *testing.T) (*textRelayEvalHook, func(*testing.T) string) {
+		server, hook := enableTextRelayMiniRedis(t)
+		return hook, func(t *testing.T) string {
+			return textRelayTokenCacheKey(t, server)
+		}
+	})
+}
+
+func TestTextRelayRealRedisBalanceMatchesDatabase(t *testing.T) {
+	addr := strings.TrimSpace(os.Getenv("TEST_REDIS_ADDR"))
+	if addr == "" {
+		t.Skip("TEST_REDIS_ADDR is not set; real Redis is not executed")
+	}
+	host, _, err := net.SplitHostPort(addr)
+	require.NoError(t, err)
+	if host != "127.0.0.1" && host != "localhost" && host != "::1" {
+		t.Fatalf("refusing non-loopback Redis address %s", host)
+	}
+	probe := redis.NewClient(&redis.Options{Addr: addr})
+	t.Cleanup(func() { _ = probe.Close() })
+	info, err := probe.Info(context.Background(), "server").Result()
+	require.NoError(t, err)
+	for _, line := range strings.Split(info, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "redis_version:") {
+			t.Log(line)
+		}
+	}
+	runTextRelayRedisBalance(t, func(t *testing.T) (*textRelayEvalHook, func(*testing.T) string) {
+		return openTextRelayRedisAddr(t, addr)
+	})
+}
+
+func openTextRelayRedisAddr(t *testing.T, addr string) (*textRelayEvalHook, func(*testing.T) string) {
+	t.Helper()
+	beforeClient := redis.NewClient(&redis.Options{Addr: addr})
+	existing, err := beforeClient.Keys(context.Background(), "token:*").Result()
+	require.NoError(t, err)
+	require.NoError(t, beforeClient.Close())
+	before := map[string]struct{}{}
+	for _, key := range existing {
+		before[key] = struct{}{}
+	}
+	hook := &textRelayEvalHook{}
+	client := redis.NewClient(&redis.Options{Addr: addr})
+	client.AddHook(hook)
+	previous := common.RDB
+	common.RDB = client
+	common.RedisEnabled = true
+	t.Cleanup(func() {
+		_ = client.Close()
+		if common.RDB == client {
+			common.RDB = previous
+		}
+	})
+	return hook, func(t *testing.T) string {
+		t.Helper()
+		keys, err := common.RDB.Keys(context.Background(), "token:*").Result()
+		require.NoError(t, err)
+		found := ""
+		for _, key := range keys {
+			if strings.HasPrefix(key, "token:fence:") {
+				continue
+			}
+			if _, seen := before[key]; seen {
+				continue
+			}
+			require.Empty(t, found)
+			found = key
+		}
+		require.NotEmpty(t, found)
+		return found
+	}
+}
+
+func runTextRelayRedisBalance(t *testing.T, open func(t *testing.T) (*textRelayEvalHook, func(*testing.T) string)) {
+	t.Helper()
 	ensureTextRelaySQLiteColumnNames(t)
 
 	t.Run("upstream error refunds once", func(t *testing.T) {
 		db, trace := useTextRelayBillingDatabase(t)
-		serverRedis, evals := enableTextRelayMiniRedis(t)
+		evals, tokenKeyOf := open(t)
 		user, token := insertTextRelayAccount(t)
 		trace.bind(user.Id, token.Id)
 		warmTextRelayQuotaCache(t, user, token)
 		userKey := fmt.Sprintf("user:%d", user.Id)
-		tokenKey := textRelayTokenCacheKey(t, serverRedis)
+		tokenKey := tokenKeyOf(t)
+		t.Cleanup(func() {
+			if common.RDB != nil {
+				_ = common.RDB.Del(context.Background(), userKey, tokenKey).Err()
+			}
+		})
 		require.Equal(t, textRelayBillingStartQuota, textRelayHashInt(t, userKey, "Quota"))
 		require.Equal(t, textRelayBillingStartQuota, textRelayHashInt(t, tokenKey, "RemainQuota"))
 
@@ -711,7 +801,6 @@ func TestTextRelayRedisBalanceMatchesDatabase(t *testing.T) {
 			_, _ = w.Write([]byte(`{"error":{"message":"upstream failed before any output","type":"upstream_error"}}`))
 		}))
 		t.Cleanup(upstream.Close)
-		poolBaseline := gopool.WorkerCount()
 		recorder := callTextRelay(t, user, token, upstream.URL, false)
 		snapMu.Lock()
 		gotErr, gotSaw := readErr, saw
@@ -724,7 +813,7 @@ func TestTextRelayRedisBalanceMatchesDatabase(t *testing.T) {
 		require.Equal(t, gotHeldToken, gotCacheToken)
 		require.Less(t, gotCacheUser, textRelayBillingStartQuota)
 		heldUser, heldToken = gotHeldUser, gotHeldToken
-		waitTextRelayWorkers(poolBaseline)
+		waitTextRelayQuotaCache(t, user.Id, token.Id, userKey, tokenKey, textRelayBillingStartQuota, textRelayBillingStartQuota)
 
 		require.GreaterOrEqual(t, evals.quotaMutations(userKey), 2)
 		require.GreaterOrEqual(t, evals.quotaMutations(tokenKey), 2)
@@ -739,23 +828,28 @@ func TestTextRelayRedisBalanceMatchesDatabase(t *testing.T) {
 	})
 
 	t.Run("success settles the difference once", func(t *testing.T) {
-		runTextRelayRedisSettlement(t, false)
+		runTextRelayRedisSettlement(t, open, false)
 	})
 
 	t.Run("flushed stream scanner error settles once", func(t *testing.T) {
-		runTextRelayRedisSettlement(t, true)
+		runTextRelayRedisSettlement(t, open, true)
 	})
 }
 
-func runTextRelayRedisSettlement(t *testing.T, stream bool) {
+func runTextRelayRedisSettlement(t *testing.T, open func(t *testing.T) (*textRelayEvalHook, func(*testing.T) string), stream bool) {
 	t.Helper()
 	db, trace := useTextRelayBillingDatabase(t)
-	serverRedis, evals := enableTextRelayMiniRedis(t)
+	evals, tokenKeyOf := open(t)
 	user, token := insertTextRelayAccount(t)
 	trace.bind(user.Id, token.Id)
 	warmTextRelayQuotaCache(t, user, token)
 	userKey := fmt.Sprintf("user:%d", user.Id)
-	tokenKey := textRelayTokenCacheKey(t, serverRedis)
+	tokenKey := tokenKeyOf(t)
+	t.Cleanup(func() {
+		if common.RDB != nil {
+			_ = common.RDB.Del(context.Background(), userKey, tokenKey).Err()
+		}
+	})
 	previousRetry := common.RetryTimes
 	previousStreamTimeout := constant.StreamingTimeout
 	common.RetryTimes = 1
@@ -824,7 +918,6 @@ func runTextRelayRedisSettlement(t *testing.T, stream bool) {
 	}))
 	t.Cleanup(upstream.Close)
 
-	poolBaseline := gopool.WorkerCount()
 	recorder := callTextRelay(t, user, token, upstream.URL, stream)
 	snapMu.Lock()
 	gotErr, gotSaw := readErr, saw
@@ -841,10 +934,9 @@ func runTextRelayRedisSettlement(t *testing.T, stream bool) {
 		require.Equal(t, int32(1), calls.Load(), recorder.Body.String())
 		require.Contains(t, recorder.Body.String(), `"content":"ok"`)
 	}
-	waitTextRelayWorkers(poolBaseline)
-
 	finalUser := reloadTextRelayQuota(t, user.Id)
 	finalToken := reloadTextRelayTokenQuota(t, token.Id)
+	waitTextRelayQuotaCache(t, user.Id, token.Id, userKey, tokenKey, finalUser, finalToken)
 	require.Less(t, finalUser, textRelayBillingStartQuota)
 	require.Greater(t, finalUser, heldUser)
 	require.Equal(t, textRelayBillingStartQuota-finalUser, textRelayBillingStartQuota-finalToken)
