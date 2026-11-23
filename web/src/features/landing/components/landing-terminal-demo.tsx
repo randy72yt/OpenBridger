@@ -17,7 +17,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 interface ApiDemoConfig {
@@ -125,6 +127,7 @@ interface LandingTerminalDemoProps {
 }
 
 export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
+  const { t } = useTranslation()
   const [activeIndex, setActiveIndex] = useState(0)
   const [transitioning, setTransitioning] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined)
@@ -149,14 +152,10 @@ export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
   }, [])
 
   const handleSelect = (index: number) => {
-    if (index === activeIndex) return
     if (intervalRef.current) clearInterval(intervalRef.current)
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    setTransitioning(true)
-    timeoutRef.current = setTimeout(() => {
-      setActiveIndex(index)
-      setTransitioning(false)
-    }, TRANSITION_MS)
+    setTransitioning(false)
+    setActiveIndex(index)
   }
 
   const demo = API_DEMOS[activeIndex]
@@ -166,25 +165,27 @@ export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
       <div className='ob-code-card overflow-hidden rounded-2xl'>
         {/* Tab strip */}
         <div
-          className='flex items-center gap-1 border-b px-2 sm:gap-1.5 sm:px-3'
+          className='flex flex-wrap items-center gap-1 border-b px-2 py-2 sm:gap-1.5 sm:px-3'
           style={{ borderColor: 'var(--ob-code-line)' }}
         >
           {API_DEMOS.map((item, index) => {
             const isActive = index === activeIndex
             return (
-              <button
+              <Button
                 key={item.id}
-                type='button'
+                variant='ghost'
+                size='xs'
+                aria-pressed={isActive}
                 onClick={() => handleSelect(index)}
                 className={cn(
-                  'relative -mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2.5 text-[11px] font-medium tracking-wide transition-colors sm:px-3 sm:text-xs',
+                  'rounded-full text-[11px] hover:bg-white/10 hover:text-orange-300 sm:text-xs',
                   isActive
-                    ? 'border-[var(--ob-primary)] text-[var(--ob-primary)]'
-                    : 'border-transparent text-[var(--ob-iron)] hover:text-[var(--ob-code-ink)]'
+                    ? 'bg-orange-500/15 text-orange-300'
+                    : 'text-stone-400'
                 )}
               >
                 {item.label}
-              </button>
+              </Button>
             )
           })}
           <div className='ml-auto flex items-center gap-2 pr-2 sm:pr-3'>
@@ -221,11 +222,11 @@ export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
         </div>
 
         {/* Body */}
-        <div className='ob-mono grid h-[400px] grid-rows-[235px_minmax(0,1fr)] text-[12.5px] leading-[1.55]'>
+        <div className='ob-mono grid min-h-[400px] grid-rows-[minmax(235px,auto)_1fr] text-[12.5px] leading-[1.55]'>
           {/* Request */}
           <div className='relative px-5 py-4'>
             <span className='ob-code-iron font-sans text-[10px] font-semibold tracking-[0.18em] uppercase'>
-              Request
+              {t('Request')}
             </span>
             <div
               className={cn(
@@ -271,7 +272,7 @@ export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
             }}
           >
             <span className='ob-code-iron font-sans text-[10px] font-semibold tracking-[0.18em] uppercase'>
-              Response
+              {t('Response')}
             </span>
             <div
               className={cn(
@@ -303,7 +304,7 @@ export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
             </span>
             <span className='size-1 rounded-full bg-[var(--ob-iron)] opacity-50' />
             <span className='flex items-center gap-1'>
-              <span className='tracking-wider uppercase'>cost</span>
+              <span className='tracking-wider uppercase'>{t('Cost')}</span>
               <span className='ob-mono'>
                 ${(demo.tokens * 0.00003).toFixed(5)}
               </span>

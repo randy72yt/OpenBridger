@@ -16,68 +16,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { ArrowRight, Coins, Sparkles } from 'lucide-react'
-import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { ErrorState } from '@/components/error-state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { PricingTable } from '@/features/pricing/components/pricing-table'
 import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
 
-import { FALLBACK_PRICING_ROWS } from '../../constants'
-import type { LandingPricingPreviewRow } from '../../types'
 import { ScrollReveal } from '../scroll-reveal'
 
 export function PricingPreviewSection() {
   const { t } = useTranslation()
-  const { models, groupRatio } = usePricingData()
-
-  const previewRows = useMemo<LandingPricingPreviewRow[]>(() => {
-    if (!models || models.length === 0) {
-      return FALLBACK_PRICING_ROWS
-    }
-
-    const tokenModels = models.filter(
-      (item) => item.quota_type === 0 && item.model_ratio > 0
-    )
-    if (tokenModels.length === 0) {
-      return FALLBACK_PRICING_ROWS
-    }
-
-    return tokenModels.slice(0, 5).map((item) => {
-      const firstGroup = item.enable_groups?.[0] || 'default'
-      const ratio = groupRatio[firstGroup] ?? 1.0
-      const inputUsd = Number((item.model_ratio * 2 * ratio).toFixed(3))
-      const completionFactor =
-        item.completion_ratio && item.completion_ratio > 0
-          ? item.completion_ratio
-          : 1
-      const outputUsd = Number((inputUsd * completionFactor).toFixed(3))
-      const cacheFactor =
-        item.cache_ratio && item.cache_ratio > 0 ? item.cache_ratio : 0.1
-      const cacheUsd = Number((inputUsd * cacheFactor).toFixed(3))
-      const parsedTags = item.tags
-        ? item.tags
-            .split(',')
-            .map((tag) => tag.trim())
-            .filter(Boolean)
-            .slice(0, 3)
-        : ['API', 'Streaming']
-
-      return {
-        modelName: item.model_name,
-        vendorName: item.vendor_name || 'AI Provider',
-        groupName: firstGroup,
-        groupRatio: ratio,
-        inputPerMillionUsd: inputUsd,
-        outputPerMillionUsd: outputUsd,
-        cacheReadPerMillionUsd: cacheUsd,
-        tags: parsedTags,
-      }
-    })
-  }, [models, groupRatio])
+  const navigate = useNavigate()
+  const { models, isLoading, error, refetch } = usePricingData()
 
   return (
     <section className='ob-section-bg relative z-10 py-20 sm:py-28'>
@@ -176,82 +131,18 @@ export function PricingPreviewSection() {
         {/* Live Model Square Preview Table */}
         <ScrollReveal delay={0.14} className='mt-6'>
           <Card className='ob-card overflow-hidden rounded-2xl py-0 shadow-none'>
-            <div className='overflow-x-auto'>
-              <table className='w-full border-collapse text-left text-sm'>
-                <thead>
-                  <tr className='ob-section-warm border-border text-muted-foreground border-b text-xs font-semibold tracking-wider uppercase'>
-                    <th className='px-5 py-3.5'>
-                      {t('landing.pricing.col.model')}
-                    </th>
-                    <th className='px-5 py-3.5'>
-                      {t('landing.pricing.col.group')}
-                    </th>
-                    <th className='px-5 py-3.5 text-right'>
-                      {t('landing.pricing.col.input')}
-                    </th>
-                    <th className='px-5 py-3.5 text-right'>
-                      {t('landing.pricing.col.output')}
-                    </th>
-                    <th className='px-5 py-3.5 text-right'>
-                      {t('landing.pricing.col.cacheRead')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className='divide-border divide-y'>
-                  {previewRows.map((row) => (
-                    <tr
-                      key={row.modelName}
-                      className='transition-colors hover:bg-[var(--ob-surf-warm)]'
-                    >
-                      <td className='px-5 py-4'>
-                        <div className='flex flex-col gap-1'>
-                          <div className='flex items-center gap-2'>
-                            <span className='text-foreground ob-mono text-sm font-semibold'>
-                              {row.modelName}
-                            </span>
-                            <span className='text-muted-foreground text-xs'>
-                              {row.vendorName}
-                            </span>
-                          </div>
-                          <div className='flex flex-wrap gap-1'>
-                            {row.tags.map((tag) => (
-                              <span
-                                key={tag}
-                                className='ob-section-warm text-muted-foreground rounded px-1.5 py-0.5 text-[10px]'
-                              >
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </td>
-                      <td className='px-5 py-4'>
-                        <span className='ob-chip-primary ob-mono inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold'>
-                          {row.groupName} ×{row.groupRatio}
-                        </span>
-                      </td>
-                      <td className='text-foreground ob-mono px-5 py-4 text-right text-sm font-bold tabular-nums'>
-                        ${row.inputPerMillionUsd.toFixed(2)}{' '}
-                        <span className='text-muted-foreground text-[11px] font-normal'>
-                          / 1M
-                        </span>
-                      </td>
-                      <td className='text-foreground ob-mono px-5 py-4 text-right text-sm font-bold tabular-nums'>
-                        ${row.outputPerMillionUsd.toFixed(2)}{' '}
-                        <span className='text-muted-foreground text-[11px] font-normal'>
-                          / 1M
-                        </span>
-                      </td>
-                      <td className='px-5 py-4 text-right'>
-                        <span className='ob-chip-primary ob-mono inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold tabular-nums'>
-                          ${row.cacheReadPerMillionUsd.toFixed(3)} / 1M
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {error && !models.length ? (
+              <ErrorState onRetry={() => void refetch()} />
+            ) : (
+              <PricingTable
+                models={models.slice(0, 5)}
+                isLoading={isLoading}
+                showPagination={false}
+                onModelClick={(name) =>
+                  navigate({ to: '/pricing', search: { search: name } })
+                }
+              />
+            )}
           </Card>
         </ScrollReveal>
       </div>

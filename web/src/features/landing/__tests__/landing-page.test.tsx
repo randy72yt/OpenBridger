@@ -29,6 +29,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ThemeProvider } from '@/context/theme-provider'
+import { useAuthStore } from '@/stores/auth-store'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { LandingPage } from '../index'
@@ -197,6 +198,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  useAuthStore.getState().auth.setUser(null)
   useSystemConfigStore.setState(originalConfig)
   localStorage.clear()
   vi.restoreAllMocks()
@@ -229,6 +231,30 @@ describe('LandingPage (P0)', { timeout: 15000 }, () => {
     client.clear()
   })
 
+  it.each([
+    { signedIn: false, destination: '/sign-up' },
+    { signedIn: true, destination: '/keys' },
+  ])(
+    'routes both API key actions to $destination',
+    async ({ signedIn, destination }) => {
+      mockViewportAndMotion({ isDesktop: false, reducedMotion: true })
+      if (signedIn) {
+        useAuthStore
+          .getState()
+          .auth.setUser({ id: 1, username: 'tester', role: 1 })
+      }
+      const { client } = renderLandingPage()
+      const actions = await screen.findAllByRole('button', {
+        name: 'landing.hero.ctaPrimary',
+      })
+      expect(actions).toHaveLength(2)
+      for (const action of actions) {
+        expect(action).toHaveAttribute('href', destination)
+      }
+      client.clear()
+    }
+  )
+
   it('renders API relay sections, supports code language switching, and preserves mandatory New API attribution', async () => {
     mockViewportAndMotion({ isDesktop: false, reducedMotion: true })
     const { client } = renderLandingPage()
@@ -243,7 +269,7 @@ describe('LandingPage (P0)', { timeout: 15000 }, () => {
     expect(document.querySelector('.ob-landing-theme')).toBeInTheDocument()
 
     // 2. Pricing preview section
-    expect(screen.getAllByText('claude-sonnet-4-6').length).toBeGreaterThan(0)
+    expect(screen.getByText('No Models Found')).toBeVisible()
 
     // 3. Real-time model status section
     expect(screen.getByText('99.94%')).toBeVisible()

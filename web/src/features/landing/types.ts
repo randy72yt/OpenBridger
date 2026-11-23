@@ -27,17 +27,6 @@ export type LandingProviderItem = {
   iconKey: string
 }
 
-export type LandingPricingPreviewRow = {
-  modelName: string
-  vendorName: string
-  groupName: string
-  groupRatio: number
-  inputPerMillionUsd: number
-  outputPerMillionUsd: number
-  cacheReadPerMillionUsd: number
-  tags: string[]
-}
-
 export type LandingModelHealthSlot = {
   id: string
   level: ModelStatusLevel

@@ -123,7 +123,7 @@ export function LandingHeader(props: LandingHeaderProps) {
           {/* Desktop Navigation Links */}
           <nav
             aria-label={t('landing.nav.ariaLabel')}
-            className='hidden items-center gap-1 md:flex'
+            className='hidden items-center gap-1 xl:flex'
           >
             {navLinks.map((link) => {
               const isActive = pathname === link.href
@@ -158,7 +158,7 @@ export function LandingHeader(props: LandingHeaderProps) {
           </nav>
 
           {/* Right Actions */}
-          <div className='hidden items-center gap-1.5 md:flex'>
+          <div className='hidden items-center gap-1.5 xl:flex'>
             <LanguageSwitcher />
             <ThemeSwitch />
             <NotificationPopover
@@ -209,7 +209,7 @@ export function LandingHeader(props: LandingHeaderProps) {
           </div>
 
           {/* Mobile Controls */}
-          <div className='flex items-center gap-1.5 md:hidden'>
+          <div className='flex items-center gap-1.5 xl:hidden'>
             <LanguageSwitcher />
             <ThemeSwitch />
             <Button
@@ -232,7 +232,7 @@ export function LandingHeader(props: LandingHeaderProps) {
 
         {/* Mobile Dropdown Panel */}
         {mobileMenuOpen && (
-          <div className='ob-card mt-2 rounded-2xl p-4 shadow-xl backdrop-blur-xl md:hidden'>
+          <div className='ob-card mt-2 max-h-[calc(100dvh-6rem)] overflow-y-auto rounded-2xl p-4 shadow-xl backdrop-blur-xl xl:hidden'>
             <nav className='flex flex-col gap-1'>
               {navLinks.map((link) => {
                 if ('external' in link && link.external) {

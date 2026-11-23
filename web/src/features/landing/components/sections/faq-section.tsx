@@ -95,14 +95,10 @@ export function FaqSection(props: FaqSectionProps) {
                   size='lg'
                   className='ob-btn-primary h-11 rounded-xl px-6 text-sm font-semibold'
                   render={
-                    <Link
-                      to={props.isAuthenticated ? '/dashboard' : '/sign-up'}
-                    />
+                    <Link to={props.isAuthenticated ? '/keys' : '/sign-up'} />
                   }
                 >
-                  {props.isAuthenticated
-                    ? t('Go to Dashboard')
-                    : t('landing.hero.ctaPrimary')}
+                  {t('landing.hero.ctaPrimary')}
                   <ArrowRight className='ml-1.5 size-4' />
                 </Button>
                 <Button

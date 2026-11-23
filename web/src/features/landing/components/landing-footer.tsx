@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { HtmlContent } from '@/components/html-content'
 import { HeaderLogo } from '@/components/layout/components/header-logo'
 import { PlatformContact } from '@/components/platform-contact'
+import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { DEFAULT_SYSTEM_NAME } from '@/lib/constants'
 import { cn } from '@/lib/utils'
@@ -39,6 +40,11 @@ export function LandingFooter(props: LandingFooterProps) {
     logoLoaded,
     footerHtml,
   } = useSystemConfig()
+  const { status } = useStatus()
+  const docsUrl =
+    typeof status?.docs_link === 'string' && status.docs_link
+      ? status.docs_link
+      : '/docs'
   const displayName = systemName || DEFAULT_SYSTEM_NAME
   const currentYear = new Date().getFullYear()
 
@@ -91,9 +97,14 @@ export function LandingFooter(props: LandingFooterProps) {
                 </Link>
               </li>
               <li>
-                <Link to='/docs' className='ob-footer-link'>
+                <a
+                  href={docsUrl}
+                  className='ob-footer-link'
+                  target={/^https?:\/\//.test(docsUrl) ? '_blank' : undefined}
+                  rel='noopener noreferrer'
+                >
                   {t('Practical tutorials')}
-                </Link>
+                </a>
               </li>
               <li>
                 <Link to='/about' className='ob-footer-link'>

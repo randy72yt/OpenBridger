@@ -21,7 +21,6 @@ import type {
   LandingFaqItem,
   LandingModelHealthItem,
   LandingModelHealthSlot,
-  LandingPricingPreviewRow,
   LandingProviderItem,
 } from './types'
 
@@ -108,59 +107,6 @@ export const SUPPORTED_CLI_TOOLS = [
   { name: 'Cline / Roo Code', protocol: 'OpenAI / Anthropic' },
   { name: 'LangChain / Vercel AI SDK', protocol: 'Multi-SDK' },
 ] as const
-
-export const FALLBACK_PRICING_ROWS: LandingPricingPreviewRow[] = [
-  {
-    modelName: 'claude-sonnet-4-6',
-    vendorName: 'Anthropic',
-    groupName: 'default',
-    groupRatio: 1.0,
-    inputPerMillionUsd: 3.0,
-    outputPerMillionUsd: 15.0,
-    cacheReadPerMillionUsd: 0.3,
-    tags: ['Coding', 'Agent', '200K'],
-  },
-  {
-    modelName: 'gpt-4.1',
-    vendorName: 'OpenAI',
-    groupName: 'default',
-    groupRatio: 1.0,
-    inputPerMillionUsd: 2.0,
-    outputPerMillionUsd: 8.0,
-    cacheReadPerMillionUsd: 0.5,
-    tags: ['General', '1M Context', 'Tools'],
-  },
-  {
-    modelName: 'gemini-2.5-pro',
-    vendorName: 'Google',
-    groupName: 'default',
-    groupRatio: 1.0,
-    inputPerMillionUsd: 1.25,
-    outputPerMillionUsd: 10.0,
-    cacheReadPerMillionUsd: 0.31,
-    tags: ['Multimodal', '1M Context', 'Reasoning'],
-  },
-  {
-    modelName: 'deepseek-r1',
-    vendorName: 'DeepSeek',
-    groupName: 'default',
-    groupRatio: 1.0,
-    inputPerMillionUsd: 0.55,
-    outputPerMillionUsd: 2.19,
-    cacheReadPerMillionUsd: 0.14,
-    tags: ['Reasoning', 'Math', 'Open Weights'],
-  },
-  {
-    modelName: 'gpt-4.1-mini',
-    vendorName: 'OpenAI',
-    groupName: 'default',
-    groupRatio: 1.0,
-    inputPerMillionUsd: 0.4,
-    outputPerMillionUsd: 1.6,
-    cacheReadPerMillionUsd: 0.1,
-    tags: ['Fast', 'High Throughput'],
-  },
-]
 
 const HEALTHY_24H: LandingModelHealthSlot[] = Array.from(
   { length: 24 },

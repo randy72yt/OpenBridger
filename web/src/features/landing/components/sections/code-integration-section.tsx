@@ -175,12 +175,12 @@ export function CodeIntegrationSection() {
                 className='gap-0'
               >
                 <CardHeader className='ob-code-header flex flex-row flex-wrap items-center justify-between gap-3 border-b px-4 py-3'>
-                  <TabsList className='h-9 bg-black/30 p-1'>
+                  <TabsList className='grid w-full grid-cols-3 bg-black/30 p-1 group-data-horizontal/tabs:h-auto sm:inline-flex sm:w-fit'>
                     {snippets.map((snippet) => (
                       <TabsTrigger
                         key={snippet.id}
                         value={snippet.id}
-                        className='px-3 text-xs text-[var(--ob-iron)] data-[active]:bg-[var(--ob-primary)] data-[active]:text-white'
+                        className='min-h-8 min-w-0 px-1 text-xs whitespace-normal text-stone-300 hover:text-white data-active:bg-orange-500/20 data-active:text-orange-300 sm:px-3 dark:hover:text-white dark:data-active:bg-orange-500/20 dark:data-active:text-orange-300'
                       >
                         {snippet.label}
                       </TabsTrigger>
