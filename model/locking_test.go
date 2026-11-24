@@ -23,8 +23,11 @@ func TestLockForUpdateEmitsRowLock(t *testing.T) {
 		return lockForUpdate(dummyDB).Where("id = ?", 1).Find(&rows).Statement.SQL.String()
 	}
 
+	// 恢复进入测试前的真实方言（TestMain 里由 testdb 按环境变量设定），
+	// 硬编码重置成 SQLite 会污染同包后续测试的方言分支。
+	prevMain, prevLog := common.MainDatabaseType(), common.LogDatabaseType()
 	t.Cleanup(func() {
-		common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
+		common.SetDatabaseTypes(prevMain, prevLog)
 	})
 
 	common.SetDatabaseTypes(common.DatabaseTypeMySQL, common.DatabaseTypeSQLite)

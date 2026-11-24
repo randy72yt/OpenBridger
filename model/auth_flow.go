@@ -44,7 +44,7 @@ var (
 // TokenHash is an HMAC of the opaque token; the token itself is never persisted.
 type AuthFlow struct {
 	Id         int64      `json:"id" gorm:"primaryKey"`
-	TokenHash  string     `json:"-" gorm:"type:char(64);not null;uniqueIndex"`
+	TokenHash  string     `json:"-" gorm:"type:varchar(64);not null;uniqueIndex"`
 	Purpose    string     `json:"purpose" gorm:"type:varchar(32);not null;index:idx_auth_flow_purpose_expiry"`
 	Provider   string     `json:"provider,omitempty" gorm:"type:varchar(64)"`
 	Intent     string     `json:"intent,omitempty" gorm:"type:varchar(16)"`

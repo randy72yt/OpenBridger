@@ -158,7 +158,11 @@ type SubscriptionPlan struct {
 	DurationValue int    `json:"duration_value" gorm:"type:int;not null;default:1"`
 	CustomSeconds int64  `json:"custom_seconds" gorm:"type:bigint;not null;default:0"`
 
-	Enabled   bool `json:"enabled" gorm:"default:true"`
+	// Enabled 不带 gorm default:tag。default:true 会让 Create 时显式的
+	// false 被当作零值跳过、落库变 true（管理端无法创建默认禁用的套餐），
+	// 且 MySQL/PG 布尔默认值规范化差异会导致 AutoMigrate 反复 ALTER。
+	// 「新建默认启用」由前端表单显式传 true 实现。
+	Enabled   bool `json:"enabled"`
 	SortOrder int  `json:"sort_order" gorm:"type:int;default:0"`
 
 	AllowBalancePay *bool `json:"allow_balance_pay"`

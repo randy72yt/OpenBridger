@@ -1,6 +1,8 @@
 package model
 
 import (
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +13,32 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
+
+// postgresDSNToURL 把 key-value 形式的 DSN（host=... port=... user=...）
+// 转成 URL 形式：chooseDB 只识别 postgres:// 前缀来选择 PostgreSQL 方言，
+// 而 CI/本地注入的 TEST_POSTGRES_DSN 是 key-value 格式。
+func postgresDSNToURL(dsn string) string {
+	parts := map[string]string{}
+	for _, kv := range strings.Fields(dsn) {
+		if k, v, ok := strings.Cut(kv, "="); ok {
+			parts[k] = v
+		}
+	}
+	u := &url.URL{
+		Scheme: "postgres",
+		Host:   net.JoinHostPort(parts["host"], parts["port"]),
+		Path:   "/" + parts["dbname"],
+	}
+	if parts["user"] != "" {
+		u.User = url.UserPassword(parts["user"], parts["password"])
+	}
+	if parts["sslmode"] != "" {
+		q := u.Query()
+		q.Set("sslmode", parts["sslmode"])
+		u.RawQuery = q.Encode()
+	}
+	return u.String()
+}
 
 type MigrationIdentityFields struct {
 	ID        int    `gorm:"primaryKey"`
@@ -70,6 +98,9 @@ func TestMigrationSchemaStability(t *testing.T) {
 				dsn = os.Getenv("TEST_MYSQL_DSN")
 			case "postgres":
 				dsn = os.Getenv("TEST_POSTGRES_DSN")
+				if dsn != "" && !strings.HasPrefix(dsn, "postgres://") && !strings.HasPrefix(dsn, "postgresql://") {
+					dsn = postgresDSNToURL(dsn)
+				}
 			}
 			if dsn == "" {
 				t.Skip("test database DSN is not configured")

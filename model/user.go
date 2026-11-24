@@ -91,8 +91,8 @@ type User struct {
 	OidcId               string                     `json:"oidc_id" gorm:"column:oidc_id;index"`
 	WeChatId             string                     `json:"wechat_id" gorm:"column:wechat_id;index"`
 	TelegramId           string                     `json:"telegram_id" gorm:"column:telegram_id;index"`
-	VerificationCode     string                     `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
-	AccessToken          *string                    `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
+	VerificationCode     string                     `json:"verification_code" gorm:"-:all"`                            // this field is only for Email verification, don't save it to database!
+	AccessToken          *string                    `json:"-" gorm:"type:varchar(32);column:access_token;uniqueIndex"` // this token is for system management
 	AccessTokenCreatedAt *int64                     `json:"-" gorm:"type:bigint;column:access_token_created_at"`
 	Quota                int                        `json:"quota" gorm:"type:int;default:0"`
 	UsedQuota            int                        `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
@@ -616,6 +616,12 @@ func (user *User) TransferAffQuotaToQuota(quota int) error {
 	// 再次检查用户的AffQuota是否足够
 	if user.AffQuota < quota {
 		return errors.New("邀请额度不足！")
+	}
+
+	// 转入不得把钱包余额推过 JS 安全上限，与 increaseUserQuota 的
+	// 条件更新边界保持一致（用减法形式避免相加溢出）。
+	if user.Quota > common.MaxWalletQuota-quota {
+		return fmt.Errorf("转移后余额将超过钱包上限！")
 	}
 
 	// 更新用户额度
