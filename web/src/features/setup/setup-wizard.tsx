@@ -26,6 +26,7 @@ import { toast } from 'sonner'
 import { ErrorState } from '@/components/error-state'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { LoadingState } from '@/components/loading-state'
+import { ThemeSwitch } from '@/components/theme-switch'
 import {
   Card,
   CardContent,
@@ -280,9 +281,10 @@ export function SetupWizard() {
   }
 
   return (
-    <div className='bg-muted/40 relative min-h-svh py-10'>
-      <div className='absolute top-4 right-4 sm:top-6 sm:right-6'>
+    <div className='ob-landing-theme bg-background text-foreground relative min-h-svh py-12'>
+      <div className='absolute top-4 right-4 flex items-center gap-1.5 sm:top-6 sm:right-6'>
         <LanguageSwitcher />
+        <ThemeSwitch />
       </div>
       <div className='container mx-auto flex max-w-5xl flex-col gap-8 px-4 sm:px-6'>
         <div className='flex flex-col items-center gap-3'>
@@ -300,7 +302,7 @@ export function SetupWizard() {
           {systemConfigLoading ? (
             <Skeleton className='h-7 w-40' />
           ) : (
-            <h1 className='text-2xl font-semibold tracking-tight'>
+            <h1 className='ob-serif-heading text-3xl font-semibold tracking-tight'>
               {t('Initialize')} {systemName}
             </h1>
           )}
@@ -311,7 +313,7 @@ export function SetupWizard() {
           </p>
         </div>
 
-        <Card className='shadow-lg'>
+        <Card className='ob-card rounded-3xl shadow-sm'>
           <CardHeader className='space-y-2'>
             <CardTitle className='text-xl font-semibold'>
               {t('System setup wizard')}

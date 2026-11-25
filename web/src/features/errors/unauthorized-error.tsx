@@ -26,19 +26,28 @@ export function UnauthorisedError() {
   const navigate = useNavigate()
   const { history } = useRouter()
   return (
-    <div className='h-svh'>
-      <div className='m-auto flex h-full w-full flex-col items-center justify-center gap-2'>
-        <h1 className='text-[7rem] leading-tight font-bold'>401</h1>
-        <span className='font-medium'>{t('Unauthorized Access')}</span>
-        <p className='text-muted-foreground text-center'>
+    <div className='ob-landing-theme bg-background text-foreground h-svh'>
+      <div className='m-auto flex h-full w-full flex-col items-center justify-center gap-2 px-4'>
+        <h1 className='ob-serif-heading ob-hero-gradient-text text-[7rem] leading-tight font-bold'>
+          401
+        </h1>
+        <span className='text-lg font-semibold'>{t('Unauthorized Access')}</span>
+        <p className='text-muted-foreground text-center text-sm sm:text-base'>
           {t('Please log in with the appropriate credentials')} <br />{' '}
           {t('to access this resource.')}
         </p>
-        <div className='mt-6 flex gap-4'>
-          <Button variant='outline' onClick={() => history.go(-1)}>
+        <div className='mt-6 flex gap-3'>
+          <Button
+            variant='outline'
+            className='ob-btn-secondary rounded-full px-5'
+            onClick={() => history.go(-1)}
+          >
             {t('Go Back')}
           </Button>
-          <Button onClick={() => navigate({ to: '/' })}>
+          <Button
+            className='ob-btn-primary rounded-full px-6'
+            onClick={() => navigate({ to: '/' })}
+          >
             {t('Back to Home')}
           </Button>
         </div>

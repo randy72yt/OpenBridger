@@ -19,20 +19,19 @@ For commercial licensing, please contact support@quantumnous.com
 import { useTranslation } from 'react-i18next'
 
 import { PublicLayout } from '@/components/layout'
-import { Footer } from '@/components/layout/components/footer'
 import { Card, CardContent } from '@/components/ui/card'
 
 export function Tutorials() {
   const { t } = useTranslation()
   return (
     <PublicLayout showMainContainer={false}>
-      <main className='mx-auto min-h-[70vh] max-w-4xl px-6 pt-32 pb-16'>
-        <Card className='rounded-3xl shadow-none'>
+      <main className='mx-auto min-h-[70vh] max-w-4xl px-6 pt-28 pb-16 sm:pt-32'>
+        <Card className='ob-card rounded-3xl shadow-none'>
           <CardContent className='space-y-5 p-8 md:p-12'>
-            <p className='text-primary text-xs font-semibold tracking-widest'>
+            <p className='text-primary text-xs font-semibold tracking-widest uppercase'>
               OpenBridger
             </p>
-            <h1 className='text-3xl font-semibold'>
+            <h1 className='ob-serif-heading text-3xl font-semibold tracking-tight sm:text-4xl'>
               {t('Practical tutorials')}
             </h1>
             <p className='text-muted-foreground leading-8'>
@@ -43,7 +42,6 @@ export function Tutorials() {
           </CardContent>
         </Card>
       </main>
-      <Footer />
     </PublicLayout>
   )
 }

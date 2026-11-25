@@ -127,16 +127,22 @@ export function LegalDocument({
       {contentIsHtml ? (
         <RichContent mode='html' htmlVariant='isolated' content={rawContent} />
       ) : (
-        <div className='mx-auto max-w-4xl space-y-6 py-12'>
+        <div className='mx-auto max-w-4xl space-y-6 py-8'>
           <div className='space-y-2'>
-            <h1 className='text-3xl font-semibold tracking-tight'>{title}</h1>
+            <h1 className='ob-serif-heading text-3xl font-semibold tracking-tight sm:text-4xl'>
+              {title}
+            </h1>
           </div>
 
-          <RichContent
-            mode='markdown'
-            content={rawContent}
-            className='prose-neutral dark:prose-invert max-w-none'
-          />
+          <Card className='ob-card rounded-3xl shadow-none'>
+            <CardContent className='p-6 sm:p-10'>
+              <RichContent
+                mode='markdown'
+                content={rawContent}
+                className='prose-neutral dark:prose-invert max-w-none'
+              />
+            </CardContent>
+          </Card>
         </div>
       )}
     </PublicLayout>

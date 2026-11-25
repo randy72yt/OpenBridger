@@ -14,9 +14,10 @@
   - ❌ **严禁随意引入第三方 Logo 图片或外部 CDN 链接**：厂商图标统一使用本地依赖 `@lobehub/icons`。
   - ⚠️ **必须保留开源协议声明**：页面 Footer 必须保留 AGPLv3 Section 7 规范署名：`"Frontend design and development by New API contributors."` 及 GitHub 官方链接 `https://github.com/QuantumNous/new-api`。
 
-### 1.2 架构范围约束
-- 所有 Landing 相关的页面与组件必须保持在 `web/src/features/landing/` 目录内部，不得侵入控制台业务代码（如 `/dashboard`, `/channels` 等）。
-- 样式通过 `web/src/features/landing/landing-theme.css` 的 `.ob-landing-theme` 进行局部作用域隔离，不可污染全局 Tailwind token。
+### 1.2 双层 Token 架构范围约束
+- **L1 全局生产力底座（`web/src/styles/openbridger.css`）**：为全站默认主题（`default` preset）及所有 `document.body` Portal 弹层提供克制干净的暖白中性画布（`#FAF8F5` 底 / `#FFFFFF` 卡片 / `#14110F` 炭黑字）与品牌活力橙（`--primary: #FF6B00`），保留控制台 `ConfigDrawer` 切换其他主题预设的能力，同时严格保留 `--success` 健康绿等交通灯功能语义色。
+- **L2 公开页视觉层（`web/src/styles/public-surface.css`）**：通过 `.ob-landing-theme` 为公开页（`PublicLayout`）、认证页（`AuthLayout`）、初始化向导与全局错误页叠加暖米白底 `#FFFBF7`、暖色块 `#FFF6ED`、衬线标题 `.ob-serif-heading` 及橙色光晕主按钮 `.ob-btn-primary`。
+- **默认亮暗策略**：全站首次访问（无历史 Cookie）统一默认浅色模式（`DEFAULT_THEME = 'light'`），支持手动切换浅色/深色/跟随系统。
 
 ---
 
@@ -24,19 +25,19 @@
 
 全站主视觉为**浅色暖白底（Warm Cream）+ 醒目活力橙（Vibrant Orange）**，默认浅色，保留深色模式。
 
-### 2.1 CSS 变量规范（`landing-theme.css`）
+### 2.1 CSS 变量规范（`public-surface.css`）
 
 | Token 变量 | 浅色模式 (Light) | 深色模式 (Dark) | 语义说明 |
 | :--- | :--- | :--- | :--- |
-| `--ob-bg` | `#FFFBF7` | `#14110F` | 主页面背景色（暖白底 / 暖黑底） |
-| `--ob-surf-warm` | `#FFF6ED` | `#1C1815` | 卡片表面、次级胶囊徽章底色 |
-| `--ob-ink` | `#14110F` | `#FDFDFC` | 主标题与正文字体颜色 |
-| `--ob-ink-muted` | `#6E6259` | `#A69B91` | 次要文案、描述说明文字 |
-| `--ob-border` | `rgba(20, 17, 15, 0.08)` | `rgba(255, 255, 255, 0.08)` | 发丝细边框、分割线 |
+| `--ob-bg` | `#FFFBF7` | `#14110F` | 公开页主背景色（暖白底 / 暖黑底） |
+| `--ob-surf-warm` | `#FFF6ED` | `#1C1917` | 卡片表面、次级胶囊徽章底色 |
+| `--ob-ink` | `#14110F` | `#F5F5F4` | 主标题与正文字体颜色 |
+| `--ob-muted` | `#57534E` | `#A8A29E` | 次要文案、描述说明文字 |
+| `--ob-line` | `rgba(20, 17, 15, 0.09)` | `rgba(255, 255, 255, 0.08)` | 发丝细边框、分割线 |
 | `--ob-primary` | `#FF6B00` | `#FF6B00` | 品牌强调橙色（主 CTA、激活药丸） |
 | `--ob-primary-light` | `#FF8533` | `#FF8533` | 悬停态强调、渐变文字辅色 |
-| `--ob-primary-soft` | `#FFF0E6` | `rgba(255, 107, 0, 0.15)` | 激活标签底色、徽章半透背景 |
-| `--ob-terminal-bg` | `#14110F` | `#14110F` | 终端演示卡片深色背景（双模恒黑） |
+| `--ob-primary-soft` | `#FFF7ED` | `rgba(255, 107, 0, 0.12)` | 激活标签底色、徽章半透背景 |
+| `--ob-code-bg` | `#14110F` | `#14110F` | 终端演示卡片深色背景（双模恒黑） |
 
 ### 2.2 辅助原子类
 - `.ob-btn-primary`：橙色主按钮，渐变微光 + 悬停轻微位移阴影 `shadow-md shadow-orange-500/20`。
@@ -51,7 +52,7 @@
 ### 3.1 标题系统
 - **主标题（H1）**：中文采用**宋体/衬线体**（Serif），营造高端杂志社论质感。
   - 类名：`.ob-serif-heading`
-  - 字体族：`font-family: 'Songti SC', 'Noto Serif SC', 'STSong', 'SimSun', serif;`
+  - 字体族：`font-family: 'Lora Variable', 'Noto Serif SC', 'Songti SC', 'STSong', Georgia, serif;`
   - 示例文案：
     - Line 1：`一套标准接口，`
     - Line 2：`驱动全栈大模型。`

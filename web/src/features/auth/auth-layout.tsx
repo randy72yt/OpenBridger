@@ -19,9 +19,13 @@ For commercial licensing, please contact support@quantumnous.com
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
+import { LanguageSwitcher } from '@/components/language-switcher'
+import { HeaderLogo } from '@/components/layout/components/header-logo'
+import { ThemeSwitch } from '@/components/theme-switch'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSystemConfig } from '@/hooks/use-system-config'
+import { DEFAULT_SYSTEM_NAME } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 
 type AuthLayoutProps = {
@@ -29,50 +33,81 @@ type AuthLayoutProps = {
   showcase?: boolean
 }
 
-export function AuthLayout({ children, showcase = false }: AuthLayoutProps) {
+const SHOWCASE_PROVIDER_PILLS = [
+  'OpenAI',
+  'Claude',
+  'Gemini',
+  'DeepSeek',
+  'Qwen',
+  'Grok',
+] as const
+
+export function AuthLayout(props: AuthLayoutProps) {
+  const showcase = props.showcase ?? false
   const { t } = useTranslation()
-  const { systemName, logo, loading } = useSystemConfig()
+  const { systemName, logo, loading, logoLoaded } = useSystemConfig()
+  const displayName = systemName || DEFAULT_SYSTEM_NAME
 
   return (
-    <div className='bg-background relative grid min-h-svh max-w-none'>
+    <div className='ob-landing-theme bg-background text-foreground relative grid min-h-svh max-w-none overflow-hidden'>
+      <div
+        aria-hidden='true'
+        className='pointer-events-none absolute inset-0'
+        style={{
+          background: [
+            'radial-gradient(ellipse 55% 45% at 15% 20%, rgba(255, 107, 0, 0.10) 0%, transparent 70%)',
+            'radial-gradient(ellipse 45% 40% at 85% 80%, rgba(245, 158, 11, 0.08) 0%, transparent 70%)',
+          ].join(', '),
+        }}
+      />
+
       <Link
         to='/'
-        className='absolute top-4 left-4 z-10 flex items-center gap-2 transition-opacity hover:opacity-80 sm:top-8 sm:left-8'
+        className='absolute top-4 left-4 z-10 flex items-center gap-2.5 transition-opacity hover:opacity-85 sm:top-8 sm:left-8'
       >
-        <div className='relative h-8 w-8'>
+        <div className='ob-chip-primary flex size-8 shrink-0 items-center justify-center rounded-full'>
           {loading ? (
-            <Skeleton className='absolute inset-0 rounded-full' />
+            <Skeleton className='size-5 rounded-full' />
           ) : (
-            <img
+            <HeaderLogo
               src={logo}
-              alt={t('Logo')}
-              className='h-8 w-8 rounded-full object-cover'
+              loading={loading}
+              logoLoaded={logoLoaded}
+              className='size-5 rounded-md object-contain'
             />
           )}
         </div>
         {loading ? (
           <Skeleton className='h-6 w-24' />
         ) : (
-          <h1 className='text-xl font-medium'>{systemName}</h1>
+          <h1 className='text-lg font-bold tracking-tight'>{displayName}</h1>
         )}
       </Link>
+
+      <div className='absolute top-4 right-4 z-10 flex items-center gap-1.5 sm:top-7 sm:right-8'>
+        <LanguageSwitcher />
+        <ThemeSwitch />
+      </div>
+
       <div
         className={cn(
-          'container mx-auto flex items-center px-5 pt-24 pb-10 sm:px-8',
+          'relative z-10 container mx-auto flex items-center px-5 pt-24 pb-10 sm:px-8',
           showcase && 'max-w-6xl gap-16 lg:grid lg:grid-cols-2'
         )}
       >
         {showcase && (
-          <section className='hidden space-y-8 lg:block'>
-            <p className='text-primary text-sm font-semibold tracking-wider'>
+          <section className='hidden space-y-7 lg:block'>
+            <p className='ob-chip-primary inline-flex items-center gap-2 rounded-full px-3.5 py-1 text-xs font-semibold tracking-wider'>
+              <span className='ob-dot-primary size-1.5 rounded-full' />
               {t('AI application infrastructure')}
             </p>
-            <h2 className='text-4xl leading-tight font-semibold tracking-tight xl:text-5xl'>
+            <h2 className='ob-serif-heading text-4xl leading-tight font-bold tracking-tight xl:text-5xl'>
               {t('Connect to world-class AI,')}
               <br />
-              {t('build limitless possibilities')}
+              <span className='ob-hero-gradient-text'>
+                {t('build limitless possibilities')}
+              </span>
             </h2>
-            <div className='bg-primary h-1 w-12 rounded-full' />
             <div className='max-w-md space-y-3'>
               <p className='text-foreground/90 text-lg leading-relaxed font-medium'>
                 {t(
@@ -85,15 +120,22 @@ export function AuthLayout({ children, showcase = false }: AuthLayoutProps) {
                 )}
               </p>
             </div>
+            <div className='flex flex-wrap items-center gap-2 pt-1'>
+              {SHOWCASE_PROVIDER_PILLS.map((provider) => (
+                <span
+                  key={provider}
+                  className='ob-chip-primary ob-mono rounded-full px-3 py-1 text-xs font-medium'
+                >
+                  {provider}
+                </span>
+              ))}
+            </div>
           </section>
         )}
-        <Card
-          className={cn(
-            'mx-auto w-full max-w-[480px] rounded-3xl py-0 shadow-none',
-            !showcase && 'bg-transparent ring-0'
-          )}
-        >
-          <CardContent className='px-6 py-8 sm:p-10'>{children}</CardContent>
+        <Card className='ob-card mx-auto w-full max-w-[480px] rounded-3xl py-0 shadow-[0_20px_50px_-24px_rgba(20,17,15,0.12)] dark:shadow-[0_20px_50px_-24px_rgba(0,0,0,0.5)]'>
+          <CardContent className='px-6 py-8 sm:p-10'>
+            {props.children}
+          </CardContent>
         </Card>
       </div>
     </div>
