@@ -25,7 +25,9 @@ import {
   PlaygroundHeroGreeting,
   PlaygroundStarterPills,
 } from '../components/chat/playground-empty-state'
+import { PlaygroundInput } from '../components/input/playground-input'
 import { PlaygroundHeader } from '../components/playground-header'
+import { DEFAULT_CONFIG, DEFAULT_PARAMETER_ENABLED } from '../constants'
 import type { Message } from '../types'
 
 vi.mock('@/lib/lobe-icon', () => ({
@@ -54,6 +56,34 @@ describe('Playground ChatGPT-style UI', () => {
     ).toBeInTheDocument()
   })
 
+  test('renders model selector inside the bottom-right of the input composer', () => {
+    const { container } = render(
+      <PlaygroundInput
+        config={DEFAULT_CONFIG}
+        groups={[{ label: 'Default', value: 'default', ratio: 1 }]}
+        groupValue='default'
+        models={[
+          { label: 'gpt-4o', value: 'gpt-4o' },
+          { label: 'claude-sonnet-4-5', value: 'claude-sonnet-4-5' },
+        ]}
+        modelValue='claude-sonnet-4-5'
+        onConfigChange={() => undefined}
+        onGroupChange={() => undefined}
+        onModelChange={() => undefined}
+        onParameterEnabledChange={() => undefined}
+        onSubmit={() => undefined}
+        parameterEnabled={DEFAULT_PARAMETER_ENABLED}
+      />
+    )
+
+    const modelSelector = screen.getByRole('combobox')
+    expect(modelSelector).toHaveTextContent('claude-sonnet-4-5')
+    expect(
+      container.querySelector('[data-lobe-icon="Claude.Color"]')
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument()
+  })
+
   test('submits starter prompt when a quick starter pill is clicked', async () => {
     const user = userEvent.setup()
     const onSelectPrompt = vi.fn()
@@ -70,16 +100,7 @@ describe('Playground ChatGPT-style UI', () => {
     const onClearMessages = vi.fn()
 
     render(
-      <PlaygroundHeader
-        groups={[{ label: 'Default', value: 'default', ratio: 1 }]}
-        groupValue='default'
-        hasMessages
-        models={[{ label: 'gpt-4o', value: 'gpt-4o' }]}
-        modelValue='gpt-4o'
-        onClearMessages={onClearMessages}
-        onGroupChange={() => undefined}
-        onModelChange={() => undefined}
-      />
+      <PlaygroundHeader hasMessages onClearMessages={onClearMessages} />
     )
 
     await user.click(screen.getByRole('button', { name: 'New chat' }))

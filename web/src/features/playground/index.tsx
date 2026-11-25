@@ -87,15 +87,8 @@ export function Playground() {
     <div className='bg-background relative flex size-full min-h-0 flex-col overflow-hidden'>
       <PlaygroundHeader
         disabled={isGenerating}
-        groups={groups}
-        groupValue={config.group}
         hasMessages={hasMessages}
-        isModelLoading={isLoadingModels}
-        models={models}
-        modelValue={config.model}
         onClearMessages={handleClearMessages}
-        onGroupChange={(value) => updateConfig('group', value)}
-        onModelChange={(value) => updateConfig('model', value)}
       />
 
       {showEmptyLanding ? (
@@ -107,10 +100,14 @@ export function Playground() {
               config={config}
               disabled={isGenerating}
               groups={groups}
+              groupValue={config.group}
               isGenerating={isGenerating}
               isModelLoading={isLoadingModels}
               models={models}
+              modelValue={config.model}
               onConfigChange={updateConfig}
+              onGroupChange={(value) => updateConfig('group', value)}
+              onModelChange={(value) => updateConfig('model', value)}
               onParameterEnabledChange={updateParameterEnabled}
               onStop={stopGeneration}
               onSubmit={handleSendMessage}
@@ -147,10 +144,14 @@ export function Playground() {
               config={config}
               disabled={isGenerating}
               groups={groups}
+              groupValue={config.group}
               isGenerating={isGenerating}
               isModelLoading={isLoadingModels}
               models={models}
+              modelValue={config.model}
               onConfigChange={updateConfig}
+              onGroupChange={(value) => updateConfig('group', value)}
+              onModelChange={(value) => updateConfig('model', value)}
               onParameterEnabledChange={updateParameterEnabled}
               onStop={stopGeneration}
               onSubmit={handleSendMessage}

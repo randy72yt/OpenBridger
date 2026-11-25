@@ -43,8 +43,12 @@ export interface PlaygroundInputProps {
   disabled?: boolean
   isGenerating?: boolean
   models: ModelOption[]
+  modelValue: string
+  onModelChange: (value: string) => void
   isModelLoading?: boolean
   groups: GroupOption[]
+  groupValue: string
+  onGroupChange: (value: string) => void
   onConfigChange: <K extends keyof PlaygroundConfig>(
     key: K,
     value: PlaygroundConfig[K]
@@ -92,9 +96,13 @@ export function PlaygroundInput(props: PlaygroundInputProps) {
           <PlaygroundInputControls
             disabled={props.disabled}
             groups={props.groups}
+            groupValue={props.groupValue}
             isGenerating={props.isGenerating}
             isModelLoading={props.isModelLoading}
             models={props.models}
+            modelValue={props.modelValue}
+            onGroupChange={props.onGroupChange}
+            onModelChange={props.onModelChange}
             onStop={props.onStop}
             text={text}
             tools={
