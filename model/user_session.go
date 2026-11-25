@@ -45,7 +45,7 @@ type UserSession struct {
 	Version             int64  `json:"version" gorm:"type:bigint;not null;default:1"`
 	UserAuthVersion     int64  `json:"user_auth_version" gorm:"type:bigint;not null"`
 	Status              string `json:"status" gorm:"type:varchar(16);not null;index:idx_user_sessions_user_status_expiry,priority:2;index:idx_user_sessions_status_revoked,priority:1"`
-	RefreshHash         string `json:"-" gorm:"type:char(64);not null"`
+	RefreshHash         string `json:"-" gorm:"type:varchar(64);not null"`
 	PreviousRefreshHash string `json:"-" gorm:"type:varchar(64)"`
 	PreviousValidUntil  int64  `json:"-" gorm:"type:bigint;not null;default:0"`
 	LoginMethod         string `json:"login_method" gorm:"type:varchar(32);not null"`

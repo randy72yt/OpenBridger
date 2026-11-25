@@ -51,13 +51,13 @@ func TestModelPoolAbilityGating(t *testing.T) {
 		require.NoError(t, DB.Where("channel_id = ?", channel.Id).Delete(&Ability{}).Error)
 		require.NoError(t, channel.AddAbilities(nil))
 		var defaultCount int64
-		require.NoError(t, DB.Model(&Ability{}).Where("channel_id = ? AND `group` = ?", channel.Id, "default").Count(&defaultCount).Error)
+		require.NoError(t, DB.Model(&Ability{}).Where("channel_id = ? AND "+commonGroupCol+" = ?", channel.Id, "default").Count(&defaultCount).Error)
 		assert.Equal(t, int64(1), defaultCount, "default 组只应有基础池的 1 个模型")
 		var proCount int64
-		require.NoError(t, DB.Model(&Ability{}).Where("channel_id = ? AND `group` = ?", channel.Id, "pro").Count(&proCount).Error)
+		require.NoError(t, DB.Model(&Ability{}).Where("channel_id = ? AND "+commonGroupCol+" = ?", channel.Id, "pro").Count(&proCount).Error)
 		assert.Equal(t, int64(2), proCount, "pro 组应拿到全部模型")
 		var premiumModelDefault int64
-		require.NoError(t, DB.Model(&Ability{}).Where("channel_id = ? AND `group` = ? AND model = ?", channel.Id, "default", "m-premium").Count(&premiumModelDefault).Error)
+		require.NoError(t, DB.Model(&Ability{}).Where("channel_id = ? AND "+commonGroupCol+" = ? AND model = ?", channel.Id, "default", "m-premium").Count(&premiumModelDefault).Error)
 		assert.Equal(t, int64(0), premiumModelDefault, "非基础池模型不得对 default 组开放")
 
 		// 重建路径（UpdateAbilities → 渠道保存/同步）必须推导出同样的结果。

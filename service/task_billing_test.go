@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -12,34 +13,24 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/common/testdb"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
-	"github.com/glebarez/sqlite"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
 
 func TestMain(m *testing.M) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		panic("failed to open test db: " + err.Error())
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		panic("failed to get sql.DB: " + err.Error())
-	}
-	sqlDB.SetMaxOpenConns(1)
+	db := testdb.Open()
 
 	model.DB = db
 	model.LOG_DB = db
 
-	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
 	common.RedisEnabled = false
 	common.BatchUpdateEnabled = false
 	common.LogConsumeEnabled = true
@@ -74,33 +65,90 @@ func TestMain(m *testing.M) {
 // Seed helpers
 // ---------------------------------------------------------------------------
 
+func clearTables() {
+	model.DB.Exec("DELETE FROM tasks")
+	model.DB.Exec("DELETE FROM users")
+	model.DB.Exec("DELETE FROM tokens")
+	model.DB.Exec("DELETE FROM logs")
+	model.DB.Exec("DELETE FROM channels")
+	model.DB.Exec("DELETE FROM midjourneys")
+	model.DB.Exec("DELETE FROM top_ups")
+	model.DB.Exec("DELETE FROM user_subscriptions")
+	model.DB.Exec("DELETE FROM system_task_locks")
+	model.DB.Exec("DELETE FROM system_tasks")
+	model.DB.Exec("DELETE FROM options")
+	model.DB.Exec("DELETE FROM upstream_model_offers")
+	model.DB.Exec("DELETE FROM upstream_cost_snapshots")
+	model.DB.Exec("DELETE FROM model_price_policies")
+	model.DB.Exec("DELETE FROM model_price_proposals")
+	model.DB.Exec("DELETE FROM pricing_sync_runs")
+	model.DB.Exec("DELETE FROM upstream_cost_calibrations")
+}
+
 func truncate(t *testing.T) {
 	t.Helper()
-	t.Cleanup(func() {
-		model.DB.Exec("DELETE FROM tasks")
-		model.DB.Exec("DELETE FROM users")
-		model.DB.Exec("DELETE FROM tokens")
-		model.DB.Exec("DELETE FROM logs")
-		model.DB.Exec("DELETE FROM channels")
-		model.DB.Exec("DELETE FROM midjourneys")
-		model.DB.Exec("DELETE FROM top_ups")
-		model.DB.Exec("DELETE FROM user_subscriptions")
-		model.DB.Exec("DELETE FROM system_task_locks")
-		model.DB.Exec("DELETE FROM system_tasks")
-		model.DB.Exec("DELETE FROM options")
-		model.DB.Exec("DELETE FROM upstream_model_offers")
-		model.DB.Exec("DELETE FROM upstream_cost_snapshots")
-		model.DB.Exec("DELETE FROM model_price_policies")
-		model.DB.Exec("DELETE FROM model_price_proposals")
-		model.DB.Exec("DELETE FROM pricing_sync_runs")
-		model.DB.Exec("DELETE FROM upstream_cost_calibrations")
-	})
+	// 进入时先清一遍：SQLite 内存库每次进程重建掩盖了测试间的残留，
+	// 真实数据库（MySQL/PostgreSQL）是持久库，必须防御前序测试的遗留数据。
+	clearTables()
+	t.Cleanup(clearTables)
 }
 
 func seedUser(t *testing.T, id int, quota int) {
 	t.Helper()
 	user := &model.User{Id: id, Username: "test_user", Quota: quota, Status: common.UserStatusEnabled}
 	require.NoError(t, model.DB.Create(user).Error)
+}
+
+// installFailUpdateTrigger 注入一个让指定表特定行的 UPDATE 失败的触发器，
+// 用于模拟配额写库失败。三库触发器语法不同，按当前测试方言生成。
+// CREATE 前先 DROP：真实数据库是持久库，上次中断可能残留同名触发器。
+func installFailUpdateTrigger(t *testing.T, table string, rowID int) {
+	t.Helper()
+	triggerName := "fail_update_" + table
+	dropTrigger := func() {
+		if testdb.Dialect() == common.DatabaseTypePostgreSQL {
+			// 只有 PostgreSQL 的 DROP TRIGGER 需要 ON <table> 限定。
+			model.DB.Exec(fmt.Sprintf("DROP TRIGGER IF EXISTS %s ON %s", triggerName, table))
+		} else {
+			model.DB.Exec("DROP TRIGGER IF EXISTS " + triggerName)
+		}
+	}
+	dropTrigger()
+	switch testdb.Dialect() {
+	case common.DatabaseTypePostgreSQL:
+		funcName := triggerName + "_fn"
+		model.DB.Exec(fmt.Sprintf(`CREATE OR REPLACE FUNCTION %s() RETURNS trigger AS $$
+BEGIN
+	IF OLD.id = %d THEN RAISE EXCEPTION 'forced update failure'; END IF;
+	RETURN NEW;
+END; $$ LANGUAGE plpgsql`, funcName, rowID))
+		require.NoError(t, model.DB.Exec(fmt.Sprintf(
+			`CREATE TRIGGER %s BEFORE UPDATE ON %s FOR EACH ROW WHEN (OLD.id = %d) EXECUTE FUNCTION %s()`,
+			triggerName, table, rowID, funcName)).Error)
+		t.Cleanup(func() {
+			dropTrigger()
+			model.DB.Exec("DROP FUNCTION IF EXISTS " + funcName + "()")
+		})
+	case common.DatabaseTypeMySQL:
+		require.NoError(t, model.DB.Exec(fmt.Sprintf(
+			`CREATE TRIGGER %s BEFORE UPDATE ON %s FOR EACH ROW
+BEGIN
+	IF OLD.id = %d THEN
+		SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'forced update failure';
+	END IF;
+END`, triggerName, table, rowID)).Error)
+		t.Cleanup(dropTrigger)
+	default: // SQLite
+		require.NoError(t, model.DB.Exec(fmt.Sprintf(`
+	CREATE TRIGGER %s
+	BEFORE UPDATE ON %s
+	WHEN OLD.id = %d
+	BEGIN
+		SELECT RAISE(ABORT, 'forced update failure');
+	END;
+`, triggerName, table, rowID)).Error)
+		t.Cleanup(dropTrigger)
+	}
 }
 
 func seedToken(t *testing.T, id int, userId int, key string, remainQuota int) {
@@ -684,17 +732,7 @@ func TestSettleMidjourneyTaskBillingFundingFailureClearsMarkers(t *testing.T) {
 	require.True(t, prepared)
 	require.NoError(t, task.Insert())
 
-	require.NoError(t, model.DB.Exec(`
-		CREATE TRIGGER fail_midjourney_user_update
-		BEFORE UPDATE ON users
-		WHEN OLD.id = 52
-		BEGIN
-			SELECT RAISE(ABORT, 'forced user quota failure');
-		END;
-	`).Error)
-	t.Cleanup(func() {
-		model.DB.Exec("DROP TRIGGER IF EXISTS fail_midjourney_user_update")
-	})
+	installFailUpdateTrigger(t, "users", userID)
 
 	billed, err := SettleMidjourneyTaskBilling(relayInfo, task, prepared)
 
@@ -738,17 +776,7 @@ func TestSettleMidjourneyTaskBillingTokenFailureKeepsFundingRefundable(t *testin
 	require.True(t, prepared)
 	require.NoError(t, task.Insert())
 
-	require.NoError(t, model.DB.Exec(`
-		CREATE TRIGGER fail_midjourney_token_update
-		BEFORE UPDATE ON tokens
-		WHEN OLD.id = 53
-		BEGIN
-			SELECT RAISE(ABORT, 'forced token quota failure');
-		END;
-	`).Error)
-	t.Cleanup(func() {
-		model.DB.Exec("DROP TRIGGER IF EXISTS fail_midjourney_token_update")
-	})
+	installFailUpdateTrigger(t, "tokens", tokenID)
 
 	billed, err := SettleMidjourneyTaskBilling(relayInfo, task, prepared)
 

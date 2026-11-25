@@ -37,7 +37,11 @@ func TestPricingControlDatabaseMatrix(t *testing.T) {
 			previousMain, previousLog := common.MainDatabaseType(), common.LogDatabaseType()
 			model.DB = database
 			common.SetDatabaseTypes(dialect.dbType, dialect.dbType)
+			// 共享的持久库：先清 pricing 相关表，防御同包其他测试留下的
+			// 策略/提案（否则 RecalculatePricingProposals 的计数会数到它们）。
+			clearPricingTables(database)
 			t.Cleanup(func() {
+				clearPricingTables(database)
 				model.DB = previousDB
 				common.SetDatabaseTypes(previousMain, previousLog)
 				sqlDB, closeErr := database.DB()
@@ -558,4 +562,15 @@ func seedAutoPublishRoot(t *testing.T, id int, status int) {
 	}
 	require.NoError(t, model.DB.Create(user).Error)
 	t.Setenv("PRICING_AUTO_PUBLISH_OPERATOR_ID", strconv.Itoa(id))
+}
+
+// clearPricingTables 清空 pricing 相关表。TestPricingControlDatabaseMatrix
+// 连接的是共享持久库（CI 注入的 TEST_*_DSN），必须防御同包其他测试留下的行。
+func clearPricingTables(db *gorm.DB) {
+	for _, table := range []string{
+		"upstream_model_offers", "upstream_cost_snapshots", "model_price_policies",
+		"model_price_proposals", "pricing_sync_runs", "upstream_cost_calibrations",
+	} {
+		db.Exec("DELETE FROM " + table)
+	}
 }
