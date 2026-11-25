@@ -22,22 +22,19 @@ For commercial licensing, please contact support@quantumnous.com
  */
 export function getMessageContentStyles() {
   return [
-    // Assistant content reads like a document column; user bubble stays compact.
+    // Assistant content reads like a ChatGPT document column; user bubble stays compact.
     'group-[.is-assistant]:w-full',
-    'group-[.is-assistant]:max-w-[78ch]',
+    'group-[.is-assistant]:max-w-none',
     'group-[.is-user]:w-fit',
 
-    // User bubble: compact surface that stays calm in both light and dark themes.
-    'group-[.is-user]:rounded-2xl',
-    'group-[.is-user]:rounded-br-md',
-    'group-[.is-user]:border',
-    'group-[.is-user]:border-border/70',
-    'group-[.is-user]:bg-muted/70',
-    'group-[.is-user]:px-4',
+    // User bubble: soft ChatGPT-style pill without harsh border or sharp corner.
+    'group-[.is-user]:rounded-3xl',
+    'group-[.is-user]:border-0',
+    'group-[.is-user]:bg-muted/85 dark:group-[.is-user]:bg-muted/55',
+    'group-[.is-user]:px-5',
     'group-[.is-user]:py-2.5',
     'group-[.is-user]:text-foreground',
-    'group-[.is-user]:shadow-sm',
-    'group-[.is-user]:shadow-black/5',
+    'group-[.is-user]:shadow-none',
 
     // Assistant response: flat reading surface using the active UI font axis.
     'group-[.is-assistant]:bg-transparent',
@@ -45,20 +42,18 @@ export function getMessageContentStyles() {
     'group-[.is-assistant]:rounded-none',
     'group-[.is-assistant]:overflow-visible',
     'group-[.is-assistant]:[font-family:var(--font-body)]',
-    'group-[.is-assistant]:text-foreground/90',
+    'group-[.is-assistant]:text-foreground',
 
     // Preferred readable widths and wrapping
     'text-[0.95rem]',
-    'leading-6',
+    'leading-7',
     'break-words',
     'whitespace-pre-wrap',
-    'sm:text-[0.975rem]',
+    'sm:text-base',
     'sm:leading-7',
 
     // Cap user bubble width so it does not look like a banner
     'group-[.is-user]:max-w-[85%]',
-    'sm:group-[.is-user]:max-w-[62ch]',
-    'md:group-[.is-user]:max-w-[68ch]',
-    'lg:group-[.is-user]:max-w-[72ch]',
+    'sm:group-[.is-user]:max-w-[72%]',
   ].join(' ')
 }

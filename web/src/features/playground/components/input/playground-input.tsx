@@ -36,67 +36,44 @@ import type {
 import { PlaygroundInputControls } from './playground-input-controls'
 import { PlaygroundInputTools } from './playground-input-tools'
 
-interface PlaygroundInputProps {
+export interface PlaygroundInputProps {
   config: PlaygroundConfig
   onSubmit: (text: string) => void
   onStop?: () => void
   disabled?: boolean
   isGenerating?: boolean
   models: ModelOption[]
-  modelValue: string
-  onModelChange: (value: string) => void
   isModelLoading?: boolean
   groups: GroupOption[]
-  groupValue: string
-  onGroupChange: (value: string) => void
-  hasMessages?: boolean
   onConfigChange: <K extends keyof PlaygroundConfig>(
     key: K,
     value: PlaygroundConfig[K]
   ) => void
-  onClearMessages?: () => void
   onParameterEnabledChange: (
     key: keyof ParameterEnabled,
     value: boolean
   ) => void
   parameterEnabled: ParameterEnabled
+  showDisclaimer?: boolean
 }
 
-export function PlaygroundInput({
-  config,
-  onSubmit,
-  onStop,
-  disabled,
-  isGenerating,
-  models,
-  modelValue,
-  onModelChange,
-  isModelLoading = false,
-  groups,
-  groupValue,
-  onGroupChange,
-  hasMessages = false,
-  onConfigChange,
-  onClearMessages,
-  onParameterEnabledChange,
-  parameterEnabled,
-}: PlaygroundInputProps) {
+export function PlaygroundInput(props: PlaygroundInputProps) {
   const { t } = useTranslation()
   const [text, setText] = useState('')
 
   const handleSubmit = (message: PromptInputMessage) => {
-    const submittableText = getSubmittableInputText(message, disabled)
+    const submittableText = getSubmittableInputText(message, props.disabled)
 
     if (!submittableText) return
-    onSubmit(submittableText)
+    props.onSubmit(submittableText)
     setText('')
   }
 
   return (
-    <div className='grid shrink-0 gap-4 px-1 md:pb-4'>
+    <div className='grid w-full shrink-0 gap-2'>
       <PromptInput
         className='relative'
-        groupClassName='bg-background/95 dark:bg-background/80 border-border/70 shadow-[0_18px_60px_-32px_rgba(0,0,0,0.65)] ring-1 ring-foreground/5 rounded-xl overflow-hidden transition-all duration-200 focus-within:border-primary/45 focus-within:ring-primary/15 focus-within:shadow-[0_22px_70px_-34px_rgba(0,0,0,0.75)]'
+        groupClassName='bg-muted/35 dark:bg-muted/20 border-border/80 hover:border-border focus-within:bg-background focus-within:border-border shadow-[0_6px_28px_-10px_rgba(0,0,0,0.08)] dark:shadow-[0_12px_34px_-12px_rgba(0,0,0,0.5)] rounded-[26px] overflow-hidden transition-all duration-200 focus-within:shadow-[0_10px_36px_-10px_rgba(0,0,0,0.12)]'
         onSubmit={handleSubmit}
       >
         <PromptInputTextarea
@@ -104,40 +81,40 @@ export function PlaygroundInput({
           autoCorrect='off'
           autoCapitalize='off'
           spellCheck={false}
-          className='min-h-20 px-5 pt-4 pb-3 leading-7 md:min-h-24 md:text-base'
-          disabled={disabled}
+          className='min-h-13 max-h-52 border-0 bg-transparent px-4 pt-3.5 pb-1.5 text-[15px] leading-6 shadow-none focus-visible:ring-0 md:text-base'
+          disabled={props.disabled}
           onChange={(event) => setText(event.target.value)}
           placeholder={t('Ask anything')}
           value={text}
         />
 
-        <PromptInputFooter className='border-border/60 bg-muted/20 dark:bg-muted/10 border-t px-3 py-2.5 backdrop-blur'>
+        <PromptInputFooter className='border-0 bg-transparent px-3 pt-1 pb-2.5'>
           <PlaygroundInputControls
-            disabled={disabled}
-            groups={groups}
-            groupValue={groupValue}
-            isGenerating={isGenerating}
-            isModelLoading={isModelLoading}
-            models={models}
-            modelValue={modelValue}
-            onGroupChange={onGroupChange}
-            onModelChange={onModelChange}
-            onStop={onStop}
+            disabled={props.disabled}
+            groups={props.groups}
+            isGenerating={props.isGenerating}
+            isModelLoading={props.isModelLoading}
+            models={props.models}
+            onStop={props.onStop}
             text={text}
             tools={
               <PlaygroundInputTools
-                config={config}
-                disabled={disabled}
-                hasMessages={hasMessages}
-                onConfigChange={onConfigChange}
-                onClearMessages={onClearMessages}
-                onParameterEnabledChange={onParameterEnabledChange}
-                parameterEnabled={parameterEnabled}
+                config={props.config}
+                disabled={props.disabled}
+                onConfigChange={props.onConfigChange}
+                onParameterEnabledChange={props.onParameterEnabledChange}
+                parameterEnabled={props.parameterEnabled}
               />
             }
           />
         </PromptInputFooter>
       </PromptInput>
+
+      {props.showDisclaimer && (
+        <p className='text-muted-foreground/80 px-2 text-center text-[11px] leading-4'>
+          {t('AI can make mistakes. Check important info.')}
+        </p>
+      )}
     </div>
   )
 }

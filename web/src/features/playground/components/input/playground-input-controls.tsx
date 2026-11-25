@@ -16,12 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { SendIcon, SquareIcon } from 'lucide-react'
+import { ArrowUpIcon, SquareIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { PromptInputButton } from '@/components/ai-elements/prompt-input'
-import { ModelGroupSelector } from '@/components/model-group-selector'
 
 import { getInputControlState } from '../../lib'
 import type { GroupOption, ModelOption } from '../../types'
@@ -29,96 +28,53 @@ import type { GroupOption, ModelOption } from '../../types'
 type PlaygroundInputControlsProps = {
   disabled?: boolean
   groups: GroupOption[]
-  groupValue: string
   isGenerating?: boolean
   isModelLoading?: boolean
   models: ModelOption[]
-  modelValue: string
-  onGroupChange: (value: string) => void
-  onModelChange: (value: string) => void
   onStop?: () => void
   text: string
   tools: ReactNode
 }
 
-export function PlaygroundInputControls({
-  disabled,
-  groups,
-  groupValue,
-  isGenerating,
-  isModelLoading = false,
-  models,
-  modelValue,
-  onGroupChange,
-  onModelChange,
-  onStop,
-  text,
-  tools,
-}: PlaygroundInputControlsProps) {
+export function PlaygroundInputControls(props: PlaygroundInputControlsProps) {
   const { t } = useTranslation()
-  const { canSubmit, isSelectorDisabled, shouldShowStop } =
-    getInputControlState({
-      disabled,
-      groups,
-      hasStopHandler: Boolean(onStop),
-      isGenerating,
-      isModelLoading,
-      models,
-      text,
-    })
-
-  const renderSelector = () => (
-    <ModelGroupSelector
-      selectedModel={modelValue}
-      models={models}
-      onModelChange={onModelChange}
-      selectedGroup={groupValue}
-      groups={groups}
-      onGroupChange={onGroupChange}
-      disabled={isSelectorDisabled}
-    />
-  )
-
-  const renderSubmitButton = () =>
-    shouldShowStop ? (
-      <PromptInputButton
-        className='border-destructive/25 bg-destructive/10 text-destructive hover:bg-destructive/15 font-medium'
-        onClick={onStop}
-        variant='secondary'
-      >
-        <SquareIcon className='fill-current' size={16} />
-        <span className='hidden sm:inline'>{t('Stop')}</span>
-        <span className='sr-only sm:hidden'>{t('Stop')}</span>
-      </PromptInputButton>
-    ) : (
-      <PromptInputButton
-        className='bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground h-8 px-3 font-medium shadow-sm'
-        disabled={!canSubmit}
-        type='submit'
-        variant='default'
-      >
-        <SendIcon size={16} />
-        <span className='hidden sm:inline'>{t('Send')}</span>
-        <span className='sr-only sm:hidden'>{t('Send')}</span>
-      </PromptInputButton>
-    )
+  const { canSubmit, shouldShowStop } = getInputControlState({
+    disabled: props.disabled,
+    groups: props.groups,
+    hasStopHandler: Boolean(props.onStop),
+    isGenerating: props.isGenerating,
+    isModelLoading: props.isModelLoading,
+    models: props.models,
+    text: props.text,
+  })
 
   return (
-    <div className='flex w-full flex-col gap-2.5 md:flex-row md:items-center md:justify-between'>
-      <div className='flex min-w-0 items-center justify-end md:hidden'>
-        {renderSelector()}
-      </div>
+    <div className='flex w-full items-center justify-between gap-2'>
+      <div className='flex min-w-0 items-center gap-1'>{props.tools}</div>
 
-      <div className='flex items-center justify-between gap-2 md:justify-start'>
-        {tools}
-        <div className='flex items-center gap-1.5 md:hidden'>
-          {renderSubmitButton()}
-        </div>
-      </div>
-
-      <div className='hidden min-w-0 items-center gap-2 md:flex'>
-        {renderSelector()}
-        {renderSubmitButton()}
+      <div className='flex shrink-0 items-center'>
+        {shouldShowStop ? (
+          <PromptInputButton
+            aria-label={t('Stop')}
+            className='bg-foreground text-background hover:bg-foreground/85 size-8 rounded-full p-0 shadow-xs transition-transform active:scale-95'
+            onClick={props.onStop}
+            variant='default'
+          >
+            <SquareIcon className='size-3.5 fill-current' aria-hidden='true' />
+            <span className='sr-only'>{t('Stop')}</span>
+          </PromptInputButton>
+        ) : (
+          <PromptInputButton
+            aria-label={t('Send')}
+            className='bg-foreground text-background hover:bg-foreground/85 disabled:bg-muted disabled:text-muted-foreground size-8 rounded-full p-0 shadow-xs transition-all active:scale-95 disabled:opacity-45'
+            disabled={!canSubmit}
+            type='submit'
+            variant='default'
+          >
+            <ArrowUpIcon className='size-4 stroke-[2.5]' aria-hidden='true' />
+            <span className='sr-only'>{t('Send')}</span>
+          </PromptInputButton>
+        )}
       </div>
     </div>
   )

@@ -17,7 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { PlaygroundChat } from './components/chat/playground-chat'
+import {
+  PlaygroundHeroGreeting,
+  PlaygroundStarterPills,
+} from './components/chat/playground-empty-state'
 import { PlaygroundInput } from './components/input/playground-input'
+import { PlaygroundHeader } from './components/playground-header'
 import {
   useChatHandler,
   usePlaygroundConversation,
@@ -56,6 +61,7 @@ export function Playground() {
     applyEdit,
     handleDeleteMessage,
   } = usePlaygroundConversation({
+    currentModel: config.model,
     messages,
     updateMessages,
     sendChat,
@@ -74,47 +80,86 @@ export function Playground() {
     updateConfig,
   })
 
-  return (
-    <div className='relative flex size-full min-h-0 flex-col overflow-hidden'>
-      {/* Full-width scroll container: scrolling works even over side whitespace */}
-      <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
-        <PlaygroundChat
-          messages={messages}
-          isLoadingMessages={isLoadingMessages}
-          onRegenerateMessage={handleRegenerateMessage}
-          onEditMessage={handleEditMessage}
-          onDeleteMessage={handleDeleteMessage}
-          onSelectPrompt={handleSendMessage}
-          isGenerating={isGenerating}
-          editingKey={editingMessageKey}
-          onCancelEdit={handleEditOpenChange}
-          onSaveEdit={(newContent) => applyEdit(newContent, false)}
-          onSaveEditAndSubmit={(newContent) => applyEdit(newContent, true)}
-        />
-      </div>
+  const hasMessages = messages.length > 0
+  const showEmptyLanding = !hasMessages && !isLoadingMessages
 
-      {/* Input area: center content and constrain to the same container width */}
-      <div className='mx-auto w-full max-w-4xl'>
-        <PlaygroundInput
-          config={config}
-          disabled={isGenerating}
-          groups={groups}
-          groupValue={config.group}
-          isGenerating={isGenerating}
-          isModelLoading={isLoadingModels}
-          modelValue={config.model}
-          models={models}
-          onGroupChange={(value) => updateConfig('group', value)}
-          onConfigChange={updateConfig}
-          onClearMessages={handleClearMessages}
-          onModelChange={(value) => updateConfig('model', value)}
-          onParameterEnabledChange={updateParameterEnabled}
-          onStop={stopGeneration}
-          onSubmit={handleSendMessage}
-          parameterEnabled={parameterEnabled}
-          hasMessages={messages.length > 0}
-        />
-      </div>
+  return (
+    <div className='bg-background relative flex size-full min-h-0 flex-col overflow-hidden'>
+      <PlaygroundHeader
+        disabled={isGenerating}
+        groups={groups}
+        groupValue={config.group}
+        hasMessages={hasMessages}
+        isModelLoading={isLoadingModels}
+        models={models}
+        modelValue={config.model}
+        onClearMessages={handleClearMessages}
+        onGroupChange={(value) => updateConfig('group', value)}
+        onModelChange={(value) => updateConfig('model', value)}
+      />
+
+      {showEmptyLanding ? (
+        <div className='flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-10'>
+          <div className='flex w-full max-w-3xl flex-col items-center gap-6'>
+            <PlaygroundHeroGreeting modelName={config.model} />
+
+            <PlaygroundInput
+              config={config}
+              disabled={isGenerating}
+              groups={groups}
+              isGenerating={isGenerating}
+              isModelLoading={isLoadingModels}
+              models={models}
+              onConfigChange={updateConfig}
+              onParameterEnabledChange={updateParameterEnabled}
+              onStop={stopGeneration}
+              onSubmit={handleSendMessage}
+              parameterEnabled={parameterEnabled}
+            />
+
+            <PlaygroundStarterPills
+              disabled={isGenerating || models.length === 0}
+              onSelectPrompt={handleSendMessage}
+            />
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
+            <PlaygroundChat
+              currentModel={config.model}
+              messages={messages}
+              isLoadingMessages={isLoadingMessages}
+              onRegenerateMessage={handleRegenerateMessage}
+              onEditMessage={handleEditMessage}
+              onDeleteMessage={handleDeleteMessage}
+              onSelectPrompt={handleSendMessage}
+              isGenerating={isGenerating}
+              editingKey={editingMessageKey}
+              onCancelEdit={handleEditOpenChange}
+              onSaveEdit={(newContent) => applyEdit(newContent, false)}
+              onSaveEditAndSubmit={(newContent) => applyEdit(newContent, true)}
+            />
+          </div>
+
+          <div className='mx-auto w-full max-w-3xl px-4 pt-1 pb-3'>
+            <PlaygroundInput
+              config={config}
+              disabled={isGenerating}
+              groups={groups}
+              isGenerating={isGenerating}
+              isModelLoading={isLoadingModels}
+              models={models}
+              onConfigChange={updateConfig}
+              onParameterEnabledChange={updateParameterEnabled}
+              onStop={stopGeneration}
+              onSubmit={handleSendMessage}
+              parameterEnabled={parameterEnabled}
+              showDisclaimer
+            />
+          </div>
+        </>
+      )}
     </div>
   )
 }

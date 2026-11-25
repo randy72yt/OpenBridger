@@ -20,65 +20,115 @@ import {
   BarChartIcon,
   CodeSquareIcon,
   GraduationCapIcon,
-  MessageSquarePlusIcon,
   NotepadTextIcon,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { ModelProviderIcon } from '@/components/model-provider-icon'
 import { Button } from '@/components/ui/button'
+import { resolveModelProvider } from '@/lib/model-provider'
 
-type PlaygroundEmptyStateProps = {
+export interface PlaygroundHeroGreetingProps {
+  modelName: string
+}
+
+export interface PlaygroundStarterPillsProps {
+  disabled?: boolean
   onSelectPrompt: (prompt: string) => void
 }
 
-const starterPrompts = [
-  { icon: BarChartIcon, text: 'Analyze data' },
-  { icon: NotepadTextIcon, text: 'Summarize text' },
-  { icon: CodeSquareIcon, text: 'Code' },
-  { icon: GraduationCapIcon, text: 'Get advice' },
-]
+const STARTER_PROMPTS = [
+  {
+    icon: NotepadTextIcon,
+    iconColorClass: 'text-orange-500',
+    text: 'Summarize text',
+  },
+  {
+    icon: CodeSquareIcon,
+    iconColorClass: 'text-blue-500',
+    text: 'Code',
+  },
+  {
+    icon: BarChartIcon,
+    iconColorClass: 'text-emerald-500',
+    text: 'Analyze data',
+  },
+  {
+    icon: GraduationCapIcon,
+    iconColorClass: 'text-violet-500',
+    text: 'Get advice',
+  },
+] as const
 
-export function PlaygroundEmptyState({
-  onSelectPrompt,
-}: PlaygroundEmptyStateProps) {
+export function PlaygroundHeroGreeting(props: PlaygroundHeroGreetingProps) {
+  const { t } = useTranslation()
+  const provider = resolveModelProvider(props.modelName)
+
+  return (
+    <div className='flex flex-col items-center gap-4 text-center'>
+      <div
+        className='border-border/70 bg-card flex size-13 items-center justify-center rounded-full border shadow-xs transition-transform duration-200'
+        data-testid='playground-model-emblem'
+      >
+        <ModelProviderIcon
+          modelName={props.modelName}
+          size={26}
+          fallbackToOpenAI={!props.modelName}
+        />
+      </div>
+
+      <div className='space-y-1.5'>
+        <h1 className='text-foreground text-2xl font-semibold tracking-tight text-balance sm:text-3xl'>
+          {t('What can I help with?')}
+        </h1>
+        {provider && (
+          <p className='text-muted-foreground text-xs font-medium'>
+            {provider.label} · {props.modelName}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function PlaygroundStarterPills(props: PlaygroundStarterPillsProps) {
   const { t } = useTranslation()
 
   return (
-    <div className='flex min-h-[min(520px,calc(100svh-18rem))] items-center justify-center px-1 py-8 md:py-12'>
-      <div className='grid w-full max-w-2xl gap-5 text-center'>
-        <div className='bg-muted/50 text-muted-foreground mx-auto flex size-11 items-center justify-center rounded-xl border'>
-          <MessageSquarePlusIcon className='size-5' aria-hidden='true' />
-        </div>
+    <div className='flex flex-wrap items-center justify-center gap-2'>
+      {STARTER_PROMPTS.map((item) => {
+        const Icon = item.icon
+        const prompt = t(item.text)
 
-        <div className='grid gap-2'>
-          <h2 className='text-xl font-semibold tracking-tight text-balance md:text-2xl'>
-            {t('Start a playground chat')}
-          </h2>
-          <p className='text-muted-foreground mx-auto max-w-lg text-sm leading-6 text-balance'>
-            {t(
-              'Test a model with a starter prompt, or write your own request below.'
-            )}
-          </p>
-        </div>
+        return (
+          <Button
+            className='border-border/75 bg-background/80 hover:bg-muted/70 text-muted-foreground hover:text-foreground h-9 gap-2 rounded-full px-4 text-[13px] font-normal shadow-2xs transition-colors'
+            disabled={props.disabled}
+            key={item.text}
+            onClick={() => props.onSelectPrompt(prompt)}
+            type='button'
+            variant='outline'
+          >
+            <Icon
+              className={`size-4 shrink-0 ${item.iconColorClass}`}
+              aria-hidden='true'
+            />
+            <span>{prompt}</span>
+          </Button>
+        )
+      })}
+    </div>
+  )
+}
 
-        <div className='grid gap-2 sm:grid-cols-2'>
-          {starterPrompts.map(({ icon: Icon, text }) => {
-            const prompt = t(text)
-
-            return (
-              <Button
-                className='h-auto min-h-11 justify-start gap-2 px-3 py-2.5 text-left whitespace-normal'
-                key={text}
-                onClick={() => onSelectPrompt(prompt)}
-                variant='outline'
-              >
-                <Icon className='text-muted-foreground size-4' />
-                <span>{prompt}</span>
-              </Button>
-            )
-          })}
-        </div>
-      </div>
+export function PlaygroundEmptyState(props: {
+  modelName?: string
+  onSelectPrompt: (prompt: string) => void
+}) {
+  return (
+    <div className='flex min-h-[min(460px,calc(100svh-18rem))] flex-col items-center justify-center gap-6 px-2 py-8'>
+      <PlaygroundHeroGreeting modelName={props.modelName ?? ''} />
+      <PlaygroundStarterPills onSelectPrompt={props.onSelectPrompt} />
     </div>
   )
 }
