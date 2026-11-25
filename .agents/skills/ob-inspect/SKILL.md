@@ -15,7 +15,10 @@ description: >-
 ```bash
 ssh ob-prod '/srv/openbridger/obctl status'        # 容器/版本/内存/磁盘
 ssh ob-prod '/srv/openbridger/obctl diag'           # 深度诊断（可加 backup-check）
+ssh ob-prod '/srv/openbridger/obctl schema-check'   # 2026-11 schema 迁移待办检查（FAIL=有列未迁移，见下）
 ```
+
+**schema-check FAIL 的含义**：2026-11 的三库兼容修复（4× char→varchar + subscription_plans.enabled 去 default，PR #44）尚未在生产完成 AutoMigrate。若生产镜像版本已包含 PR #44 之后代码却仍 FAIL，说明 AutoMigrate 未生效，查 `obctl logs app 200 | grep -i migrate`。迁移完成后该检查自然 PASS，2026-12 之后此命令可从巡检清单移除。
 
 ## 验证口径（重要）
 

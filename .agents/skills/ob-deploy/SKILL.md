@@ -29,8 +29,12 @@ description: >-
    等价手工步骤：`cd web && NODE_OPTIONS= bun run build`；`TAG=$(git rev-parse --short=9 HEAD)`；`docker buildx build --platform linux/amd64 -f Dockerfile.dev -t openbridger:$TAG --load .`；磁盘 <70% 后 `docker save openbridger:$TAG | gzip | ssh -o BatchMode=yes ob-prod 'gunzip | docker load'`。
 4. **冻结备份**（镜像 load 成功之后、切换之前）：`ssh ob-prod '/srv/openbridger/obctl backup'`。
 5. **部署**：`ssh ob-prod "/srv/openbridger/obctl deploy $TAG"`，tag 用脚本打印的那一个。L1 本地冒烟失败才自动回滚；L2（经 CF 公网自测）失败只是假失败告警，**不要**据此回滚。
-6. **外网验证**：本机 curl 三域名（openbridger.com / api.openbridger.com / docs.openbridger.com）均 200；`docker inspect repo-openbridger-1` 确认镜像 tag 与 healthy。
-7. **回滚**（异常时）：`ssh ob-prod '/srv/openbridger/obctl rollback'`。
+6. **Schema 迁移验证（强制，不可跳过）**：`ssh ob-prod '/srv/openbridger/obctl schema-check'`。
+   - 检查 2026-11 三库兼容修复的 5 处列变更（4× char→varchar + subscription_plans.enabled 去 default）是否已由新镜像的 AutoMigrate 完成。
+   - **PASS 才算发版完成**；FAIL 时看 `obctl logs app 200 | grep -i migrate` 排查 AutoMigrate 报错，未解决前不得执行后续步骤，必要时 `obctl rollback`。
+   - 该命令 FAIL 退出非零，可直接串进自动化。全绿后此项从发版清单移除（约 2026-12 之后可删）。
+7. **外网验证**：本机 curl 三域名（openbridger.com / api.openbridger.com / docs.openbridger.com）均 200；`docker inspect repo-openbridger-1` 确认镜像 tag 与 healthy。
+8. **回滚**（异常时）：`ssh ob-prod '/srv/openbridger/obctl rollback'`。
 
 ## 备选：CI 构建（仅 Mac 不可用时，手动触发）
 
@@ -38,4 +42,4 @@ GitHub → Actions → Release image to GHCR → Run workflow（或 `gh workflow
 
 ## 完成后
 
-汇报：结论 → 已执行 → 验证结果（三域名状态码）→ 下一步。必要时更新 `~/Downloads/OpenBridger-AI-交接包.md` 的镜像基线。
+汇报：结论 → 已执行 → 验证结果（三域名状态码 + **schema-check 结果**）→ 下一步。必要时更新 `~/Downloads/OpenBridger-AI-交接包.md` 的镜像基线。
