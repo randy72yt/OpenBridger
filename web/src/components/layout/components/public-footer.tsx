@@ -93,6 +93,11 @@ export function PublicFooter(props: PublicFooterProps) {
                 </Link>
               </li>
               <li>
+                <Link to='/agent-join' className='ob-footer-link'>
+                  {t('Partner Program')}
+                </Link>
+              </li>
+              <li>
                 <Link to='/dashboard' className='ob-footer-link'>
                   {t('Console')}
                 </Link>

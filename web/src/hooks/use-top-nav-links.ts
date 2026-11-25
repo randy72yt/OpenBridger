@@ -79,6 +79,11 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Model Square'), href: '/pricing', requiresAuth })
   }
 
+  // Partner Program (/agent-join)
+  if (modules?.agentJoin !== false) {
+    links.push({ title: t('Partner Program'), href: '/agent-join' })
+  }
+
   // Rankings
   const rankings = modules?.rankings
   if (rankings && typeof rankings === 'object' && rankings.enabled) {
