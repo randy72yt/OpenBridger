@@ -135,9 +135,11 @@
 
 | 文件路径 | 职责定位 |
 | :--- | :--- |
-| `web/src/features/landing/landing-theme.css` | 首页色彩变量、文字渐变、阴影与动画定义 |
-| `web/src/features/landing/components/landing-header.tsx` | 全圆角悬浮胶囊顶栏与导航路由 |
-| `web/src/features/landing/components/landing-user-menu.tsx` | 登录态胶囊头像下拉菜单 |
+| `web/src/styles/openbridger.css` | 全站 L1 默认生产力色彩底座、侧边栏与图表色板 |
+| `web/src/styles/public-surface.css` | 公开页 L2 色彩变量、文字渐变、阴影与动画定义 |
+| `web/src/components/layout/components/public-header.tsx` | 全圆角悬浮胶囊顶栏与导航路由 |
+| `web/src/components/layout/components/public-user-menu.tsx` | 登录态胶囊头像下拉菜单 |
+| `web/src/components/layout/components/public-footer.tsx` | 公开页深色三栏品牌页脚与开源署名 |
 | `web/src/features/landing/components/sections/landing-hero.tsx` | Hero 主视觉、衬线主标题、胶囊按钮、竖线指标 |
 | `web/src/features/landing/components/hero-brand-ticker.tsx` | 底部大模型厂商 Logo 走马灯饰条 |
 | `web/src/features/landing/components/landing-terminal-demo.tsx` | 实时 API 交互演示与代码高亮窗 |
