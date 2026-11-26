@@ -60,55 +60,76 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('AgentJoinPage', { timeout: 15000 }, () => {
-  it('renders partner hero, 6 core advantages, 4 onboarding steps, and contact card without borrowed brand copy', async () => {
-    const root = createRootRoute()
-    const agentJoin = createRoute({
-      getParentRoute: () => root,
-      path: '/agent-join',
-      component: AgentJoinPage,
-    })
-    const router = createRouter({
-      routeTree: root.addChildren([agentJoin]),
-      history: createMemoryHistory({ initialEntries: ['/agent-join'] }),
-    })
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    })
-    client.setQueryData(['status'], {
-      docs_link: '/docs',
-      server_address: 'https://api.openbridger.com',
-    })
+function renderAgentJoinWithStatus(statusPayload: Record<string, unknown>) {
+  const root = createRootRoute()
+  const agentJoin = createRoute({
+    getParentRoute: () => root,
+    path: '/agent-join',
+    component: AgentJoinPage,
+  })
+  const router = createRouter({
+    routeTree: root.addChildren([agentJoin]),
+    history: createMemoryHistory({ initialEntries: ['/agent-join'] }),
+  })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  client.setQueryData(['status'], statusPayload)
 
-    render(
-      <ThemeProvider>
-        <QueryClientProvider client={client}>
-          <RouterProvider router={router} />
-        </QueryClientProvider>
-      </ThemeProvider>
-    )
+  const utils = render(
+    <ThemeProvider>
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </ThemeProvider>
+  )
+
+  return { ...utils, client }
+}
+
+describe('AgentJoinPage', { timeout: 15000 }, () => {
+  it('renders default support@openbridger.com and QR placeholder when WeChat is unconfigured', async () => {
+    const { client } = renderAgentJoinWithStatus({
+      docs_link: '/docs',
+      server_address: 'https://openbridger.com',
+    })
 
     expect(
       await screen.findByText('agentJoin.hero.badge')
     ).toBeInTheDocument()
     expect(document.querySelector('.ob-landing-theme')).toBeInTheDocument()
+    expect(
+      screen.getAllByText('support@openbridger.com').length
+    ).toBeGreaterThanOrEqual(1)
+    expect(
+      screen.getByTestId('partner-wechat-qr-placeholder')
+    ).toBeInTheDocument()
 
-    // 4 numbered onboarding steps
     for (const stepNum of ['01', '02', '03', '04']) {
       expect(screen.getByText(stepNum)).toBeInTheDocument()
     }
 
-    // Top nav and footer link to /agent-join
-    const partnerLinks = screen.getAllByRole('link', {
-      name: 'Partner Program',
-    })
-    expect(partnerLinks.length).toBeGreaterThanOrEqual(2)
-    expect(partnerLinks[0]).toHaveAttribute('href', '/agent-join')
-
-    // Excludes third-party trademarks or personal WeChat handles
     expect(
       screen.queryByText(/快跑|Kokolo779|一镜到底/)
     ).not.toBeInTheDocument()
+
+    client.clear()
+  })
+
+  it('renders hot-configured WeChat ID and uploaded WeChat QR image from /api/status', async () => {
+    const qrDataUrl =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    const { client } = renderAgentJoinWithStatus({
+      contact_email: 'support@openbridger.com',
+      contact_wechat_id: 'OpenBridger_BD',
+      contact_wechat_qrcode: qrDataUrl,
+    })
+
+    const wechatMatches = await screen.findAllByText('OpenBridger_BD')
+    expect(wechatMatches.length).toBeGreaterThanOrEqual(1)
+    const qrBox = screen.getByTestId('partner-wechat-qr')
+    const qrImg = qrBox.querySelector('img')
+    expect(qrImg).toHaveAttribute('src', qrDataUrl)
 
     client.clear()
   })

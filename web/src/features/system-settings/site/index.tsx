@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { DEFAULT_LOGO, DEFAULT_SYSTEM_NAME } from '@/lib/constants'
+import { DEFAULT_SUPPORT_EMAIL } from '@/lib/platform-contact'
 
 import { SettingsPage } from '../components/settings-page'
 import type { SiteSettings } from '../types'
@@ -37,6 +38,9 @@ const defaultSiteSettings: SiteSettings = {
   TaskPublicAddress: '',
   'legal.user_agreement': '',
   'legal.privacy_policy': '',
+  'contact.email': DEFAULT_SUPPORT_EMAIL,
+  'contact.wechat_id': '',
+  'contact.wechat_qrcode': '',
   HeaderNavModules: '',
   SidebarModulesAdmin: '',
 }

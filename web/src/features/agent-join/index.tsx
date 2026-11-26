@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Link } from '@tanstack/react-router'
 import {
   ArrowUpRight,
   BarChart3,
@@ -25,8 +24,8 @@ import {
   Globe,
   Headset,
   Mail,
-  MessageSquare,
-  ShieldCheck,
+  MessageCircle,
+  QrCode,
   Sliders,
   Zap,
 } from 'lucide-react'
@@ -40,10 +39,13 @@ import { PageTransition } from '@/components/page-transition'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { ScrollReveal } from '@/features/landing/components/scroll-reveal'
+import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { DEFAULT_SYSTEM_NAME } from '@/lib/constants'
-import { PLATFORM_CONTACT } from '@/lib/platform-contact'
-import { useAuthStore } from '@/stores/auth-store'
+import {
+  isQrImageSource,
+  resolvePlatformContact,
+} from '@/lib/platform-contact'
 
 interface AdvantageItem {
   id: string
@@ -123,9 +125,11 @@ const ONBOARDING_STEPS: readonly StepItem[] = [
 export function AgentJoinPage() {
   const { t } = useTranslation()
   const { systemName } = useSystemConfig()
-  const user = useAuthStore((s) => s.auth.user)
-  const isAuthenticated = Boolean(user)
+  const { status } = useStatus()
   const displaySiteName = systemName || DEFAULT_SYSTEM_NAME
+  const contact = resolvePlatformContact(status)
+  const hasQrCode = contact.wechatQrCode.length > 0
+  const isQrImage = isQrImageSource(contact.wechatQrCode)
 
   const scrollToSection = (sectionId: string) => {
     const el = document.querySelector(`#${sectionId}`)
@@ -292,7 +296,7 @@ export function AgentJoinPage() {
           </ScrollReveal>
         </section>
 
-        {/* 4. Business Contact / Apply Section */}
+        {/* 4. Business Contact / WeChat QR Section */}
         <section
           id='partner-contact'
           className='relative mx-auto max-w-5xl scroll-mt-24 px-4 pt-12 pb-20 sm:px-6 sm:pt-16 sm:pb-28 lg:px-8'
@@ -312,7 +316,7 @@ export function AgentJoinPage() {
           <ScrollReveal delay={0.1} className='mt-10'>
             <Card className='ob-card rounded-3xl py-0 shadow-[0_20px_50px_-24px_rgba(20,17,15,0.08)]'>
               <CardContent className='grid grid-cols-1 items-center gap-8 p-8 sm:p-12 md:grid-cols-[1fr_auto]'>
-                {/* Left Column: Business Contact Details */}
+                {/* Left Column: Support Email + WeChat ID + Hours */}
                 <div className='space-y-5'>
                   <div className='space-y-1.5'>
                     <p className='text-muted-foreground text-xs font-semibold tracking-wider uppercase'>
@@ -328,19 +332,19 @@ export function AgentJoinPage() {
                       <span className='ob-chip-primary flex size-9 shrink-0 items-center justify-center rounded-xl'>
                         <Mail className='size-4' />
                       </span>
-                      <div className='flex min-w-0 items-center gap-2'>
+                      <div className='flex min-w-0 flex-wrap items-center gap-2'>
                         <span className='text-muted-foreground'>
                           {t('Contact email')}:
                         </span>
-                        {PLATFORM_CONTACT.email ? (
+                        {contact.email ? (
                           <>
                             <a
-                              href={`mailto:${PLATFORM_CONTACT.email}`}
+                              href={`mailto:${contact.email}`}
                               className='text-foreground hover:text-primary ob-mono truncate font-medium underline-offset-4 hover:underline'
                             >
-                              {PLATFORM_CONTACT.email}
+                              {contact.email}
                             </a>
-                            <CopyButton value={PLATFORM_CONTACT.email} />
+                            <CopyButton value={contact.email} />
                           </>
                         ) : (
                           <span className='text-foreground font-medium'>
@@ -351,25 +355,23 @@ export function AgentJoinPage() {
                     </div>
 
                     <div className='flex items-center gap-3'>
-                      <span className='flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'>
-                        <MessageSquare className='size-4' />
+                      <span className='flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/12 text-emerald-600 dark:text-emerald-400'>
+                        <MessageCircle className='size-4' />
                       </span>
-                      <div className='flex min-w-0 items-center gap-2'>
+                      <div className='flex min-w-0 flex-wrap items-center gap-2'>
                         <span className='text-muted-foreground'>
-                          {t('Community')}:
+                          {t('agentJoin.contact.wechatLabel')}:
                         </span>
-                        {PLATFORM_CONTACT.communityUrl ? (
-                          <a
-                            href={PLATFORM_CONTACT.communityUrl}
-                            target='_blank'
-                            rel='noopener noreferrer'
-                            className='text-foreground hover:text-primary font-medium underline-offset-4 hover:underline'
-                          >
-                            Telegram
-                          </a>
+                        {contact.wechatId ? (
+                          <>
+                            <span className='text-foreground ob-mono font-medium'>
+                              {contact.wechatId}
+                            </span>
+                            <CopyButton value={contact.wechatId} />
+                          </>
                         ) : (
-                          <span className='text-foreground font-medium'>
-                            {t('To be announced')}
+                          <span className='text-muted-foreground font-medium'>
+                            {t('agentJoin.contact.wechatScanHint')}
                           </span>
                         )}
                       </div>
@@ -386,57 +388,44 @@ export function AgentJoinPage() {
                   </div>
                 </div>
 
-                {/* Right Column: QR Code (when community URL configured) or Direct Onboarding Box */}
-                {PLATFORM_CONTACT.communityUrl ? (
-                  <div className='flex flex-col items-center gap-2.5 justify-self-center md:justify-self-end'>
-                    <div className='rounded-2xl border border-black/[0.08] bg-white p-3.5 shadow-xs'>
-                      <QRCodeSVG
-                        value={PLATFORM_CONTACT.communityUrl}
-                        size={148}
-                        level='M'
-                      />
+                {/* Right Column: Dedicated WeChat QR Code Card */}
+                <div className='flex flex-col items-center gap-2.5 justify-self-center md:justify-self-end'>
+                  {hasQrCode ? (
+                    <div
+                      className='rounded-2xl border border-black/[0.08] bg-white p-3.5 shadow-xs'
+                      data-testid='partner-wechat-qr'
+                    >
+                      {isQrImage ? (
+                        <img
+                          src={contact.wechatQrCode}
+                          alt={t('agentJoin.contact.scanWechatQr')}
+                          className='size-38 rounded-lg object-contain'
+                        />
+                      ) : (
+                        <QRCodeSVG
+                          value={contact.wechatQrCode}
+                          size={152}
+                          level='M'
+                        />
+                      )}
                     </div>
-                    <span className='text-muted-foreground text-xs font-medium'>
-                      {t('agentJoin.contact.scanQr')}
-                    </span>
-                  </div>
-                ) : (
-                  <div className='ob-section-warm flex w-full flex-col items-center gap-4 rounded-2xl border border-[var(--ob-line)] p-6 text-center md:w-64'>
-                    <div className='ob-chip-primary flex size-11 items-center justify-center rounded-full'>
-                      <ShieldCheck className='size-5' />
+                  ) : (
+                    <div
+                      className='ob-section-warm flex size-44 flex-col items-center justify-center gap-2.5 rounded-2xl border border-dashed border-[var(--ob-line)] p-4 text-center'
+                      data-testid='partner-wechat-qr-placeholder'
+                    >
+                      <div className='ob-chip-primary flex size-10 items-center justify-center rounded-xl'>
+                        <QrCode className='size-5' />
+                      </div>
+                      <span className='text-muted-foreground text-xs leading-relaxed'>
+                        {t('agentJoin.contact.qrPending')}
+                      </span>
                     </div>
-                    <div className='space-y-1'>
-                      <p className='text-foreground text-sm font-semibold'>
-                        {t('agentJoin.contact.quickStartTitle')}
-                      </p>
-                      <p className='text-muted-foreground text-xs leading-relaxed'>
-                        {t('agentJoin.contact.quickStartDesc')}
-                      </p>
-                    </div>
-                    <div className='flex w-full flex-col gap-2 pt-1'>
-                      <Button
-                        size='sm'
-                        className='ob-btn-primary w-full rounded-full text-xs font-semibold'
-                        render={
-                          <Link to={isAuthenticated ? '/dashboard' : '/sign-up'} />
-                        }
-                      >
-                        {isAuthenticated
-                          ? t('Console')
-                          : t('agentJoin.contact.registerCta')}
-                        <ArrowUpRight className='ml-1 size-3.5' />
-                      </Button>
-                      <Button
-                        variant='outline'
-                        size='sm'
-                        className='ob-btn-secondary w-full rounded-full text-xs font-medium'
-                        render={<Link to='/about' hash='business' />}
-                      >
-                        {t('Business cooperation')}
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                  )}
+                  <span className='text-muted-foreground text-xs font-medium'>
+                    {t('agentJoin.contact.scanWechatQr')}
+                  </span>
+                </div>
               </CardContent>
             </Card>
           </ScrollReveal>
