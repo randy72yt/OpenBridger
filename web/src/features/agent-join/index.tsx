@@ -24,7 +24,6 @@ import {
   Globe,
   Headset,
   Mail,
-  MessageCircle,
   QrCode,
   Sliders,
   Zap,
@@ -32,6 +31,8 @@ import {
 import { QRCodeSVG } from 'qrcode.react'
 import type { ComponentType } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { IconWeChat } from '@/assets/brand-icons/icon-wechat'
 
 import { CopyButton } from '@/components/copy-button'
 import { PublicLayout } from '@/components/layout'
@@ -355,8 +356,8 @@ export function AgentJoinPage() {
                     </div>
 
                     <div className='flex items-center gap-3'>
-                      <span className='flex size-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/12 text-emerald-600 dark:text-emerald-400'>
-                        <MessageCircle className='size-4' />
+                      <span className='flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#07C160]/12 text-[#07C160]'>
+                        <IconWeChat className='size-4.5' aria-hidden='true' />
                       </span>
                       <div className='flex min-w-0 flex-wrap items-center gap-2'>
                         <span className='text-muted-foreground'>
