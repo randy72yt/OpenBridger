@@ -148,13 +148,14 @@ var sizeGB = sizeMB * 1024
 func Bytes2Size(num int64) string {
 	numStr := ""
 	unit := "B"
-	if num/int64(sizeGB) > 1 {
+	// 边界必须用 >=：整 1KB/1MB/1GB 落在下级单位会显示成 1024 B/1024 KB/1024 MB。
+	if num/int64(sizeGB) >= 1 {
 		numStr = fmt.Sprintf("%.2f", float64(num)/float64(sizeGB))
 		unit = "GB"
-	} else if num/int64(sizeMB) > 1 {
+	} else if num/int64(sizeMB) >= 1 {
 		numStr = fmt.Sprintf("%d", int(float64(num)/float64(sizeMB)))
 		unit = "MB"
-	} else if num/int64(sizeKB) > 1 {
+	} else if num/int64(sizeKB) >= 1 {
 		numStr = fmt.Sprintf("%d", int(float64(num)/float64(sizeKB)))
 		unit = "KB"
 	} else {

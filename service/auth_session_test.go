@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -428,4 +430,59 @@ func TestUserAuthVersionInvalidatesExistingSession(t *testing.T) {
 	assert.ErrorIs(t, err, ErrLoginSessionRevoked)
 	_, err = CreateLoginSessionAtAuthVersion(user.Id, identity.UserAuthVersion, "2fa", "127.0.0.1", "test-agent")
 	assert.ErrorIs(t, err, ErrLoginSessionRevoked, "a pending 2FA flow must not survive an auth-version change")
+}
+
+// Refresh Cookie 的安全属性是会话管理的硬性要求（OWASP Session Management
+// Cheat Sheet）：HttpOnly 防 XSS 窃取、SameSite=Strict 防 CSRF、Path 收窄到
+// 认证端点、hint cookie 不携带任何凭证。锁定这些属性防止回归。
+func TestRefreshCookieSecurityAttributes(t *testing.T) {
+	useTestSessionSecret(t)
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	WriteRefreshCookie(c, "opaque-refresh-token")
+
+	cookies := recorder.Result().Cookies()
+	require.Len(t, cookies, 2)
+
+	var refresh, hint *http.Cookie
+	for _, ck := range cookies {
+		switch ck.Name {
+		case RefreshCookieName:
+			refresh = ck
+		case SessionHintCookieName:
+			hint = ck
+		}
+	}
+	require.NotNil(t, refresh, "refresh cookie must be issued")
+	require.NotNil(t, hint, "session hint cookie must ride the same response")
+
+	assert.True(t, refresh.HttpOnly, "refresh cookie must be HttpOnly")
+	assert.Equal(t, http.SameSiteStrictMode, refresh.SameSite)
+	assert.Equal(t, "/api/user/auth", refresh.Path, "refresh cookie must be scoped to auth endpoints only")
+	assert.Greater(t, refresh.MaxAge, 0)
+	assert.Equal(t, "opaque-refresh-token", refresh.Value)
+
+	// hint cookie 恒为常量值、可被脚本读取（设计如此）、根路径、同源严格。
+	assert.Equal(t, SessionHintCookieValue, hint.Value, "hint must never carry a credential")
+	assert.False(t, hint.HttpOnly)
+	assert.Equal(t, http.SameSiteStrictMode, hint.SameSite)
+	assert.Equal(t, "/", hint.Path)
+	assert.Greater(t, hint.MaxAge, 0)
+}
+
+// 登出清除必须立即过期两个 cookie，且 Value 清空。
+func TestClearRefreshCookieExpiresImmediately(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	ClearRefreshCookie(c)
+
+	for _, ck := range recorder.Result().Cookies() {
+		assert.Equal(t, -1, ck.MaxAge, "%s must expire immediately", ck.Name)
+		assert.Empty(t, ck.Value)
+		assert.True(t, ck.Expires.Before(time.Now().Add(time.Second)), "%s must carry a past expiry", ck.Name)
+	}
 }
