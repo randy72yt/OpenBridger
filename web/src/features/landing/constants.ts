@@ -171,8 +171,20 @@ export const DEFAULT_MODEL_HEALTH_ITEMS: LandingModelHealthItem[] = [
   },
 ]
 
-export function getCodeSnippets(baseUrl: string): CodeSnippetItem[] {
+export interface CodeSnippetModelOverrides {
+  pythonModel?: string
+  tsModel?: string
+  curlModel?: string
+}
+
+export function getCodeSnippets(
+  baseUrl: string,
+  overrides?: CodeSnippetModelOverrides
+): CodeSnippetItem[] {
   const normalizedBase = baseUrl.replace(/\/+$/, '')
+  const pyModel = overrides?.pythonModel || 'gpt-6.2-astra'
+  const tsModel = overrides?.tsModel || 'claude-opus-5-5'
+  const curlModel = overrides?.curlModel || 'gemini-4-neon'
   return [
     {
       id: 'python',
@@ -188,7 +200,7 @@ export function getCodeSnippets(baseUrl: string): CodeSnippetItem[] {
         ')',
         '',
         'resp = client.chat.completions.create(',
-        '    model="gpt-6.2-astra",             # 3. Call GPT-6.2 / Codex / Claude 5.5',
+        `    model="${pyModel}",             # 3. Call any latest frontier model`,
         '    messages=[{"role": "user", "content": "Hello from OpenBridger!"}],',
         ')',
         'print(resp.choices[0].message.content)',
@@ -208,7 +220,7 @@ export function getCodeSnippets(baseUrl: string): CodeSnippetItem[] {
         '})',
         '',
         'const response = await client.chat.completions.create({',
-        "  model: 'claude-opus-5-5',                // 3. Switch models freely",
+        `  model: '${tsModel}',                // 3. Switch models freely`,
         "  messages: [{ role: 'user', content: 'Explain streaming SSE in 3 lines.' }],",
         '})',
         'console.log(response.choices[0]?.message.content)',
@@ -224,7 +236,7 @@ export function getCodeSnippets(baseUrl: string): CodeSnippetItem[] {
         '  -H "Content-Type: application/json" \\',
         '  -H "Authorization: Bearer sk-ob-your-api-key" \\',
         "  -d '{",
-        '    "model": "gemini-4-neon",',
+        `    "model": "${curlModel}",`,
         '    "messages": [{"role": "user", "content": "Ping!"}],',
         '    "stream": true',
         "  }'",

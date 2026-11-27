@@ -23,7 +23,8 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 
-import { LANDING_PROVIDERS, SUPPORTED_CLI_TOOLS } from '../../constants'
+import { SUPPORTED_CLI_TOOLS } from '../../constants'
+import { useLandingShowcase } from '../../lib/live-models'
 import { ScrollReveal } from '../scroll-reveal'
 
 function renderProviderIcon(iconKey: string) {
@@ -47,6 +48,7 @@ function renderProviderIcon(iconKey: string) {
 
 export function MultiModelSection() {
   const { t } = useTranslation()
+  const { providers } = useLandingShowcase()
 
   return (
     <section className='ob-section-warm relative z-10 py-20 sm:py-28'>
@@ -66,7 +68,7 @@ export function MultiModelSection() {
 
         {/* Provider Cards Grid */}
         <div className='mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3'>
-          {LANDING_PROVIDERS.map((provider, idx) => (
+          {providers.map((provider, idx) => (
             <ScrollReveal key={provider.id} delay={idx * 0.06}>
               <Card className='ob-card ob-card-interactive h-full rounded-2xl py-0 shadow-none'>
                 <CardHeader className='flex flex-row items-center justify-between gap-3 p-5 pb-3'>

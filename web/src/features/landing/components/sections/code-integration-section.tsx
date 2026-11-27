@@ -26,7 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useStatus } from '@/hooks/use-status'
 import { cn } from '@/lib/utils'
 
-import { getCodeSnippets } from '../../constants'
+import { useLandingShowcase } from '../../lib/live-models'
 import type { CodeLanguage } from '../../types'
 import { ScrollReveal } from '../scroll-reveal'
 
@@ -90,6 +90,7 @@ function highlightCodeLine(line: string): ReactNode {
 export function CodeIntegrationSection() {
   const { t } = useTranslation()
   const { status } = useStatus()
+  const { getSnippets } = useLandingShowcase()
   const [activeTab, setActiveTab] = useState<CodeLanguage>('python')
 
   const serverAddress = useMemo(() => {
@@ -104,8 +105,8 @@ export function CodeIntegrationSection() {
   }, [status?.server_address])
 
   const snippets = useMemo(
-    () => getCodeSnippets(serverAddress),
-    [serverAddress]
+    () => getSnippets(serverAddress),
+    [getSnippets, serverAddress]
   )
 
   const steps = [

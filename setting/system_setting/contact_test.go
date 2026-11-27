@@ -81,3 +81,12 @@ func TestContactSettingsRegistrationAndValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestLandingSettingsRegistrationAndValidation(t *testing.T) {
+	cfg := config.GlobalConfig.Get("landing")
+	require.NotNil(t, cfg)
+	assert.Empty(t, GetLandingSettings().FeaturedModels)
+
+	assert.NoError(t, ValidateLandingOption("landing.featured_models", "GPT-7 · Codex · Claude 6 · Gemini 5"))
+	assert.Error(t, ValidateLandingOption("landing.featured_models", strings.Repeat("模", maxLandingFeaturedModelsLen+1)))
+}

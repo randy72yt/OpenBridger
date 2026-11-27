@@ -31,6 +31,7 @@ const STATUS_RELATED_KEYS = new Set([
   'contact.email',
   'contact.wechat_id',
   'contact.wechat_qrcode',
+  'landing.featured_models',
   'LogConsumeEnabled',
   'QuotaPerUnit',
   'USDExchangeRate',

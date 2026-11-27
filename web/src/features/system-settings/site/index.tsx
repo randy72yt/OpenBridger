@@ -41,6 +41,7 @@ const defaultSiteSettings: SiteSettings = {
   'contact.email': DEFAULT_SUPPORT_EMAIL,
   'contact.wechat_id': '',
   'contact.wechat_qrcode': '',
+  'landing.featured_models': '',
   HeaderNavModules: '',
   SidebarModulesAdmin: '',
 }

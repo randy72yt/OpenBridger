@@ -72,6 +72,9 @@ const _systemInfoSchema = z.object({
     wechat_id: z.string().optional(),
     wechat_qrcode: z.string().optional(),
   }),
+  landing: z.object({
+    featured_models: z.string().max(200).optional(),
+  }),
 })
 
 type SystemInfoFormValues = z.infer<typeof _systemInfoSchema>
@@ -163,6 +166,9 @@ export function SystemInfoSection(props: SystemInfoSectionProps) {
       wechat_id: normalizeValue(defaultValues.contact?.wechat_id),
       wechat_qrcode: normalizeValue(defaultValues.contact?.wechat_qrcode),
     },
+    landing: {
+      featured_models: normalizeValue(defaultValues.landing?.featured_models),
+    },
   }
 
   const systemInfoSchemaWithI18n = z.object({
@@ -188,6 +194,9 @@ export function SystemInfoSection(props: SystemInfoSectionProps) {
       email: z.string().email().optional().or(z.literal('')),
       wechat_id: z.string().max(128).optional(),
       wechat_qrcode: z.string().optional(),
+    }),
+    landing: z.object({
+      featured_models: z.string().max(200).optional(),
     }),
   })
 
@@ -509,6 +518,32 @@ export function SystemInfoSection(props: SystemInfoSectionProps) {
                   </FormItem>
                 )}
               />
+
+              <SettingsFormGridItem span='full'>
+                <FormField
+                  control={form.control}
+                  name='landing.featured_models'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {t('Homepage Featured Models Tagline')}
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder='GPT-6.2 · Codex · Claude 5.5 · Gemini 4 · DeepSeek V4.1'
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Optional tagline shown in the homepage hero metrics. Leave empty to automatically showcase the latest models from your active channels.'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </SettingsFormGridItem>
 
               <SettingsFormGridItem span='full'>
                 <FormField

@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
-import { DEFAULT_MODEL_HEALTH_ITEMS } from '../../constants'
+import { useLandingShowcase } from '../../lib/live-models'
 import type { ModelStatusLevel } from '../../types'
 import { ScrollReveal } from '../scroll-reveal'
 
@@ -48,6 +48,7 @@ function getStatusTextColorClass(level: ModelStatusLevel): string {
 
 export function ModelStatusSection() {
   const { t } = useTranslation()
+  const { healthItems } = useLandingShowcase()
 
   const architecturePoints = [
     {
@@ -131,7 +132,7 @@ export function ModelStatusSection() {
               </CardHeader>
 
               <CardContent className='divide-border divide-y p-0'>
-                {DEFAULT_MODEL_HEALTH_ITEMS.map((item) => (
+                {healthItems.map((item) => (
                   <div
                     key={item.modelName}
                     className='flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between'

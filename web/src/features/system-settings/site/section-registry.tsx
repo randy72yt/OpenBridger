@@ -52,6 +52,9 @@ const SITE_SECTIONS = [
             wechat_id: settings['contact.wechat_id'],
             wechat_qrcode: settings['contact.wechat_qrcode'],
           },
+          landing: {
+            featured_models: settings['landing.featured_models'],
+          },
         }}
       />
     ),

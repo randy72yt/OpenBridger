@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button'
 import { useStatus } from '@/hooks/use-status'
 
 import { HERO_HIGHLIGHT_PILLS } from '../../constants'
+import { useLandingShowcase } from '../../lib/live-models'
 import { HeroBackground } from '../hero-background'
 import { HeroBrandTicker } from '../hero-brand-ticker'
 import { LandingTerminalDemo } from '../landing-terminal-demo'
@@ -42,6 +43,7 @@ interface LandingHeroProps {
 export function LandingHero(props: LandingHeroProps) {
   const { t } = useTranslation()
   const { status } = useStatus()
+  const showcase = useLandingShowcase()
   const docsUrl = (status?.docs_link as string | undefined) || '/docs'
   const isExternalDocs = docsUrl.startsWith('http')
 
@@ -156,7 +158,7 @@ export function LandingHero(props: LandingHeroProps) {
                   </span>
                 </div>
                 <p className='text-muted-foreground mt-0.5 text-xs'>
-                  {t('landing.hero.metric1.desc')}
+                  {showcase.heroModelsTagline || t('landing.hero.metric1.desc')}
                 </p>
               </div>
               <div className='py-3 sm:px-5 sm:py-0'>

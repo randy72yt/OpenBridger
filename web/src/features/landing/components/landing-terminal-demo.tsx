@@ -16,11 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+
+import { useLandingShowcase } from '../lib/live-models'
 
 interface ApiDemoConfig {
   id: string
@@ -34,15 +36,18 @@ interface ApiDemoConfig {
   latency: number
 }
 
-const API_DEMOS: ApiDemoConfig[] = [
+function buildApiDemos(
+  models: ReturnType<typeof useLandingShowcase>['terminalModels']
+): ApiDemoConfig[] {
+  return [
   {
     id: 'gpt-chat',
-    label: 'GPT-6.2',
+    label: models.chatLabel,
     method: 'POST',
     endpoint: '/v1/chat/completions',
     headers: ['"Authorization: Bearer sk-••••"'],
     request: [
-      '"model": "gpt-6.2-sol",',
+      `"model": "${models.chatModel}",`,
       '"messages": [',
       '  { "role": "user", "content": "..." }',
       ']',
@@ -63,7 +68,7 @@ const API_DEMOS: ApiDemoConfig[] = [
     endpoint: '/v1/responses',
     headers: ['"Authorization: Bearer sk-••••"'],
     request: [
-      '"model": "gpt-6.2-astra",',
+      `"model": "${models.codexModel}",`,
       '"reasoning": { "effort": "high" },',
       '"input": "..."',
     ],
@@ -78,12 +83,12 @@ const API_DEMOS: ApiDemoConfig[] = [
   },
   {
     id: 'claude',
-    label: 'Claude 5.5',
+    label: models.claudeLabel,
     method: 'POST',
     endpoint: '/v1/messages',
     headers: ['"x-api-key: sk-••••"', '"anthropic-version: 2023-06-01"'],
     request: [
-      '"model": "claude-opus-5-5",',
+      `"model": "${models.claudeModel}",`,
       '"max_tokens": 1024,',
       '"messages": [',
       '  { "role": "user", "content": "..." }',
@@ -100,9 +105,9 @@ const API_DEMOS: ApiDemoConfig[] = [
   },
   {
     id: 'gemini',
-    label: 'Gemini 4',
+    label: models.geminiLabel,
     method: 'POST',
-    endpoint: '/v1beta/models/gemini-4-neon:generateContent',
+    endpoint: `/v1beta/models/${models.geminiModel}:generateContent`,
     headers: ['"x-goog-api-key: sk-••••"'],
     request: [
       '"contents": [',
@@ -119,7 +124,8 @@ const API_DEMOS: ApiDemoConfig[] = [
     tokens: 25,
     latency: 93,
   },
-]
+  ]
+}
 
 const CYCLE_INTERVAL = 4500
 const TRANSITION_MS = 220
@@ -132,6 +138,11 @@ interface LandingTerminalDemoProps {
 
 export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
   const { t } = useTranslation()
+  const { terminalModels } = useLandingShowcase()
+  const apiDemos = useMemo(
+    () => buildApiDemos(terminalModels),
+    [terminalModels]
+  )
   const [activeIndex, setActiveIndex] = useState(0)
   const [transitioning, setTransitioning] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined)
@@ -144,7 +155,7 @@ export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
     intervalRef.current = setInterval(() => {
       setTransitioning(true)
       timeoutRef.current = setTimeout(() => {
-        setActiveIndex((prev) => (prev + 1) % API_DEMOS.length)
+        setActiveIndex((prev) => (prev + 1) % apiDemos.length)
         setTransitioning(false)
       }, TRANSITION_MS)
     }, CYCLE_INTERVAL)
@@ -153,7 +164,7 @@ export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
       if (intervalRef.current) clearInterval(intervalRef.current)
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
     }
-  }, [])
+  }, [apiDemos.length])
 
   const handleSelect = (index: number) => {
     if (intervalRef.current) clearInterval(intervalRef.current)
@@ -162,7 +173,7 @@ export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
     setActiveIndex(index)
   }
 
-  const demo = API_DEMOS[activeIndex]
+  const demo = apiDemos[activeIndex]
 
   return (
     <div className={cn('w-full', props.className)}>
@@ -172,7 +183,7 @@ export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
           className='flex flex-wrap items-center gap-1 border-b px-2 py-2 sm:gap-1.5 sm:px-3'
           style={{ borderColor: 'var(--ob-code-line)' }}
         >
-          {API_DEMOS.map((item, index) => {
+          {apiDemos.map((item, index) => {
             const isActive = index === activeIndex
             return (
               <Button

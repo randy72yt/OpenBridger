@@ -120,6 +120,7 @@ export type SiteSettings = {
   'contact.email': string
   'contact.wechat_id': string
   'contact.wechat_qrcode': string
+  'landing.featured_models': string
   HeaderNavModules: string
   SidebarModulesAdmin: string
 }

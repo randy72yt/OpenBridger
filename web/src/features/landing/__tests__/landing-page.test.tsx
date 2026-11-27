@@ -33,6 +33,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import { LandingPage } from '../index'
+import { deriveLandingShowcase } from '../lib/live-models'
 
 vi.mock('@lobehub/icons', () => {
   const IconStub = () => null
@@ -319,5 +320,57 @@ describe('LandingPage (P0)', { timeout: 15000 }, () => {
     ).not.toBeInTheDocument()
 
     client.clear()
+  })
+
+  it('automatically picks newest model versions from live channel models and honors admin tagline override', () => {
+    const showcase = deriveLandingShowcase([
+      { model_name: 'gpt-4o' },
+      { model_name: 'gpt-6.2-sol' },
+      { model_name: 'gpt-7.1-astra', enable_groups: ['vip-codex'] },
+      { model_name: 'gpt-7.1-astra-2027-02-01' },
+      { model_name: 'text-embedding-3-large' },
+      { model_name: 'claude-3-5-sonnet-20241022' },
+      { model_name: 'claude-opus-6-2' },
+      { model_name: 'claude-opus-6-2-high' },
+      { model_name: 'gemini-2.5-pro' },
+      { model_name: 'gemini-5-carbon' },
+      { model_name: 'deepseek-v3' },
+      { model_name: 'deepseek-v5.2-flash' },
+      { model_name: 'qwen3-235b-a22b' },
+      { model_name: 'qwen5-max' },
+    ])
+
+    const openaiCard = showcase.providers.find((p) => p.id === 'openai')
+    const claudeCard = showcase.providers.find((p) => p.id === 'anthropic')
+    const qwenCard = showcase.providers.find((p) => p.id === 'qwen')
+    expect(openaiCard?.models[0]).toBe('gpt-7.1-astra')
+    expect(openaiCard?.models).not.toContain('text-embedding-3-large')
+    // Deduplicates dated snapshot and effort variants of the same model
+    expect(openaiCard?.models).not.toContain('gpt-7.1-astra-2027-02-01')
+    expect(claudeCard?.models).toEqual([
+      'claude-opus-6-2',
+      'claude-3-5-sonnet-20241022',
+    ])
+    // 235b parameter count does not outrank Qwen 5 generation
+    expect(qwenCard?.models[0]).toBe('qwen5-max')
+
+    expect(showcase.heroModelsTagline).toBe(
+      'GPT-7.1 · Codex · Claude 6.2 · Gemini 5 · DeepSeek V5.2'
+    )
+    expect(showcase.terminalModels.chatLabel).toBe('GPT-7.1')
+    expect(showcase.terminalModels.claudeLabel).toBe('Claude 6.2')
+    expect(showcase.healthItems[0]).toMatchObject({
+      modelName: 'gpt-7.1-astra',
+      groupName: 'vip-codex',
+    })
+    expect(
+      showcase.getSnippets('https://api.openbridger.com')[0]?.code
+    ).toContain('model="gpt-7.1-astra"')
+
+    const overridden = deriveLandingShowcase(
+      [{ model_name: 'gpt-7.1-astra' }],
+      '  GPT-7.1 满血直连 · 校园专享  '
+    )
+    expect(overridden.heroModelsTagline).toBe('GPT-7.1 满血直连 · 校园专享')
   })
 })
