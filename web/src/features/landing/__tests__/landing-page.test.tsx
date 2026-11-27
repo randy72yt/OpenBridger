@@ -261,19 +261,24 @@ describe('LandingPage (P0)', { timeout: 15000 }, () => {
 
     // 1. Multi-model hub section + latest frontier model names + HOT partner badge
     expect(
-      await screen.findByRole('heading', { name: 'Anthropic Claude' })
+      await screen.findByRole('heading', { name: 'OpenAI · Codex' })
+    ).toBeVisible()
+    expect(
+      screen.getByRole('heading', { name: 'Anthropic Claude' })
     ).toBeVisible()
     expect(screen.getByRole('heading', { name: 'DeepSeek' })).toBeVisible()
     expect(screen.getAllByText('HOT').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('gpt-5.4').length).toBeGreaterThanOrEqual(1)
     expect(
-      screen.getAllByText('claude-opus-4-7').length
+      screen.getAllByText('gpt-6.2-astra').length
     ).toBeGreaterThanOrEqual(1)
     expect(
-      screen.getAllByText('gemini-3.1-pro-preview').length
+      screen.getAllByText('claude-opus-5-5').length
     ).toBeGreaterThanOrEqual(1)
     expect(
-      screen.getAllByText('deepseek-v4-pro').length
+      screen.getAllByText('gemini-4-neon').length
+    ).toBeGreaterThanOrEqual(1)
+    expect(
+      screen.getAllByText('deepseek-v4.1').length
     ).toBeGreaterThanOrEqual(1)
 
     // Scoped warm-orange theme wrapper is mounted

@@ -63,7 +63,7 @@ export function SidebarModulesCard() {
       modules: [
         {
           key: 'playground',
-          title: t('AI Chat'),
+          title: t('GPT Chat'),
           description: t('AI model testing environment'),
         },
         {

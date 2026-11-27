@@ -37,12 +37,12 @@ interface ApiDemoConfig {
 const API_DEMOS: ApiDemoConfig[] = [
   {
     id: 'gpt-chat',
-    label: 'Chat',
+    label: 'GPT-6.2',
     method: 'POST',
     endpoint: '/v1/chat/completions',
     headers: ['"Authorization: Bearer sk-••••"'],
     request: [
-      '"model": "gpt-5.4",',
+      '"model": "gpt-6.2-sol",',
       '"messages": [',
       '  { "role": "user", "content": "..." }',
       ']',
@@ -58,11 +58,15 @@ const API_DEMOS: ApiDemoConfig[] = [
   },
   {
     id: 'responses',
-    label: 'Responses',
+    label: 'Codex',
     method: 'POST',
     endpoint: '/v1/responses',
     headers: ['"Authorization: Bearer sk-••••"'],
-    request: ['"model": "gpt-5.3-codex",', '"input": "..."'],
+    request: [
+      '"model": "gpt-6.2-astra",',
+      '"reasoning": { "effort": "high" },',
+      '"input": "..."',
+    ],
     response: [
       '{',
       '  "output": [{ "type": "output_text", "text": <text> }],',
@@ -74,12 +78,12 @@ const API_DEMOS: ApiDemoConfig[] = [
   },
   {
     id: 'claude',
-    label: 'Claude',
+    label: 'Claude 5.5',
     method: 'POST',
     endpoint: '/v1/messages',
     headers: ['"x-api-key: sk-••••"', '"anthropic-version: 2023-06-01"'],
     request: [
-      '"model": "claude-opus-4-7",',
+      '"model": "claude-opus-5-5",',
       '"max_tokens": 1024,',
       '"messages": [',
       '  { "role": "user", "content": "..." }',
@@ -96,9 +100,9 @@ const API_DEMOS: ApiDemoConfig[] = [
   },
   {
     id: 'gemini',
-    label: 'Gemini',
+    label: 'Gemini 4',
     method: 'POST',
-    endpoint: '/v1beta/models/gemini-3.1-pro-preview:generateContent',
+    endpoint: '/v1beta/models/gemini-4-neon:generateContent',
     headers: ['"x-goog-api-key: sk-••••"'],
     request: [
       '"contents": [',

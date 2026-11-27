@@ -18,7 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import {
   Activity,
-  BotMessageSquare,
   Box,
   ClipboardList,
   CreditCard,
@@ -39,6 +38,8 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { IconOpenAI } from '@/assets/brand-icons/icon-openai'
+
 import type { SidebarData } from '@/components/layout/types'
 import { ROLE } from '@/lib/roles'
 
@@ -58,9 +59,9 @@ export function useSidebarData(): SidebarData {
         title: t('Chat'),
         items: [
           {
-            title: t('AI Chat'),
+            title: t('GPT Chat'),
             url: '/playground',
-            icon: BotMessageSquare,
+            icon: IconOpenAI,
           },
         ],
       },

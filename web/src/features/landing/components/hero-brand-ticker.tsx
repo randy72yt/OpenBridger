@@ -39,7 +39,7 @@ interface BrandItem {
 }
 
 const BRANDS: BrandItem[] = [
-  { id: 'openai', name: 'OpenAI', icon: <OpenAI size={18} /> },
+  { id: 'openai', name: 'OpenAI · Codex', icon: <OpenAI size={18} /> },
   { id: 'claude', name: 'Claude', icon: <Claude.Color size={18} /> },
   { id: 'gemini', name: 'Gemini', icon: <Gemini.Color size={18} /> },
   { id: 'deepseek', name: 'DeepSeek', icon: <DeepSeek.Color size={18} /> },
