@@ -41,7 +41,7 @@ These paths have handlers in the gateway. A model can use one of them only when 
 | Model Square | [{{CONSOLE_URL}}/pricing]({{CONSOLE_URL}}/pricing) |
 | API Keys | [{{CONSOLE_URL}}/keys]({{CONSOLE_URL}}/keys) |
 | Wallet | [{{CONSOLE_URL}}/wallet]({{CONSOLE_URL}}/wallet) |
-| Playground | [{{CONSOLE_URL}}/playground]({{CONSOLE_URL}}/playground) |
+| GPT Chat | [{{CONSOLE_URL}}/playground]({{CONSOLE_URL}}/playground) |
 | Usage Logs | [{{CONSOLE_URL}}/usage-logs]({{CONSOLE_URL}}/usage-logs) |
 | Terms | [{{CONSOLE_URL}}/user-agreement]({{CONSOLE_URL}}/user-agreement) |
 
@@ -50,5 +50,7 @@ These paths have handlers in the gateway. A model can use one of them only when 
 ## Related
 
 - [Quick start](/guide/quickstart/)
+- [Base URL reference](/guide/base-urls/)
+- [Chat Completions & Vision](/api/openai-chat/)
 - [Credits and billing](/guide/billing/)
 - [Error codes](/guide/errors/)

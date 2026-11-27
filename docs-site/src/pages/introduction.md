@@ -41,7 +41,7 @@ OpenBridger 把多家模型服务放到同一套账号、API Key 和额度下面
 | 模型广场 | [{{CONSOLE_URL}}/pricing]({{CONSOLE_URL}}/pricing) |
 | API 密钥 | [{{CONSOLE_URL}}/keys]({{CONSOLE_URL}}/keys) |
 | 钱包 | [{{CONSOLE_URL}}/wallet]({{CONSOLE_URL}}/wallet) |
-| AI 体验台 | [{{CONSOLE_URL}}/playground]({{CONSOLE_URL}}/playground) |
+| GPT 对话 | [{{CONSOLE_URL}}/playground]({{CONSOLE_URL}}/playground) |
 | 使用日志 | [{{CONSOLE_URL}}/usage-logs]({{CONSOLE_URL}}/usage-logs) |
 | 用户协议 | [{{CONSOLE_URL}}/user-agreement]({{CONSOLE_URL}}/user-agreement) |
 
@@ -50,5 +50,7 @@ OpenBridger 把多家模型服务放到同一套账号、API Key 和额度下面
 ## 相关
 
 - [快速开始](/guide/quickstart/)
+- [Base URL 填写速查](/guide/base-urls/)
+- [Chat Completions 对话与识图](/api/openai-chat/)
 - [额度与计费](/guide/billing/)
 - [错误码](/guide/errors/)

@@ -37,7 +37,7 @@ curl "{{API_BASE_URL}}/chat/completions" \
 2. 按刚才的时间和密钥名 `curl-test` 筛选。
 3. 核对模型 ID、状态和消耗。日志里有这一条，才说明客户端没有把请求发到别的地址。
 
-也可以先在 [AI 体验台]({{CONSOLE_URL}}/playground) 用同一模型发一句短消息。体验台走的是登录会话，不是 API Key；它能验证模型和额度，不能代替上面的 curl。
+也可以先在 [GPT 对话]({{CONSOLE_URL}}/playground) 用同一模型发一句短消息。在线对话走的是登录会话，不是 API Key；它能快速验证模型和额度，不能代替上面的 curl。
 
 ## 这一步常见错误
 

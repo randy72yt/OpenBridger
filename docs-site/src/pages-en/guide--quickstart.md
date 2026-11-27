@@ -37,7 +37,7 @@ A successful body is JSON with `choices[0].message.content`. The response header
 2. Filter by the time and the key name `curl-test`.
 3. Check the model ID, status, and charge. A matching row means the client did not send the request somewhere else.
 
-The [Playground]({{CONSOLE_URL}}/playground) can test the same model with your login session. It does not use the API key, so it does not replace the curl above.
+[GPT Chat]({{CONSOLE_URL}}/playground) can test the same model with your login session. It does not use the API key, so it does not replace the curl above.
 
 ## Errors at this step
 
