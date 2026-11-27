@@ -26,6 +26,7 @@ import { useAuthStore } from '@/stores/auth-store'
 export type TopNavLink = {
   title: string
   href: string
+  badge?: string
   disabled?: boolean
   requiresAuth?: boolean
   external?: boolean
@@ -81,7 +82,11 @@ export function useTopNavLinks(): TopNavLink[] {
 
   // Partner Program (/agent-join)
   if (modules?.agentJoin !== false) {
-    links.push({ title: t('Partner Program'), href: '/agent-join' })
+    links.push({
+      title: t('Partner Program'),
+      href: '/agent-join',
+      badge: 'HOT',
+    })
   }
 
   // Rankings

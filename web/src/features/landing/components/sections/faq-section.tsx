@@ -41,8 +41,8 @@ export function FaqSection(props: FaqSectionProps) {
 
   return (
     <section className='ob-section-warm relative z-10 py-20 sm:py-28'>
-      <div className='mx-auto max-w-4xl px-4 sm:px-6 lg:px-8'>
-        <ScrollReveal className='text-center'>
+      <div className='mx-auto max-w-[92rem] px-4 sm:px-6 lg:px-8'>
+        <ScrollReveal className='mx-auto max-w-3xl text-center'>
           <div className='ob-chip-primary mb-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold'>
             <HelpCircle className='size-3.5' />
             <span>{t('landing.faq.eyebrow')}</span>
@@ -55,7 +55,7 @@ export function FaqSection(props: FaqSectionProps) {
           </p>
         </ScrollReveal>
 
-        <ScrollReveal delay={0.08} className='mt-10'>
+        <ScrollReveal delay={0.08} className='mx-auto mt-10 max-w-5xl'>
           <Card className='ob-card rounded-2xl py-0 shadow-none'>
             <CardContent className='p-6 sm:p-8'>
               <Accordion defaultValue={['compatibility']}>

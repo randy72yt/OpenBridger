@@ -50,7 +50,7 @@ export function MultiModelSection() {
 
   return (
     <section className='ob-section-warm relative z-10 py-20 sm:py-28'>
-      <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
+      <div className='mx-auto max-w-[92rem] px-4 sm:px-6 lg:px-8'>
         <ScrollReveal className='mx-auto max-w-3xl text-center'>
           <div className='ob-chip-primary mb-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold'>
             <KeyRound className='size-3.5' />

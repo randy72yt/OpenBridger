@@ -178,7 +178,7 @@ export function PublicHeader(props: PublicHeaderProps) {
           props.className
         )}
       >
-        <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
+        <div className='mx-auto max-w-[75rem] px-4 sm:px-6 lg:px-10'>
           <div
             className={cn(
               'ob-header-bar flex h-14 items-center justify-between rounded-full border border-black/[0.06] px-4 backdrop-blur-xl transition-all duration-300 sm:px-5 dark:border-white/[0.08]',
@@ -212,7 +212,7 @@ export function PublicHeader(props: PublicHeaderProps) {
                     displaySiteName
                   )}
                 </span>
-                <span className='ob-chip-primary ob-mono hidden rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase lg:inline-block'>
+                <span className='ob-chip-primary ob-mono hidden rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase 2xl:inline-block'>
                   API Gateway
                 </span>
               </div>
@@ -221,7 +221,7 @@ export function PublicHeader(props: PublicHeaderProps) {
             {/* Desktop Navigation Links */}
             <nav
               aria-label={t('landing.nav.ariaLabel')}
-              className='hidden items-center gap-1 md:flex'
+              className='hidden items-center gap-0.5 md:flex'
             >
               {links.map((link) => {
                 const isActive =
@@ -229,6 +229,14 @@ export function PublicHeader(props: PublicHeaderProps) {
                     ? pathname === '/'
                     : pathname === link.href ||
                       pathname.startsWith(`${link.href}/`)
+                const badgeNode = link.badge ? (
+                  <span
+                    aria-hidden='true'
+                    className='inline-flex items-center rounded-full bg-gradient-to-r from-[#FF6B00] to-[#FF2E00] px-1.5 py-0.5 text-[9px] leading-none font-extrabold tracking-wider text-white uppercase shadow-[0_2px_6px_rgba(255,77,0,0.35)]'
+                  >
+                    {link.badge}
+                  </span>
+                ) : null
                 if (link.external) {
                   return (
                     <a
@@ -240,11 +248,12 @@ export function PublicHeader(props: PublicHeaderProps) {
                       tabIndex={link.disabled ? -1 : undefined}
                       onClick={(event) => handleNavLinkClick(event, link)}
                       className={cn(
-                        'text-muted-foreground hover:text-primary rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
+                        'text-muted-foreground hover:text-primary inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors xl:px-3.5',
                         link.disabled && 'pointer-events-none opacity-50'
                       )}
                     >
-                      {t(link.title)}
+                      <span>{t(link.title)}</span>
+                      {badgeNode}
                     </a>
                   )
                 }
@@ -255,14 +264,15 @@ export function PublicHeader(props: PublicHeaderProps) {
                     disabled={link.disabled}
                     onClick={(event) => handleNavLinkClick(event, link)}
                     className={cn(
-                      'rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200',
+                      'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all duration-200 xl:px-3.5',
                       isActive
                         ? 'text-primary bg-[var(--ob-primary-soft)] font-semibold shadow-xs'
                         : 'text-muted-foreground hover:text-primary',
                       link.disabled && 'pointer-events-none opacity-50'
                     )}
                   >
-                    {t(link.title)}
+                    <span>{t(link.title)}</span>
+                    {badgeNode}
                   </Link>
                 )
               })}
@@ -365,6 +375,14 @@ export function PublicHeader(props: PublicHeaderProps) {
                       ? pathname === '/'
                       : pathname === link.href ||
                         pathname.startsWith(`${link.href}/`)
+                  const mobileBadgeNode = link.badge ? (
+                    <span
+                      aria-hidden='true'
+                      className='inline-flex items-center rounded-full bg-gradient-to-r from-[#FF6B00] to-[#FF2E00] px-1.5 py-0.5 text-[9px] leading-none font-extrabold tracking-wider text-white uppercase shadow-[0_2px_6px_rgba(255,77,0,0.35)]'
+                    >
+                      {link.badge}
+                    </span>
+                  ) : null
                   if (link.external) {
                     return (
                       <a
@@ -378,11 +396,12 @@ export function PublicHeader(props: PublicHeaderProps) {
                           handleNavLinkClick(event, link, true)
                         }
                         className={cn(
-                          'text-muted-foreground hover:text-primary rounded-xl px-3 py-2.5 text-sm font-medium',
+                          'text-muted-foreground hover:text-primary flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium',
                           link.disabled && 'pointer-events-none opacity-50'
                         )}
                       >
-                        {t(link.title)}
+                        <span>{t(link.title)}</span>
+                        {mobileBadgeNode}
                       </a>
                     )
                   }
@@ -393,14 +412,15 @@ export function PublicHeader(props: PublicHeaderProps) {
                       disabled={link.disabled}
                       onClick={(event) => handleNavLinkClick(event, link, true)}
                       className={cn(
-                        'rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                        'flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
                         isActive
                           ? 'text-primary bg-[var(--ob-primary-soft)] font-semibold'
                           : 'text-muted-foreground hover:text-primary',
                         link.disabled && 'pointer-events-none opacity-50'
                       )}
                     >
-                      {t(link.title)}
+                      <span>{t(link.title)}</span>
+                      {mobileBadgeNode}
                     </Link>
                   )
                 })}

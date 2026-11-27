@@ -42,7 +42,7 @@ const API_DEMOS: ApiDemoConfig[] = [
     endpoint: '/v1/chat/completions',
     headers: ['"Authorization: Bearer sk-••••"'],
     request: [
-      '"model": "your-model",',
+      '"model": "gpt-5.4",',
       '"messages": [',
       '  { "role": "user", "content": "..." }',
       ']',
@@ -62,7 +62,7 @@ const API_DEMOS: ApiDemoConfig[] = [
     method: 'POST',
     endpoint: '/v1/responses',
     headers: ['"Authorization: Bearer sk-••••"'],
-    request: ['"model": "your-model",', '"input": "..."'],
+    request: ['"model": "gpt-5.3-codex",', '"input": "..."'],
     response: [
       '{',
       '  "output": [{ "type": "output_text", "text": <text> }],',
@@ -79,7 +79,7 @@ const API_DEMOS: ApiDemoConfig[] = [
     endpoint: '/v1/messages',
     headers: ['"x-api-key: sk-••••"', '"anthropic-version: 2023-06-01"'],
     request: [
-      '"model": "your-model",',
+      '"model": "claude-opus-4-7",',
       '"max_tokens": 1024,',
       '"messages": [',
       '  { "role": "user", "content": "..." }',
@@ -98,7 +98,7 @@ const API_DEMOS: ApiDemoConfig[] = [
     id: 'gemini',
     label: 'Gemini',
     method: 'POST',
-    endpoint: '/v1beta/models/{model}:generateContent',
+    endpoint: '/v1beta/models/gemini-3.1-pro-preview:generateContent',
     headers: ['"x-goog-api-key: sk-••••"'],
     request: [
       '"contents": [',
@@ -161,7 +161,7 @@ export function LandingTerminalDemo(props: LandingTerminalDemoProps) {
   const demo = API_DEMOS[activeIndex]
 
   return (
-    <div className={cn('mx-auto w-full max-w-2xl', props.className)}>
+    <div className={cn('w-full', props.className)}>
       <div className='ob-code-card overflow-hidden rounded-2xl'>
         {/* Tab strip */}
         <div

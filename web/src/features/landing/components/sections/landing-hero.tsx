@@ -49,8 +49,8 @@ export function LandingHero(props: LandingHeroProps) {
     <section className='ob-section-bg relative isolate overflow-hidden pt-28 pb-14 sm:pt-32 sm:pb-20 lg:pt-36 lg:pb-24'>
       <HeroBackground />
 
-      <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
-        <div className='grid grid-cols-1 items-center gap-12 lg:grid-cols-12 lg:gap-10'>
+      <div className='mx-auto max-w-[92rem] px-4 sm:px-6 lg:px-8'>
+        <div className='grid grid-cols-1 items-center gap-12 lg:grid-cols-12 lg:gap-12'>
           {/* Left Column: Brand pitch, CTAs, and capability pills */}
           <div className='flex min-w-0 flex-col items-start text-left lg:col-span-6'>
             {/* Status Pill */}
@@ -75,7 +75,7 @@ export function LandingHero(props: LandingHeroProps) {
               {t('landing.hero.italicSubtitle')}
             </p>
 
-            <p className='text-muted-foreground mt-4 max-w-xl text-sm leading-relaxed sm:text-base'>
+            <p className='text-muted-foreground mt-4 max-w-2xl text-sm leading-relaxed sm:text-base'>
               {t('landing.hero.subtitle')}
             </p>
 

@@ -18,11 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import {
   Activity,
+  BotMessageSquare,
   Box,
   ClipboardList,
   CreditCard,
   FileText,
-  FlaskConical,
   Key,
   LayoutDashboard,
   ListTodo,
@@ -58,9 +58,9 @@ export function useSidebarData(): SidebarData {
         title: t('Chat'),
         items: [
           {
-            title: t('Playground'),
+            title: t('AI Chat'),
             url: '/playground',
-            icon: FlaskConical,
+            icon: BotMessageSquare,
           },
         ],
       },

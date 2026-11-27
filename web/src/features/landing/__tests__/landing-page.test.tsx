@@ -259,11 +259,22 @@ describe('LandingPage (P0)', { timeout: 15000 }, () => {
     mockViewportAndMotion({ isDesktop: false, reducedMotion: true })
     const { client } = renderLandingPage()
 
-    // 1. Multi-model hub section
+    // 1. Multi-model hub section + latest frontier model names + HOT partner badge
     expect(
       await screen.findByRole('heading', { name: 'Anthropic Claude' })
     ).toBeVisible()
     expect(screen.getByRole('heading', { name: 'DeepSeek' })).toBeVisible()
+    expect(screen.getAllByText('HOT').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('gpt-5.4').length).toBeGreaterThanOrEqual(1)
+    expect(
+      screen.getAllByText('claude-opus-4-7').length
+    ).toBeGreaterThanOrEqual(1)
+    expect(
+      screen.getAllByText('gemini-3.1-pro-preview').length
+    ).toBeGreaterThanOrEqual(1)
+    expect(
+      screen.getAllByText('deepseek-v4-pro').length
+    ).toBeGreaterThanOrEqual(1)
 
     // Scoped warm-orange theme wrapper is mounted
     expect(document.querySelector('.ob-landing-theme')).toBeInTheDocument()

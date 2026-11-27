@@ -128,7 +128,7 @@ export function CodeIntegrationSection() {
 
   return (
     <section className='ob-section-bg relative z-10 py-20 sm:py-28'>
-      <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
+      <div className='mx-auto max-w-[92rem] px-4 sm:px-6 lg:px-8'>
         <div className='grid grid-cols-1 items-center gap-10 lg:grid-cols-12'>
           {/* Left Column: 3-Step Drop-In Guide */}
           <ScrollReveal className='min-w-0 space-y-6 lg:col-span-5'>
