@@ -32,6 +32,7 @@ import {
   Settings,
   ShieldCheck,
   Ticket,
+  TrendingUp,
   User,
   Users,
   Wallet,
@@ -75,6 +76,7 @@ export function useSidebarData(): SidebarData {
           {
             title: t('Dashboard'),
             url: '/dashboard/models',
+            activeUrls: ['/dashboard/flow', '/dashboard/users'],
             icon: LayoutDashboard,
           },
           {
@@ -126,6 +128,12 @@ export function useSidebarData(): SidebarData {
         id: 'admin',
         title: t('Admin'),
         items: [
+          {
+            title: t('Business Overview'),
+            url: '/dashboard/business',
+            icon: TrendingUp,
+            requiredRole: ROLE.ADMIN,
+          },
           {
             title: t('Channels'),
             url: '/channels',

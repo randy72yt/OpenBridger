@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { api } from '@/lib/api'
 
 import type {
+  BusinessDashboardData,
   FlowQuotaDataItem,
   QuotaDataItem,
   UptimeGroupResult,
@@ -89,5 +90,18 @@ export async function getUptimeStatus() {
   const res = await api.get<{ success: boolean; data: UptimeGroupResult[] }>(
     '/api/uptime/status'
   )
+  return res.data
+}
+
+// Get admin executive business dashboard metrics
+export async function getAdminBusinessDashboard(params: {
+  start_timestamp: number
+  end_timestamp: number
+}) {
+  const res = await api.get<{
+    success: boolean
+    data?: BusinessDashboardData
+    message?: string
+  }>('/api/data/business', { params })
   return res.data
 }
