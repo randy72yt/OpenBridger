@@ -33,7 +33,7 @@ func runBusinessDashboardVerification(t *testing.T, db *gorm.DB) {
 	}
 	cleanTables := func() {
 		for _, tbl := range tablesToClean {
-			_ = db.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(tbl).Error
+			_ = db.Unscoped().Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(tbl).Error
 		}
 	}
 	require.NoError(t, db.AutoMigrate(tablesToClean...))
@@ -199,6 +199,8 @@ func runBusinessDashboardVerification(t *testing.T, db *gorm.DB) {
 func TestComputeBusinessDashboardSQLite(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
+	// Run twice against the same DB instance to prove cleanup handles soft-deleted rows
+	runBusinessDashboardVerification(t, db)
 	runBusinessDashboardVerification(t, db)
 }
 
