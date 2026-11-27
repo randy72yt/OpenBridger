@@ -1,14 +1,38 @@
-# Use OpenBridger in CodeBuddy
+# CodeBuddy Setup Guide (IDE & VS Code / JetBrains Plugin)
 
-When CodeBuddy offers Custom Model, OpenAI Compatible, or an API address you can override, you can add OpenBridger. A build without those fields cannot be connected from this page.
+Add OpenBridger as a custom OpenAI-compatible model in **CodeBuddy** for **Chat** and **Craft / Agent** coding while staying signed in to your CodeBuddy account.
 
-<div class="steps"><div class="step"><strong>Open model settings</strong><p>Look for Model, Provider, API Key, or Custom Model.</p></div><div class="step"><strong>Choose OpenAI Compatible</strong><p>If that type is missing, see whether the OpenAI Base URL can be overridden.</p></div><div class="step"><strong>Fill the form and test</strong><p>Base URL is <code>{{API_BASE_URL}}</code>. Create a separate key. Copy the model ID from Model Square. Send a short message and match it in Usage Logs.</p></div></div>
+## Before You Begin
 
-<div class="config-card"><div><span>Type</span><code>OpenAI Compatible</code></div><div><span>Base URL</span><code>{{API_BASE_URL}}</code></div><div><span>API key</span><code>sk-...</code></div><div><span>Model</span><code>full ID from Model Square</code></div></div>
+1. Create a key named `codebuddy` in [API Keys]({{CONSOLE_URL}}/keys) and copy `sk-...`.
+2. Copy an exact Model ID from [Models & Pricing]({{CONSOLE_URL}}/pricing) (e.g., `gpt-6.2-astra`, `claude-sonnet-5-5`).
 
-You do not sign out of the CodeBuddy account. Check the provider for Chat, Agent, and completion separately. To go back, select the official model, turn off the custom address, and restart the client.
+## 5 Setup Steps
+
+<div class="steps">
+  <div class="step"><strong>Step 1: Open Model Management</strong><p>Click <strong>⚙️ Settings -> Models</strong> in the CodeBuddy panel (or click <strong><code>+ Add Model</code></strong> in the chat model dropdown).</p></div>
+  <div class="step"><strong>Step 2: Select OpenAI Compatible</strong><p>Click <strong><code>+ Add Custom Model</code></strong> and choose <strong><code>OpenAI Compatible</code></strong>.</p></div>
+  <div class="step"><strong>Step 3: Fill In Parameters</strong>
+    <div class="config-card">
+      <div><span>Display Name (if shown)</span>e.g., <code>OB - GPT-6.2</code></div>
+      <div><span>Model ID</span>Exact ID from Models & Pricing (e.g., <code>gpt-6.2-astra</code>)</div>
+      <div><span>Base URL</span><code>{{API_BASE_URL}}</code> (with <code>/v1</code>)</div>
+      <div><span>API Key</span>Your <code>sk-...</code> key</div>
+    </div>
+  </div>
+  <div class="step"><strong>Step 4: Save</strong><p>Click <strong>Test</strong> (if shown) and <strong>Save</strong>.</p></div>
+  <div class="step"><strong>Step 5: Select Model in Chat / Craft</strong><p>Start a new thread and select your custom model in the picker (<strong>Chat</strong> and <strong>Craft</strong> track models separately).</p></div>
+</div>
+
+## Common Issues
+
+| Symptom | Fix |
+| --- | --- |
+| Custom Model option missing | Update CodeBuddy or pair VS Code with [Cline & Roo Code](/guide/clients/cline/) |
+| `404` / `503` | `404`: set Base URL to `{{API_BASE_URL}}`; `503`: ensure `Model ID` holds the exact console ID |
 
 ## Related
 
-- [OpenAI-compatible calls](/guide/clients/openai-compatible/)
+- [Cursor](/guide/clients/cursor/)
+- [Cline & Roo Code](/guide/clients/cline/)
 - [Troubleshooting](/troubleshooting/)

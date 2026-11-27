@@ -17,25 +17,27 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
-import { useCallback, useEffect, useState } from 'react'
+import { ArrowUpRight, Menu, X } from 'lucide-react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { NotificationPopover } from '@/components/notification-popover'
-import { ProfileDropdown } from '@/components/profile-dropdown'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useNotifications } from '@/hooks/use-notifications'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
+import { DEFAULT_SYSTEM_NAME } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { defaultTopNavLinks } from '../config/top-nav.config'
 import type { TopNavLink } from '../types'
 import { HeaderLogo } from './header-logo'
+import { PublicUserMenu } from './public-user-menu'
 
 const AUTH_PROMPT_SECONDS = 5
 
@@ -76,12 +78,14 @@ export function PublicHeader(props: PublicHeaderProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [scrolled, setScrolled] = useState(false)
+  const mobileNavigationId = useId()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [authPromptTarget, setAuthPromptTarget] =
     useState<AuthPromptTarget | null>(null)
   const [authPromptSecondsLeft, setAuthPromptSecondsLeft] =
     useState(AUTH_PROMPT_SECONDS)
-  const { auth } = useAuthStore()
+
+  const user = useAuthStore((s) => s.auth.user)
   const {
     systemName,
     logo: systemLogo,
@@ -93,24 +97,16 @@ export function PublicHeader(props: PublicHeaderProps) {
   const routerState = useRouterState()
   const pathname = routerState.location.pathname
 
-  const user = auth.user
-  const isAuthenticated = !!user
-  const displaySiteName = customSiteName || systemName
+  const isAuthenticated = Boolean(user)
+  const displaySiteName = customSiteName || systemName || DEFAULT_SYSTEM_NAME
   const links = dynamicLinks.length > 0 ? dynamicLinks : navLinks
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20)
+    const onScroll = () => setScrolled(window.scrollY > 16)
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
-
-  useEffect(() => {
-    document.body.style.overflow = mobileOpen ? 'hidden' : ''
-    return () => {
-      document.body.style.overflow = ''
-    }
-  }, [mobileOpen])
 
   useEffect(() => {
     if (!authPromptTarget) return
@@ -175,47 +171,72 @@ export function PublicHeader(props: PublicHeaderProps) {
 
   return (
     <>
-      <header className='pointer-events-none fixed inset-x-0 top-0 z-50'>
-        <div
-          className={cn(
-            'pointer-events-auto mx-auto transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]',
-            scrolled ? 'max-w-[52rem] px-3 pt-3' : 'max-w-7xl px-4 pt-0 md:px-6'
-          )}
-        >
-          <nav
+      <header
+        className={cn(
+          'fixed inset-x-0 top-0 z-50 transition-all duration-300',
+          scrolled ? 'py-2.5' : 'py-3.5',
+          props.className
+        )}
+      >
+        <div className='mx-auto max-w-[75rem] px-4 sm:px-6 lg:px-10'>
+          <div
             className={cn(
-              'flex items-center justify-between transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]',
+              'ob-header-bar flex h-14 items-center justify-between rounded-full border border-black/[0.06] px-4 backdrop-blur-xl transition-all duration-300 sm:px-5 dark:border-white/[0.08]',
               scrolled
-                ? 'bg-background/60 ring-border/50 h-12 rounded-2xl pr-1.5 pl-4 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.08),0_0_0_0.5px_rgba(0,0,0,0.02)] ring-[0.5px] backdrop-blur-2xl dark:shadow-[0_2px_16px_-6px_rgba(0,0,0,0.4)]'
-                : 'h-16 px-2'
+                ? 'shadow-[0_8px_32px_-12px_rgba(20,17,15,0.12)] dark:shadow-[0_8px_32px_-12px_rgba(0,0,0,0.45)]'
+                : 'shadow-[0_4px_24px_rgba(20,17,15,0.04)]'
             )}
           >
-            {/* Logo */}
+            {/* Brand Logo */}
             <Link
               to={homeUrl}
-              className='group flex shrink-0 items-center gap-2.5'
+              className='group flex shrink-0 items-center gap-2.5 focus-visible:outline-none'
             >
-              <div className='flex size-7 shrink-0 items-center justify-center transition-all duration-300 group-hover:scale-105'>
-                {loading && <Skeleton className='size-full rounded-lg' />}
+              <div className='ob-chip-primary flex size-8 shrink-0 items-center justify-center rounded-full transition-transform duration-200 group-hover:scale-105'>
+                {loading && <Skeleton className='size-5 rounded-full' />}
                 {!loading && customLogo && customLogo}
                 {!loading && !customLogo && (
                   <HeaderLogo
                     src={systemLogo}
                     loading={loading}
                     logoLoaded={logoLoaded}
-                    className='size-full rounded-lg object-contain'
+                    className='size-5 rounded-md object-contain'
                   />
                 )}
               </div>
-              <span className='text-sm font-semibold tracking-tight'>
-                {loading ? <Skeleton className='h-4 w-16' /> : displaySiteName}
-              </span>
+              <div className='flex items-center gap-2'>
+                <span className='text-foreground text-base font-bold tracking-tight'>
+                  {loading ? (
+                    <Skeleton className='h-4 w-24' />
+                  ) : (
+                    displaySiteName
+                  )}
+                </span>
+                <span className='ob-chip-primary ob-mono hidden rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase 2xl:inline-block'>
+                  API Gateway
+                </span>
+              </div>
             </Link>
 
-            {/* Desktop nav */}
-            <div className='hidden items-center gap-0.5 sm:flex'>
+            {/* Desktop Navigation Links */}
+            <nav
+              aria-label={t('landing.nav.ariaLabel')}
+              className='hidden items-center gap-0.5 md:flex'
+            >
               {links.map((link) => {
-                const isActive = pathname === link.href
+                const isActive =
+                  link.href === '/'
+                    ? pathname === '/'
+                    : pathname === link.href ||
+                      pathname.startsWith(`${link.href}/`)
+                const badgeNode = link.badge ? (
+                  <span
+                    aria-hidden='true'
+                    className='inline-flex items-center rounded-full bg-gradient-to-r from-[#FF6B00] to-[#FF2E00] px-1.5 py-0.5 text-[9px] leading-none font-extrabold tracking-wider text-white uppercase shadow-[0_2px_6px_rgba(255,77,0,0.35)]'
+                  >
+                    {link.badge}
+                  </span>
+                ) : null
                 if (link.external) {
                   return (
                     <a
@@ -227,11 +248,12 @@ export function PublicHeader(props: PublicHeaderProps) {
                       tabIndex={link.disabled ? -1 : undefined}
                       onClick={(event) => handleNavLinkClick(event, link)}
                       className={cn(
-                        'text-muted-foreground hover:text-foreground rounded-lg px-3 py-1.5 text-sm font-medium transition-colors duration-200',
+                        'text-muted-foreground hover:text-primary inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors xl:px-3.5',
                         link.disabled && 'pointer-events-none opacity-50'
                       )}
                     >
-                      {t(link.title)}
+                      <span>{t(link.title)}</span>
+                      {badgeNode}
                     </a>
                   )
                 }
@@ -242,24 +264,22 @@ export function PublicHeader(props: PublicHeaderProps) {
                     disabled={link.disabled}
                     onClick={(event) => handleNavLinkClick(event, link)}
                     className={cn(
-                      'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors duration-200',
+                      'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-all duration-200 xl:px-3.5',
                       isActive
-                        ? 'text-foreground'
-                        : 'text-muted-foreground hover:text-foreground',
+                        ? 'text-primary bg-[var(--ob-primary-soft)] font-semibold shadow-xs'
+                        : 'text-muted-foreground hover:text-primary',
                       link.disabled && 'pointer-events-none opacity-50'
                     )}
                   >
-                    {t(link.title)}
+                    <span>{t(link.title)}</span>
+                    {badgeNode}
                   </Link>
                 )
               })}
+            </nav>
 
-              {(showLanguageSwitcher ||
-                showThemeSwitch ||
-                showNotifications) && (
-                <div className='bg-border/40 mx-2 h-4 w-px' />
-              )}
-
+            {/* Desktop Right Actions */}
+            <div className='hidden items-center gap-1.5 md:flex'>
               {showLanguageSwitcher && <LanguageSwitcher />}
               {showThemeSwitch && <ThemeSwitch />}
               {showNotifications && (
@@ -277,142 +297,174 @@ export function PublicHeader(props: PublicHeaderProps) {
 
               {showAuthButtons && (
                 <>
-                  <div className='bg-border/40 mx-1 h-4 w-px' />
-                  {loading && <Skeleton className='h-8 w-20 rounded-lg' />}
-                  {!loading && isAuthenticated && <ProfileDropdown />}
+                  <div className='bg-border mx-1 h-4 w-px' />
+                  {loading && <Skeleton className='h-9 w-24 rounded-full' />}
+                  {!loading && isAuthenticated && (
+                    <div className='flex items-center gap-2'>
+                      <Button
+                        size='sm'
+                        className='ob-btn-primary h-9 rounded-full px-4 text-xs font-semibold'
+                        render={<Link to='/dashboard' />}
+                      >
+                        {t('Console')}
+                        <ArrowUpRight className='ml-1 size-3.5' />
+                      </Button>
+                      <PublicUserMenu />
+                    </div>
+                  )}
                   {!loading && !isAuthenticated && (
-                    <Button
-                      size='sm'
-                      className='h-8 rounded-lg px-3.5 text-xs font-medium'
-                      render={<Link to='/sign-in' />}
-                    >
-                      {t('Sign in')}
-                    </Button>
+                    <div className='flex items-center gap-2'>
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        className='text-foreground hover:text-primary h-9 rounded-full px-3.5 text-xs font-medium'
+                        render={<Link to='/sign-in' />}
+                      >
+                        {t('Sign in')}
+                      </Button>
+                      <Button
+                        size='sm'
+                        className='ob-btn-primary h-9 rounded-full px-4 text-xs font-semibold'
+                        render={<Link to='/sign-up' />}
+                      >
+                        {t('Console')}
+                        <ArrowUpRight className='ml-1 size-3.5' />
+                      </Button>
+                    </div>
                   )}
                 </>
               )}
             </div>
 
-            {/* Mobile: compact actions + hamburger */}
-            <div className='flex items-center gap-2 sm:hidden'>
+            {/* Mobile Controls */}
+            <div className='flex items-center gap-1.5 md:hidden'>
+              {showLanguageSwitcher && <LanguageSwitcher />}
               {showThemeSwitch && <ThemeSwitch />}
               {showAuthButtons && !loading && isAuthenticated && (
-                <ProfileDropdown />
+                <PublicUserMenu />
               )}
               <Button
                 type='button'
                 variant='ghost'
                 size='icon'
-                className='size-9'
-                onClick={() => setMobileOpen((v) => !v)}
+                className='size-9 rounded-full'
+                onClick={() => setMobileOpen((prev) => !prev)}
+                aria-expanded={mobileOpen}
+                aria-controls={mobileNavigationId}
                 aria-label={t('Toggle navigation menu')}
               >
-                <div className='relative size-4'>
-                  <span
-                    className={cn(
-                      'absolute inset-x-0 block h-[1.5px] origin-center rounded-full bg-current transition-all duration-300',
-                      mobileOpen ? 'top-[7px] rotate-45' : 'top-[3px]'
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      'absolute inset-x-0 top-[7px] block h-[1.5px] rounded-full bg-current transition-all duration-300',
-                      mobileOpen ? 'scale-x-0 opacity-0' : 'opacity-100'
-                    )}
-                  />
-                  <span
-                    className={cn(
-                      'absolute inset-x-0 block h-[1.5px] origin-center rounded-full bg-current transition-all duration-300',
-                      mobileOpen ? 'top-[7px] -rotate-45' : 'top-[11px]'
-                    )}
-                  />
-                </div>
+                {mobileOpen ? (
+                  <X className='size-4' />
+                ) : (
+                  <Menu className='size-4' />
+                )}
               </Button>
             </div>
-          </nav>
+          </div>
+
+          {/* Mobile Dropdown Panel */}
+          {mobileOpen && (
+            <div
+              id={mobileNavigationId}
+              className='ob-card mt-2 rounded-2xl p-4 shadow-xl backdrop-blur-xl md:hidden'
+            >
+              <nav className='flex flex-col gap-1'>
+                {links.map((link) => {
+                  const isActive =
+                    link.href === '/'
+                      ? pathname === '/'
+                      : pathname === link.href ||
+                        pathname.startsWith(`${link.href}/`)
+                  const mobileBadgeNode = link.badge ? (
+                    <span
+                      aria-hidden='true'
+                      className='inline-flex items-center rounded-full bg-gradient-to-r from-[#FF6B00] to-[#FF2E00] px-1.5 py-0.5 text-[9px] leading-none font-extrabold tracking-wider text-white uppercase shadow-[0_2px_6px_rgba(255,77,0,0.35)]'
+                    >
+                      {link.badge}
+                    </span>
+                  ) : null
+                  if (link.external) {
+                    return (
+                      <a
+                        key={link.href}
+                        href={link.href}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        aria-disabled={link.disabled}
+                        tabIndex={link.disabled ? -1 : undefined}
+                        onClick={(event) =>
+                          handleNavLinkClick(event, link, true)
+                        }
+                        className={cn(
+                          'text-muted-foreground hover:text-primary flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium',
+                          link.disabled && 'pointer-events-none opacity-50'
+                        )}
+                      >
+                        <span>{t(link.title)}</span>
+                        {mobileBadgeNode}
+                      </a>
+                    )
+                  }
+                  return (
+                    <Link
+                      key={link.href}
+                      to={link.href}
+                      disabled={link.disabled}
+                      onClick={(event) => handleNavLinkClick(event, link, true)}
+                      className={cn(
+                        'flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                        isActive
+                          ? 'text-primary bg-[var(--ob-primary-soft)] font-semibold'
+                          : 'text-muted-foreground hover:text-primary',
+                        link.disabled && 'pointer-events-none opacity-50'
+                      )}
+                    >
+                      <span>{t(link.title)}</span>
+                      {mobileBadgeNode}
+                    </Link>
+                  )
+                })}
+              </nav>
+              {showAuthButtons && (
+                <div className='border-border mt-3 flex flex-col gap-2 border-t pt-3'>
+                  {isAuthenticated ? (
+                    <Button
+                      className='ob-btn-primary w-full rounded-full'
+                      render={<Link to='/dashboard' />}
+                      onClick={() => setMobileOpen(false)}
+                    >
+                      {t('Console')}
+                      <ArrowUpRight className='ml-1.5 size-4' />
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        variant='outline'
+                        className='ob-btn-secondary w-full rounded-full'
+                        render={<Link to='/sign-in' />}
+                        onClick={() => setMobileOpen(false)}
+                      >
+                        {t('Sign in')}
+                      </Button>
+                      <Button
+                        className='ob-btn-primary w-full rounded-full'
+                        render={<Link to='/sign-up' />}
+                        onClick={() => setMobileOpen(false)}
+                      >
+                        {t('Console')}
+                        <ArrowUpRight className='ml-1.5 size-4' />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
-      {/* Mobile full-screen overlay */}
-      <div
-        className={cn(
-          'bg-background/98 fixed inset-0 z-40 backdrop-blur-2xl transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] sm:pointer-events-none sm:hidden',
-          mobileOpen
-            ? 'pointer-events-auto opacity-100'
-            : 'pointer-events-none opacity-0'
-        )}
-      >
-        <div className='flex h-full flex-col justify-between px-8 pt-20 pb-10'>
-          <nav className='flex flex-col gap-1'>
-            {links.map((link, i) => {
-              const isActive = pathname === link.href
-              const linkClassName = cn(
-                'flex items-center gap-3 py-3 text-base font-medium tracking-tight transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]',
-                mobileOpen
-                  ? 'translate-y-0 opacity-100'
-                  : 'translate-y-4 opacity-0',
-                isActive ? 'text-foreground' : 'text-muted-foreground',
-                link.disabled && 'pointer-events-none opacity-50'
-              )
-              const transitionStyle = {
-                transitionDelay: mobileOpen ? `${100 + i * 50}ms` : '0ms',
-              }
-              if (link.external) {
-                return (
-                  <a
-                    key={link.href}
-                    href={link.href}
-                    target='_blank'
-                    rel='noopener noreferrer'
-                    aria-disabled={link.disabled}
-                    tabIndex={link.disabled ? -1 : undefined}
-                    onClick={(event) => handleNavLinkClick(event, link, true)}
-                    className={linkClassName}
-                    style={transitionStyle}
-                  >
-                    {t(link.title)}
-                  </a>
-                )
-              }
-              return (
-                <Link
-                  key={link.href}
-                  to={link.href}
-                  disabled={link.disabled}
-                  onClick={(event) => handleNavLinkClick(event, link, true)}
-                  className={linkClassName}
-                  style={transitionStyle}
-                >
-                  {t(link.title)}
-                </Link>
-              )
-            })}
-          </nav>
-
-          <div
-            className={cn(
-              'flex flex-col gap-3 transition-all duration-500',
-              mobileOpen
-                ? 'translate-y-0 opacity-100'
-                : 'translate-y-4 opacity-0'
-            )}
-            style={{ transitionDelay: mobileOpen ? '250ms' : '0ms' }}
-          >
-            {showAuthButtons && (
-              <Link
-                to={isAuthenticated ? '/dashboard' : '/sign-in'}
-                onClick={() => setMobileOpen(false)}
-                className='bg-foreground text-background inline-flex h-10 items-center justify-center rounded-lg text-sm font-medium transition-opacity hover:opacity-90 active:opacity-80'
-              >
-                {isAuthenticated ? t('Go to Dashboard') : t('Sign in')}
-              </Link>
-            )}
-          </div>
-        </div>
-      </div>
-
       <Dialog
-        open={!!authPromptTarget}
+        open={Boolean(authPromptTarget)}
         onOpenChange={(open) => {
           if (!open) {
             closeAuthPrompt()

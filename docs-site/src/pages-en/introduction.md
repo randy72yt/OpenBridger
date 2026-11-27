@@ -1,54 +1,48 @@
-# OpenBridger is an API gateway
+# OpenBridger Documentation
 
-OpenBridger puts multiple model providers behind one account, one API key, and one credit balance. You call the gateway with your key. The gateway forwards the request to a route that is available for that model, then records the charge shown in the console.
+One account and one API key to access **GPT-6.2 / Codex, Claude 5.5, Gemini 4, DeepSeek**, and more — billed pay-as-you-go in RMB (¥) without managing separate vendor accounts.
 
-This is a developer API: register, add credits, create a key, and read logs. Which models are on sale, and which route a request uses, is whatever the console shows at that moment. This guide does not keep a model price list.
+<div class="actions"><a class="btn primary" href="/guide/quickstart/">3-Minute Quick Start</a><a class="btn secondary" href="{{CONSOLE_URL}}">Open Console</a></div>
 
-<div class="actions"><a class="btn primary" href="/guide/quickstart/">Make the first call</a><a class="btn secondary" href="{{CONSOLE_URL}}">Open console</a></div>
+## Jump Straight to Your Tool
 
-<div class="grid"><div class="card"><h3>One entry point</h3><p>OpenAI-compatible calls use one Base URL and <code>Authorization: Bearer</code>. Anthropic-compatible calls use <code>/v1/messages</code> on the same host.</p></div><div class="card"><h3>Pay for each call</h3><p>The gateway reserves credits before the call and settles the difference afterward. Prices live in Model Square, not in this guide.</p></div><div class="card"><h3>One key per tool</h3><p>Create a separate API key for each client, then match the model, status, and charge in Usage Logs.</p></div></div>
+<div class="grid">
+  <div class="card"><h3>💻 Coding & CLI Agents</h3><p><a href="/guide/clients/cc-switch/">CC Switch (1-Click GUI)</a> · <a href="/guide/clients/codex-cli/">Codex (App / IDE / CLI)</a> · <a href="/guide/clients/claude-code/">Claude Code</a> · <a href="/guide/clients/cursor/">Cursor</a> · <a href="/guide/clients/cline/">Cline & Roo Code</a></p></div>
+  <div class="card"><h3>📚 Papers & Bilingual Translation</h3><p><a href="/guide/clients/immersive-translate/">Immersive Translate (PDF & Web)</a> · <a href="/guide/clients/zotero/">Zotero</a> · <a href="/guide/clients/cherry-studio/">Cherry Studio RAG</a></p></div>
+  <div class="card"><h3>💬 Daily Chat & Lab Sharing</h3><p><a href="{{CONSOLE_URL}}/playground">Web GPT Chat (Zero Setup)</a> · <a href="/guide/clients/chatbox/">Chatbox (Desktop & Mobile)</a> · <a href="/guide/clients/lobechat/">LobeChat</a> · <a href="/guide/clients/open-webui/">Open WebUI</a></p></div>
+  <div class="card"><h3>🔌 APIs, SDKs & Workflows</h3><p><a href="/api/openai-chat/">Chat Completions</a> · <a href="/api/openai-responses/">Responses API</a> · <a href="/api/anthropic-messages/">Anthropic Messages</a> · <a href="/guide/clients/dify-workflows/">Dify, n8n & Coze</a></p></div>
+</div>
 
-## Three values to keep
+## The Three Values You'll Use Everywhere
 
-<div class="config-card"><div><span>Console</span><code>{{CONSOLE_URL}}</code></div><div><span>OpenAI-compatible Base URL</span><code>{{API_BASE_URL}}</code></div><div><span>API key</span>Starts with <code>sk-</code>. Create it under API Keys.</div></div>
+Most apps only ask for these three fields (see [Base URL Reference](/guide/base-urls/) for per-client rules):
 
-Examples use `{{API_BASE_URL}}`. Anthropic clients append `/v1/messages` themselves, so those clients use `{{CONSOLE_URL}}` with no `/v1`. See [Claude Code](/guide/clients/claude-code/).
+<div class="config-card">
+  <div><span>OpenAI-Compatible Base URL</span><code>{{API_BASE_URL}}</code> (Claude Code uses <code>{{CONSOLE_URL}}</code> without <code>/v1</code>)</div>
+  <div><span>API Key</span><code>sk-...</code> (created in <a href="{{CONSOLE_URL}}/keys">API Keys</a>)</div>
+  <div><span>Model ID</span>Exact ID copied from <a href="{{CONSOLE_URL}}/pricing">Models & Pricing</a></div>
+</div>
 
-## What the gateway actually routes
+## Console Shortcuts
 
-These paths have handlers in the gateway. A model can use one of them only when Model Square and your group have a route for it.
+| Page | Link | What It Does |
+| --- | --- | --- |
+| **GPT Chat** | [{{CONSOLE_URL}}/playground]({{CONSOLE_URL}}/playground) | Chat with models directly in the browser — no client setup needed |
+| **Models & Pricing** | [{{CONSOLE_URL}}/pricing]({{CONSOLE_URL}}/pricing) | Browse live models, supported protocols, and prices; copy exact Model IDs |
+| **API Keys** | [{{CONSOLE_URL}}/keys]({{CONSOLE_URL}}/keys) | Create per-app `sk-...` keys and spending caps |
+| **Wallet & Plans** | [{{CONSOLE_URL}}/wallet]({{CONSOLE_URL}}/wallet) | Top up, redeem codes, or purchase subscription plans |
+| **Usage Logs** | [{{CONSOLE_URL}}/usage-logs]({{CONSOLE_URL}}/usage-logs) | Inspect every request's timestamp, model, tokens, and cost |
 
-| Use | Method and path |
-| --- | --- |
-| List models visible to this key | `GET /v1/models` |
-| Chat | `POST /v1/chat/completions` |
-| Text completion | `POST /v1/completions` |
-| Responses (Codex) | `POST /v1/responses` |
-| Anthropic Messages | `POST /v1/messages` |
-| Embeddings | `POST /v1/embeddings` |
-| Image generation / edits | `POST /v1/images/generations`, `POST /v1/images/edits` |
-| Speech to text, translation, speech | `POST /v1/audio/transcriptions`, `/v1/audio/translations`, `/v1/audio/speech` |
-| Rerank, moderation | `POST /v1/rerank`, `POST /v1/moderations` |
-| Gemini native path | `POST /v1beta/models/...` |
-| Realtime audio | `GET /v1/realtime` (WebSocket) |
+## Supported API Endpoints
 
-`POST /v1/images/variations`, `/v1/files`, and `/v1/fine-tunes` return `501` with `code` `api_not_implemented`. `/v1/messages/count_tokens` is not enabled. Video and async tasks use `/v1/videos` and `/v1/tasks` only when that capability is turned on.
+| Protocol / Capability | Endpoint | Reference |
+| --- | --- | --- |
+| List visible models | `GET /v1/models` | [Chat Completions](/api/openai-chat/) |
+| OpenAI Chat & Vision | `POST /v1/chat/completions` | [Chat Completions](/api/openai-chat/) |
+| OpenAI Responses (Codex) | `POST /v1/responses` | [Responses API](/api/openai-responses/) |
+| Anthropic Messages (Claude Code) | `POST /v1/messages` | [Anthropic Messages](/api/anthropic-messages/) |
+| Google Gemini Native | `POST /v1beta/models/{model}:generateContent` | [Gemini Native API](/api/gemini-native/) |
+| Image, Video, Audio & Realtime | `/v1/images/*`, `/v1/videos`, `/v1/audio/*`, `/v1/realtime` | [Image, Video & Audio](/api/multimodal-media/) |
+| Embeddings & Rerank | `POST /v1/embeddings`, `POST /v1/rerank` | [Embeddings & Rerank](/api/embeddings-rerank/) |
 
-## Console pages
-
-| Task | URL |
-| --- | --- |
-| Model Square | [{{CONSOLE_URL}}/pricing]({{CONSOLE_URL}}/pricing) |
-| API Keys | [{{CONSOLE_URL}}/keys]({{CONSOLE_URL}}/keys) |
-| Wallet | [{{CONSOLE_URL}}/wallet]({{CONSOLE_URL}}/wallet) |
-| Playground | [{{CONSOLE_URL}}/playground]({{CONSOLE_URL}}/playground) |
-| Usage Logs | [{{CONSOLE_URL}}/usage-logs]({{CONSOLE_URL}}/usage-logs) |
-| Terms | [{{CONSOLE_URL}}/user-agreement]({{CONSOLE_URL}}/user-agreement) |
-
-<div class="callout warning"><strong>Who the service is for</strong><p>The terms published on the main site say this service is only for users outside mainland China. Your use also has to follow the laws that apply to you, upstream terms, and the platform rules. See <a href="/legal/terms/">Terms of service</a>.</p></div>
-
-## Related
-
-- [Quick start](/guide/quickstart/)
-- [Credits and billing](/guide/billing/)
-- [Error codes](/guide/errors/)
+<div class="callout warning"><strong>Service scope</strong><p>Per our published <a href="/legal/terms/">Terms of Service</a>, this platform is intended only for users outside Mainland China and must be used in compliance with applicable local laws.</p></div>

@@ -1,62 +1,70 @@
-# Use OpenBridger in Codex
+# Codex Setup Guide (Desktop App, VS Code & CLI)
 
-Codex calls a custom model provider with the Responses protocol. The gateway path is `POST /v1/responses`. Keep the key in an environment variable. The config file only names that variable.
+The **Codex Desktop App**, **VS Code extension**, and **`codex` CLI** all read from the same local `.codex` folder — configure it once and all three work together.
 
-## Before you start
+## Before You Begin
 
-- The Codex CLI is installed.
-- An API key named `codex`.
-- A full model ID from Model Square. That model needs a route on the Responses path, or the call returns `503` and no channel.
+1. Create a key named `codex` in [API Keys]({{CONSOLE_URL}}/keys) (pick a Responses-capable group such as `default` or `codex`) and copy `sk-...`.
+2. Copy an exact Model ID from [Models & Pricing]({{CONSOLE_URL}}/pricing) (e.g., `gpt-6.2-astra` or `gpt-6.2-sol`).
 
-## Configure
+---
 
-```bash
-export OPENBRIDGER_API_KEY="sk-your-key"
+## Method 1: 1-Click GUI via CC Switch (Recommended)
+
+1. Open **CC Switch** (see [CC Switch Guide](/guide/clients/cc-switch/)).
+2. Click **`Codex`** -> click **`+`** -> choose **Custom**.
+3. Enter `Base URL` = `{{API_BASE_URL}}`, `API Key` = `sk-...`, `Wire API` = `responses`, `Model` = `gpt-6.2-astra`.
+4. Click **Save** -> click **Enable** -> fully quit and relaunch Codex Desktop (or reload VS Code).
+
+---
+
+## Method 2: Manual `.codex` Config Files
+
+<div class="callout warning"><strong>Desktop App note</strong><p>Launching the GUI Desktop App does not load shell exports from <code>~/.zshrc</code>. Saving your key in <code>auth.json</code> alongside <code>config.toml</code> works across Desktop, VS Code, and CLI.</p></div>
+
+<div class="steps">
+  <div class="step"><strong>Step 1: Install Codex</strong><p>• <strong>Desktop App</strong>: Install the official Codex app (close the initial ChatGPT login prompt without signing in).<br>• <strong>VS Code Extension</strong>: Install <code>OpenAI Codex</code> (<code>openai.chatgpt</code>).<br>• <strong>CLI</strong>: Requires Node.js 22+; run <code>npm install -g @openai/codex</code>.</p></div>
+  <div class="step"><strong>Step 2: Open Your <code>.codex</code> Folder</strong><p>• <strong>macOS</strong>: In Finder, press <code>Cmd + Shift + G</code>, enter <code>~/</code>, press <code>Cmd + Shift + .</code> to show hidden files, and create/open <code>.codex</code>.<br>• <strong>Windows</strong>: In File Explorer, enter <code>%USERPROFILE%</code> in the address bar, check <strong>File name extensions</strong> under View, and create/open <code>.codex</code>.</p></div>
+  <div class="step"><strong>Step 3: Create <code>auth.json</code></strong><p>Inside <code>.codex</code>, create <strong><code>auth.json</code></strong> (not <code>.json.txt</code>) with the JSON below.</p></div>
+  <div class="step"><strong>Step 4: Create <code>config.toml</code></strong><p>Inside <code>.codex</code>, create <strong><code>config.toml</code></strong> with the TOML config below.</p></div>
+  <div class="step"><strong>Step 5: Restart & Verify</strong><p>Quit and relaunch Codex Desktop (<code>Cmd + Q</code> / tray exit), run <code>Developer: Reload Window</code> in VS Code, or run <code>codex</code> in terminal. Start a new thread and check <a href="{{CONSOLE_URL}}/usage-logs">Usage Logs</a>.</p></div>
+</div>
+
+### `auth.json`
+
+```json
+{
+  "OPENAI_API_KEY": "sk-replace-with-your-key"
+}
 ```
 
-`~/.codex/config.toml`:
+### `config.toml`
 
 ```toml
-model = "MODEL_ID_FROM_CONSOLE"
 model_provider = "openbridger"
+model = "gpt-6.2-astra"
+model_reasoning_effort = "high"
+disable_response_storage = true
+preferred_auth_method = "apikey"
 
 [model_providers.openbridger]
 name = "OpenBridger"
 base_url = "{{API_BASE_URL}}"
-env_key = "OPENBRIDGER_API_KEY"
 wire_api = "responses"
 ```
 
-`base_url` includes `/v1`. `wire_api` must be `responses`, so the client calls `/v1/responses` instead of Chat Completions.
+> Set `model_reasoning_effort` to `"medium"` for faster everyday edits or `"high"` for complex debugging. Never commit `auth.json` to Git.
 
-Do not write the `sk-` key into `config.toml`.
+## Common Issues
 
-## Start
-
-```bash
-cd /path/to/your/project
-codex
-```
-
-Match the model and the key name `codex` in [Usage Logs]({{CONSOLE_URL}}/usage-logs).
-
-To use the official provider again, set `model_provider` back or delete this provider, then restart Codex. You do not need to sign out of the ChatGPT account.
-
-## Check
-
-- The model shown in the UI matches `model` in `config.toml`.
-- Use a check that does not print the secret, such as testing that the variable is non-empty, instead of echoing it onto the screen.
-- A personal shell profile is a fine place for the variable. The project repository is not.
-
-## Common problems
-
-| What you see | What to do |
+| Symptom | Fix |
 | --- | --- |
-| 401 | The environment variable is empty, or the key is disabled |
-| 503 no channel | The model ID is not the full ID from Model Square, or this group has no Responses route |
-| The request uses another provider | `model_provider` is not `openbridger`, or an old process is still running |
+| Desktop App still opens browser login | Verify `preferred_auth_method = "apikey"` in `config.toml`, confirm no `.txt` extension, and quit/relaunch |
+| Custom model isn't in the UI picker after an app update | Edit `model` in `config.toml` (or CC Switch), restart, and open a **New Thread** instead of picking bundled UI presets |
+| `401` / `503` | `401`: re-copy `sk-...`; `503`: verify exact Model ID and key group in [Models & Pricing]({{CONSOLE_URL}}/pricing) |
 
 ## Related
 
-- [CC Switch](/guide/clients/cc-switch/)
-- [OpenAI-compatible calls](/guide/clients/openai-compatible/)
+- [CC Switch (1-Click GUI)](/guide/clients/cc-switch/)
+- [Responses API](/api/openai-responses/)
+- [Error codes](/guide/errors/)

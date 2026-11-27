@@ -1,37 +1,39 @@
-# 在 Cursor 中使用 OpenBridger
+# Cursor 配置教程
 
-Cursor 在提供「自定义 OpenAI Base URL」或 OpenAI Compatible 供应商时，可以让 Chat 或 Agent 走 OpenBridger。菜单名字会随版本变化。找不到 Base URL 一项时，该版本不能按本页接入。
+通过 Cursor 内置的 **Override OpenAI Base URL** 接入 OpenBridger 进行 Chat 与 Agent 编码（无需退出你原有的 Cursor 账号；是否支持自带 Key 取决于你安装的 Cursor 版本策略）。
 
-## 开始之前
+## 开始前准备
 
-- 一把只给 Cursor 用的 API Key，见 [创建 API Key](/guide/api-key/)。
-- 从 [模型广场]({{CONSOLE_URL}}/pricing) 复制的完整模型 ID。
-- 确认你的 Cursor 版本允许使用自带 API Key。这个范围由 Cursor 的版本和套餐决定，OpenBridger 不能代替这项许可。
+1. 在 [API 密钥]({{CONSOLE_URL}}/keys) 创建名为 `cursor` 的密钥，复制 `sk-...`。
+2. 在 [模型广场]({{CONSOLE_URL}}/pricing) 复制完整模型 ID（如 `gpt-6.2-astra`、`claude-sonnet-5-5`）。
 
-## 配置
+## 配置 5 步
 
-<div class="steps"><div class="step"><strong>打开 Cursor Settings</strong><p>找到 Models、API Keys 或自定义 Provider。</p></div><div class="step"><strong>填写 OpenAI 兼容项</strong><p>Override OpenAI Base URL 或同类开关打开后，Base URL 填 <code>{{API_BASE_URL}}</code>，Key 填 <code>sk-</code> 开头的密钥。</p></div><div class="step"><strong>添加模型 ID</strong><p>使用广场上的完整 ID。不要只写厂商家族名。</p></div><div class="step"><strong>发一句短消息</strong><p>在 Chat 里发送，然后到 <a href="{{CONSOLE_URL}}/usage-logs">使用日志</a> 按这把密钥核对。</p></div></div>
+<div class="steps">
+  <div class="step"><strong>第 1 步：打开 Cursor Settings</strong><p>点击 Cursor 右上角 <strong>⚙️ 齿轮图标</strong>（快捷键 <code>Cmd/Ctrl + Shift + J</code>）-> 左侧点 <strong><code>Models</code></strong>。</p></div>
+  <div class="step"><strong>第 2 步：先添加自定义模型名</strong><p>拉到模型列表下方点 <strong><code>+ Add Model</code></strong>，粘贴完整模型 ID（如 <code>gpt-6.2-astra</code>）并勾选启用；建议顺手把其他不用的内置 OpenAI 模型取消勾选，防止验证时测错模型。</p></div>
+  <div class="step"><strong>第 3 步：填写 Key 并开启 Override Base URL</strong>
+    <div class="config-card">
+      <div><span>OpenAI API Key</span>粘贴 <code>sk-...</code> 完整密钥</div>
+      <div><span>Override OpenAI Base URL</span>打开开关 -> 填 <code>{{API_BASE_URL}}</code>（带 <code>/v1</code>）</div>
+    </div>
+  </div>
+  <div class="step"><strong>第 4 步：点击 Save 与 Verify</strong><p>先点地址框右侧的 <strong>Save</strong>，再打开 OpenAI API Key 右侧开关（或点 <code>Verify</code>）。</p></div>
+  <div class="step"><strong>第 5 步：新建对话关掉 Auto 并选模型</strong><p>按 <code>Cmd/Ctrl + L</code> 打开右侧面板 -> 点 <strong><code>+</code>（New Chat）</strong> -> 在输入框左下角关掉 <code>Auto</code>，选中你刚添加的模型发消息，到 <a href="{{CONSOLE_URL}}/usage-logs">使用日志</a> 核对即可。</p></div>
+</div>
 
-<div class="config-card"><div><span>Base URL</span><code>{{API_BASE_URL}}</code></div><div><span>API Key</span><code>sk-...</code></div><div><span>Model</span><code>模型广场中的完整 ID</code></div></div>
-
-## 和 Cursor 自己的功能分开
-
-- 不需要退出 Cursor 账号。账号同步和自定义模型是两件事。
-- Tab Completion 等由 Cursor 提供的补全，可能仍然走 Cursor 自己的服务，不会出现在 OpenBridger 日志里。
-- Chat、Agent、补全要分别看各自的模型设置。
-- 全局 Override 打开时，官方模型也会被带到这个 Base URL。切回官方模型前先关掉它，再重启 Cursor。
+> **补充说明**：行内代码补全（Cursor Tab）仍走 Cursor 自有服务，不消耗 OpenBridger 额度。后续若想切回 Cursor 会员内置模型，请先关闭 `Override OpenAI Base URL` 并重启 Cursor。
 
 ## 常见问题
 
-| 现象 | 处理 |
+| 现象 | 解决方法 |
 | --- | --- |
-| 没有 Verify 按钮 | 保存后直接发短消息，用使用日志确认 |
-| model not found 或 503 无可用渠道 | 重新复制模型 ID，核对密钥分组 |
-| 官方模型也失败 | 关闭 Base URL 覆盖并重启 |
-| 日志里没有请求 | 当前功能没有走自定义 Base URL，或仍在使用 Cursor 自有模型 |
-| 401 | 密钥多了空格或写了两次 `Bearer` |
+| 点 `Verify` 提示某个没见过的模型不存在 | 先在 `Models` 列表里取消勾选其他内置模型，只留你添加的模型再点 `Verify` |
+| 报 `404` | Base URL 改为 `{{API_BASE_URL}}`（末尾不要加 `/` 或 `/chat/completions`） |
+| 报 `503` 或 `model not found` | 从 [模型广场]({{CONSOLE_URL}}/pricing) 重新复制完整模型 ID |
+| 使用日志里没记录 | 对话框左下角模型还停在 `Auto` 或内置模型上，手动切换并新开 Chat |
 
 ## 相关
 
-- [OpenAI 兼容调用](/guide/clients/openai-compatible/)
+- [Cline / Roo Code（Cursor 内插件替代方案）](/guide/clients/cline/)
 - [故障排查](/troubleshooting/)

@@ -1,37 +1,39 @@
-# Use OpenBridger in Cursor
+# Cursor Setup Guide
 
-When your Cursor version offers a custom OpenAI Base URL or an OpenAI-compatible provider, Chat or Agent can use OpenBridger. Menu names change between versions. If there is no Base URL field, this version cannot be connected from this page.
+Connect Cursor's **Chat** and **Agent** panels to OpenBridger via **Override OpenAI Base URL** (no need to sign out of your Cursor account; BYOK availability depends on your Cursor build/plan).
 
-## Before you start
+## Before You Begin
 
-- An API key used only by Cursor. See [Create an API key](/guide/api-key/).
-- A full model ID copied from [Model Square]({{CONSOLE_URL}}/pricing).
-- A Cursor version that allows your own API key. That permission is Cursor's, by version and plan. OpenBridger does not grant it.
+1. Create a key named `cursor` in [API Keys]({{CONSOLE_URL}}/keys) and copy `sk-...`.
+2. Copy an exact Model ID from [Models & Pricing]({{CONSOLE_URL}}/pricing) (e.g., `gpt-6.2-astra` or `claude-sonnet-5-5`).
 
-## Configure
+## 5 Setup Steps
 
-<div class="steps"><div class="step"><strong>Open Cursor Settings</strong><p>Find Models, API Keys, or a custom provider.</p></div><div class="step"><strong>Fill the OpenAI-compatible fields</strong><p>Turn on Override OpenAI Base URL, or the equivalent. Base URL is <code>{{API_BASE_URL}}</code>. The key starts with <code>sk-</code>.</p></div><div class="step"><strong>Add the model ID</strong><p>Use the full ID from Model Square. Do not type only a vendor family name.</p></div><div class="step"><strong>Send one short message</strong><p>Send it in Chat, then match this key in <a href="{{CONSOLE_URL}}/usage-logs">Usage Logs</a>.</p></div></div>
+<div class="steps">
+  <div class="step"><strong>Step 1: Open Cursor Settings</strong><p>Click the top-right <strong>⚙️ gear icon</strong> (<code>Cmd/Ctrl + Shift + J</code>) -> select <strong><code>Models</code></strong>.</p></div>
+  <div class="step"><strong>Step 2: Add Your Custom Model ID First</strong><p>Click <strong><code>+ Add Model</code></strong> below the list, paste the exact Model ID (e.g., <code>gpt-6.2-astra</code>), and keep it checked. Uncheck unused built-in OpenAI models so <code>Verify</code> tests your custom model.</p></div>
+  <div class="step"><strong>Step 3: Enter Key & Override Base URL</strong>
+    <div class="config-card">
+      <div><span>OpenAI API Key</span>Your <code>sk-...</code> key</div>
+      <div><span>Override OpenAI Base URL</span>Toggle ON -> <code>{{API_BASE_URL}}</code> (with <code>/v1</code>)</div>
+    </div>
+  </div>
+  <div class="step"><strong>Step 4: Save & Verify</strong><p>Click <strong>Save</strong> next to the Base URL field, then click <strong><code>Verify</code></strong> (or enable the OpenAI API Key toggle).</p></div>
+  <div class="step"><strong>Step 5: Open a New Chat & Disable Auto</strong><p>Press <code>Cmd/Ctrl + L</code> -> click <strong><code>+</code> (New Chat)</strong> -> turn off <code>Auto</code> in the model picker, select your custom model, send a message, and check <a href="{{CONSOLE_URL}}/usage-logs">Usage Logs</a>.</p></div>
+</div>
 
-<div class="config-card"><div><span>Base URL</span><code>{{API_BASE_URL}}</code></div><div><span>API key</span><code>sk-...</code></div><div><span>Model</span><code>full ID from Model Square</code></div></div>
+> **Notes**: Cursor Tab inline autocomplete stays on Cursor's own engine. Turn off `Override OpenAI Base URL` and restart Cursor before switching back to Cursor's bundled subscription models.
 
-## Separate this from Cursor's own features
+## Common Issues
 
-- You do not sign out of the Cursor account. Account sync and a custom model are different settings.
-- Tab completion and similar Cursor features may keep using Cursor's own service. Those calls will not appear in OpenBridger logs.
-- Check Chat, Agent, and completion separately.
-- A global override also sends official models to this Base URL. Turn the override off before you switch back, then restart Cursor.
-
-## Common problems
-
-| What you see | What to do |
+| Symptom | Fix |
 | --- | --- |
-| There is no Verify button | Save, send a short message, and confirm it in Usage Logs |
-| model not found, or 503 no channel | Copy the model ID again and check the key's group |
-| Official models fail too | Turn off the Base URL override and restart |
-| Nothing in the logs | This feature is not using the custom Base URL, or it is still on a Cursor model |
-| 401 | The key has a space, or `Bearer` was added twice |
+| `Verify` complains about an unfamiliar model | Uncheck other built-in OpenAI models so only your custom Model ID remains checked |
+| `404` error | Set Base URL strictly to `{{API_BASE_URL}}` |
+| `503` or `model not found` | Re-copy the exact Model ID from [Models & Pricing]({{CONSOLE_URL}}/pricing) |
+| Nothing in Usage Logs | Turn off `Auto` in the chat model picker and start a fresh Chat tab |
 
 ## Related
 
-- [OpenAI-compatible calls](/guide/clients/openai-compatible/)
+- [Cline & Roo Code (Extension Alternative)](/guide/clients/cline/)
 - [Troubleshooting](/troubleshooting/)

@@ -1,41 +1,31 @@
-# Credits and billing
+# Credits and Billing
 
-The wallet balance is the credit used for calls. Model Square prices decide how a request converts into credit. The usage row is the settled result.
+Balances, model prices, and per-request costs across [Wallet]({{CONSOLE_URL}}/wallet), [Models & Pricing]({{CONSOLE_URL}}/pricing), and [Usage Logs]({{CONSOLE_URL}}/usage-logs) are all displayed directly in **RMB (¥)**.
 
-## The credit unit
+## How Each Request Is Billed
 
-The wallet, Usage Logs, and Model Square show amounts in yuan (¥). The ledger still stores an integer credit. The code default is **500000 credits = 1 US dollar**, and the page converts that into yuan. Pay, balance, and per-call charges are the yuan figures on the page. Do not multiply by an exchange rate yourself.
+Every API call follows a **Pre-hold -> Execute -> Settle** flow:
 
-## How one request is charged
+<div class="steps">
+  <div class="step"><strong>1. Pre-hold</strong><p>Before forwarding your request, the gateway reserves an estimated amount. If your balance cannot cover the pre-hold, the request stops immediately with <code>403</code> (<code>insufficient_user_quota</code>) and nothing is charged.</p></div>
+  <div class="step"><strong>2. Upstream Execution</strong><p>If an upstream failure prevents completion, the pre-hold is automatically refunded.</p></div>
+  <div class="step"><strong>3. Exact Settlement</strong><p>Once finished, exact charges are calculated from actual input tokens, output tokens (including thinking tokens on reasoning models), cache hits, and group multipliers. Unused pre-hold is refunded immediately and the final cost is recorded in <a href="{{CONSOLE_URL}}/usage-logs">Usage Logs</a>.</p></div>
+</div>
 
-<div class="steps"><div class="step"><strong>Reserve</strong><p>The gateway estimates the credit for this call. If the wallet or subscription cannot cover it, the call fails with HTTP <code>403</code>, <code>code</code> <code>insufficient_user_quota</code>, and a message about insufficient user quota or a failed pre-charge. Upstream is not called.</p></div><div class="step"><strong>Forward</strong><p>The request is sent only after the reserve succeeds. A failed request refunds the reserve.</p></div><div class="step"><strong>Settle</strong><p>On success the gateway charges actual usage. It debits more if the reserve was low and refunds the difference if the reserve was high. Usage Logs show the settled amount.</p></div></div>
+## Wallet vs. Subscription Priority
 
-The default preference is Subscription First (`subscription_first`). With no active subscription, the wallet is charged. With one, subscription credit is used first, and a shortfall falls back to the wallet only when that subscription allows it. See [Subscriptions](/guide/account/subscriptions/). The wallet can also switch to Wallet First, Subscription Only, or Wallet Only.
+- Without an active subscription, requests deduct from your **Wallet**.
+- With an active subscription, billing defaults to **Subscription First** (configurable in Wallet between Subscription First, Wallet First, Subscription Only, or Wallet Only — see [Subscriptions](/guide/account/subscriptions/)).
+- Note the difference in error codes: an empty wallet/subscription returns `403` (`insufficient_user_quota`), whereas hitting a per-key spending cap set in API Keys returns `401` Invalid token.
 
-A key can also have its own remaining credit. When that key balance is used up the result is `401` and an invalid-token message, which is not the wallet's `403`.
+## Why Did My Usage Spike?
 
-## What changes the amount
-
-- Input, output, and cache tokens. A longer context costs more input. An agent resends history and tool results.
-- The group ratio. The same model can settle differently in another group.
-- Image count, media duration, and resolution, only when that model bills those units. Extreme counts are rejected at validation. They are not stored as a negative charge.
-
-Do not assume an extra unit is billed when Model Square does not list it. Use that model's page and this request's log.
-
-## Check one charge
-
-<div class="steps"><div class="step"><strong>Use a separate key</strong><p>Do not share a test key with production.</p></div><div class="step"><strong>Note the time</strong><p>Look at the clock before you send.</p></div><div class="step"><strong>Open Usage Logs</strong><p>Filter <a href="{{CONSOLE_URL}}/usage-logs">Usage Logs</a> by time, key, and model. Drawing and video tasks may be in the task log, not the chat log.</p></div><div class="step"><strong>Read the model and group</strong><p>Confirm the charge used the model ID you selected, not a name the client substituted.</p></div></div>
-
-If a charge looks high, check whether the full history was sent again or whether an agent called tools repeatedly. The token counts in the log are the settlement basis.
-
-## Where new credit comes from
-
-Online top-ups and redemption codes both add wallet credit. Minimums and refunds are on [Top up and redeem](/guide/account/redeem/).
-
-<div class="callout warning"><strong>Do not reconcile against numbers in this guide</strong><p>Model prices are on Model Square. Registration does not include a credit gift. The minimum top-up is whatever the wallet shows. Reconcile against the confirmation page and the yuan amounts in Usage Logs.</p></div>
+Check the input and output token columns in [Usage Logs]({{CONSOLE_URL}}/usage-logs):
+1. **Long chat history**: Clients resend the entire conversation history on every turn. Click **New Chat** when switching topics.
+2. **Multi-step coding agents**: Tools like Codex, Claude Code, and Cline automatically run multiple file-read and tool-call turns to finish one task.
 
 ## Related
 
 - [Models and pricing](/guide/models-pricing/)
+- [Top up and redeem](/guide/account/redeem/)
 - [Usage and logs](/guide/account/usage/)
-- [Error codes](/guide/errors/)

@@ -16,8 +16,63 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-// Public contact channels. Leave empty until the platform owner publishes them.
+import type { SystemStatus } from '@/features/auth/types'
+
+export const DEFAULT_SUPPORT_EMAIL = 'support@openbridger.com'
+
 export const PLATFORM_CONTACT = {
-  email: '',
-  communityUrl: '',
+  email: DEFAULT_SUPPORT_EMAIL,
+  wechatId: '',
+  wechatQrCode: '',
+}
+
+export interface ResolvedPlatformContact {
+  email: string
+  wechatId: string
+  wechatQrCode: string
+}
+
+function pickStatusString(
+  status: SystemStatus | null | undefined,
+  key: 'contact_email' | 'contact_wechat_id' | 'contact_wechat_qrcode'
+): string | undefined {
+  const directValue = status?.[key]
+  if (typeof directValue === 'string') {
+    return directValue.trim()
+  }
+
+  const nestedValue = status?.data?.[key]
+  if (typeof nestedValue === 'string') {
+    return nestedValue.trim()
+  }
+
+  return undefined
+}
+
+export function resolvePlatformContact(
+  status?: SystemStatus | null
+): ResolvedPlatformContact {
+  const configuredEmail = pickStatusString(status, 'contact_email')
+  const configuredWeChatId = pickStatusString(status, 'contact_wechat_id')
+  const configuredWeChatQr = pickStatusString(status, 'contact_wechat_qrcode')
+
+  return {
+    email:
+      configuredEmail !== undefined ? configuredEmail : PLATFORM_CONTACT.email,
+    wechatId: configuredWeChatId ?? PLATFORM_CONTACT.wechatId,
+    wechatQrCode: configuredWeChatQr ?? PLATFORM_CONTACT.wechatQrCode,
+  }
+}
+
+export function isQrImageSource(raw: string): boolean {
+  const trimmed = raw.trim().toLowerCase()
+  if (!trimmed) {
+    return false
+  }
+
+  if (trimmed.startsWith('data:image/') || trimmed.startsWith('/')) {
+    return true
+  }
+
+  return /\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(trimmed)
 }

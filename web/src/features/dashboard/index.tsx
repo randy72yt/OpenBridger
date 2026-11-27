@@ -48,6 +48,7 @@ import {
 } from './lib'
 import {
   type DashboardSectionId,
+  ADMIN_ONLY_DASHBOARD_SECTIONS,
   DASHBOARD_DEFAULT_SECTION,
   DASHBOARD_SECTION_IDS,
 } from './section-registry'
@@ -110,6 +111,12 @@ const LazyUserCharts = lazy(() =>
 const LazyFlowCharts = lazy(() =>
   import('./components/flow/flow-charts').then((m) => ({
     default: m.FlowCharts,
+  }))
+)
+
+const LazyBusinessDashboard = lazy(() =>
+  import('./components/business/business-dashboard').then((m) => ({
+    default: m.BusinessDashboard,
   }))
 )
 
@@ -180,6 +187,9 @@ const SECTION_META: Record<DashboardSectionId, { titleKey: string }> = {
   overview: {
     titleKey: 'Overview',
   },
+  business: {
+    titleKey: 'Business Overview',
+  },
   models: {
     titleKey: 'Model Call Analytics',
   },
@@ -248,7 +258,9 @@ export function Dashboard() {
   const visibleSections = useMemo(
     () =>
       DASHBOARD_SECTION_IDS.filter(
-        (section) => section !== 'overview' && (section !== 'users' || isAdmin)
+        (section) =>
+          section !== 'overview' &&
+          (!ADMIN_ONLY_DASHBOARD_SECTIONS.has(section) || isAdmin)
       ),
     [isAdmin]
   )
@@ -346,6 +358,13 @@ export function Dashboard() {
               </div>
             )}
           </div>
+          {activeSection === 'business' && isAdmin && (
+            <FadeIn>
+              <Suspense fallback={<ModelChartsFallback />}>
+                <LazyBusinessDashboard />
+              </Suspense>
+            </FadeIn>
+          )}
           {activeSection === 'models' && (
             <>
               <FadeIn>

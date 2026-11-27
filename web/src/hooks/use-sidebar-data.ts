@@ -22,7 +22,6 @@ import {
   ClipboardList,
   CreditCard,
   FileText,
-  FlaskConical,
   Key,
   LayoutDashboard,
   ListTodo,
@@ -32,11 +31,14 @@ import {
   Settings,
   ShieldCheck,
   Ticket,
+  TrendingUp,
   User,
   Users,
   Wallet,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+
+import { IconOpenAI } from '@/assets/brand-icons/icon-openai'
 
 import type { SidebarData } from '@/components/layout/types'
 import { ROLE } from '@/lib/roles'
@@ -57,9 +59,9 @@ export function useSidebarData(): SidebarData {
         title: t('Chat'),
         items: [
           {
-            title: t('Playground'),
+            title: t('GPT Chat'),
             url: '/playground',
-            icon: FlaskConical,
+            icon: IconOpenAI,
           },
         ],
       },
@@ -75,6 +77,7 @@ export function useSidebarData(): SidebarData {
           {
             title: t('Dashboard'),
             url: '/dashboard/models',
+            activeUrls: ['/dashboard/flow', '/dashboard/users'],
             icon: LayoutDashboard,
           },
           {
@@ -126,6 +129,12 @@ export function useSidebarData(): SidebarData {
         id: 'admin',
         title: t('Admin'),
         items: [
+          {
+            title: t('Business Overview'),
+            url: '/dashboard/business',
+            icon: TrendingUp,
+            requiredRole: ROLE.ADMIN,
+          },
           {
             title: t('Channels'),
             url: '/channels',

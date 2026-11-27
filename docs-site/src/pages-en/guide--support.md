@@ -1,37 +1,22 @@
-# Contact and incidents
+# Contact and Incidents
 
-Support email: [support@openbridger.com](mailto:support@openbridger.com). This is the public support channel.
+- **Official Support Email**: [support@openbridger.com](mailto:support@openbridger.com)
+- **Live Service Status**: <https://stats.uptimerobot.com/aHV66DcfpB>
 
-Status page: <https://stats.uptimerobot.com/aHV66DcfpB>. Read it before you report an outage.
+## What to Include in Your Email
 
-## Include this in the email
+1. **Your account email or username**
+2. **HTTP status code and `request id`** (from the error message or [Usage Logs]({{CONSOLE_URL}}/usage-logs))
+3. **Client app and Model ID** (e.g., `Codex Desktop + gpt-6.2-astra`)
+4. **First 8 characters of your API key** (e.g., `sk-abcd12...`)
 
-1. The account username or email.
-2. The time, with timezone, and whether it happens once or every time.
-3. The model ID and the client name.
-4. The HTTP status, the error body, and `X-Oneapi-Request-Id`. A screenshot of that Usage Logs row is fine if the full key is not in it.
-5. What you already tried: another model, another key, and whether curl succeeded.
+> **Billing & refunds**: Include payment timestamp, RMB amount, and transaction ID (see [Top up and redeem](/guide/account/redeem/)). Prefix urgent outage emails with `[URGENT]`.
 
-If the service is already down, you can put `[URGENT]` in the subject.
+<div class="callout warning"><strong>Never send secrets</strong><p>Never include account passwords, verification codes, full <code>sk-...</code> API keys, or full voucher codes in emails or screenshots.</p></div>
 
-## Do not send
+## Response Time
 
-- Passwords, second-factor codes, payment passwords, or SMS codes
-- A full API key or a full redemption code
-
-The first 8 characters of a key are enough. We will not ask for your password or a full key by email or private message.
-
-## Billing
-
-Missing top-ups, refunds, and charge disputes use the same address. Include the amount, time, and order id. Refund scope follows the [terms](/legal/terms/): spent credit is not refunded, and unused top-up balance can be requested back on the original path.
-
-The normal way to add credit is a wallet top-up or a redemption code, not an email asking for credit. See [Top up and redeem](/guide/account/redeem/).
-
-## Response
-
-During the trial period, support is handled by people. It is not a 24/7 queue. General questions and billing questions are answered with a first reply within 1 business day. A confirmed outage is handled first. Nights and holidays move the clock forward.
-
-That timing is the current public description, not a field in the API. If it changes, this page is the place that changes.
+General inquiries and billing tickets typically receive a first reply within **1 business day**, with service-impacting incidents prioritized.
 
 ## Related
 

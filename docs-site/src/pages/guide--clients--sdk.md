@@ -1,68 +1,46 @@
-# SDK 与 LangChain
+# LangChain 接入（Python & TypeScript）
 
-服务端使用官方 OpenAI SDK，或任何接受自定义 Base URL 的库。密钥放在环境变量或密钥管理服务里，不要写进仓库。
+通过 `langchain-openai` / `@langchain/openai` 将 `base_url` 指向 `{{API_BASE_URL}}` 即可接入全部对话与工具调用模型。
 
-```bash
-export OPENBRIDGER_API_KEY="sk-..."
-export OPENBRIDGER_BASE_URL="{{API_BASE_URL}}"
-export OPENBRIDGER_MODEL="MODEL_ID_FROM_CONSOLE"
-```
-
-Node 与 Python 的 OpenAI SDK 示例在 [OpenAI 兼容调用](/guide/clients/openai-compatible/)。
-
-## 上线前
-
-- 开发、测试、生产各用一把密钥。
-- 设置连接超时和读取超时。对 `429` 和上游的临时 5xx 做有限次退避，不要无限重试 `401` 和额度不足的 `403`。
-- 日志记录请求 ID、模型、状态和耗时。丢掉密钥和提示词里的敏感内容。
-- 对用户输入长度和 `max_tokens` 设业务上限。网关会拒绝明显不合法的请求，但这不是你的配额策略。
-
-## LangChain（Python）
+## 1. Python（`pip install langchain-openai`）
 
 ```python
 import os
 from langchain_openai import ChatOpenAI
 
-model = ChatOpenAI(
-    model=os.environ["OPENBRIDGER_MODEL"],
+llm = ChatOpenAI(
+    model="gpt-6.2-sol",
     api_key=os.environ["OPENBRIDGER_API_KEY"],
-    base_url=os.environ["OPENBRIDGER_BASE_URL"],
+    base_url="{{API_BASE_URL}}",
 )
 
-print(model.invoke("Hello OpenBridger").content)
+print(llm.invoke("用三点概括 RAG 的检索流程").content)
 ```
 
-依赖是 `langchain-openai`，它使用 OpenAI SDK，因此 `base_url` 同样要包含 `/v1`。
+## 2. JavaScript / TypeScript（`npm install @langchain/openai`）
 
-## LangChain（JavaScript）
-
-```js
+```ts
 import { ChatOpenAI } from "@langchain/openai";
 
-const model = new ChatOpenAI({
+const llm = new ChatOpenAI({
+  model: "gpt-6.2-sol",
   apiKey: process.env.OPENBRIDGER_API_KEY,
   configuration: {
-    baseURL: process.env.OPENBRIDGER_BASE_URL,
+    baseURL: "{{API_BASE_URL}}",
   },
-  model: process.env.OPENBRIDGER_MODEL,
 });
 
-const response = await model.invoke("Hello OpenBridger");
-console.log(response.content);
+const res = await llm.invoke("用三点概括 RAG 的检索流程");
+console.log(res.content);
 ```
 
-这里的 `baseURL` 也是 `{{API_BASE_URL}}`。如果某个版本的包把参数改成了顶层 `baseURL` 而不是 `configuration.baseURL`，以该版本文档为准，只要最终请求主机是 `openbridger.com` 且路径以 `/v1/chat/completions` 结尾即可。
+## 生产环境建议
 
-## 常见问题
-
-| 现象 | 处理 |
-| --- | --- |
-| 仍然请求官方 OpenAI | 环境变量没进进程，或传错了参数名 |
-| 浏览器 CORS | 把调用移到服务端 |
-| 工具调用失败 | 先 `invoke` 一句纯文本，再查模型是否支持 tools |
-| 额度错误被 LangChain 包成普通异常 | 打印 `status` 和响应体，对照 [错误码](/guide/errors/) |
+- **按环境隔离密钥**：本地开发与线上服务使用不同 API Key，便于按密钥查看日志与限额。
+- **合理设置重试**：仅对 `429` 和临时 `5xx` 开启有限次指数退避；遇到 `401`（密钥无效）或 `403`（余额不足）应立即告警停止重试。
 
 ## 相关
 
-- [OpenAI 兼容调用](/guide/clients/openai-compatible/)
-- [创建 API Key](/guide/api-key/)
+- [Python / Node SDK 接入](/guide/clients/openai-compatible/)
+- [Embeddings 向量与 Rerank](/api/embeddings-rerank/)
+- [错误码](/guide/errors/)

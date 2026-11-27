@@ -1,26 +1,47 @@
-# Use OpenBridger in LobeChat
+# LobeChat Setup Guide (Web, Desktop & Docker)
 
-LobeChat's OpenAI provider can take a custom API address. These values are enough. No extra plugin is required.
+Connect LobeChat to OpenBridger using its built-in `OpenAI` provider (or a custom provider).
 
-<div class="config-card"><div><span>Provider</span><code>OpenAI</code></div><div><span>API key</span><code>sk-...</code></div><div><span>Endpoint / proxy address</span><code>{{API_BASE_URL}}</code></div><div><span>Model ID</span><code>full ID from Model Square</code></div></div>
+## Before You Begin
 
-Depending on the version, the field may be called API Proxy, Endpoint, or a proxy address. Enter `{{API_BASE_URL}}`. If the placeholder already ends in `/v1`, do not add another `/v1`. If the placeholder is a bare host and the client appends `/v1` itself, enter only `{{CONSOLE_URL}}`. The check is the final path: `/v1/chat/completions`, with a single `/v1`.
+1. Create a key named `lobechat` in [API Keys]({{CONSOLE_URL}}/keys) and copy `sk-...`.
+2. Copy exact Model IDs from [Models & Pricing]({{CONSOLE_URL}}/pricing) (e.g., `gpt-6.2-astra`, `claude-sonnet-5-5`).
 
-## Steps
+## 5 Setup Steps
 
-<div class="steps"><div class="step"><strong>Open language-model settings</strong><p>Use the OpenAI provider, not a provider that requires an official account sign-in.</p></div><div class="step"><strong>Enter the key and address</strong><p>Use a key that belongs only to LobeChat.</p></div><div class="step"><strong>Add the model</strong><p>If the list does not load, add a custom model with the full ID from Model Square.</p></div><div class="step"><strong>Start a new session</strong><p>Send a short message and confirm it in <a href="{{CONSOLE_URL}}/usage-logs">Usage Logs</a>.</p></div></div>
+<div class="steps">
+  <div class="step"><strong>Step 1: Open AI Provider Settings</strong><p>Click your <strong>top-left avatar</strong> -> <strong>⚙️ Settings</strong> -> <strong>AI Provider</strong>.</p></div>
+  <div class="step"><strong>Step 2: Enable OpenAI (or Add Custom Provider)</strong><p>Select <strong><code>OpenAI</code></strong> and toggle its switch ON (or click <code>+ Add Custom Provider</code> at the bottom with format <code>OpenAI</code>).</p></div>
+  <div class="step"><strong>Step 3: Enter Key & Proxy URL</strong>
+    <div class="config-card">
+      <div><span>API Key</span>Your <code>sk-...</code> key</div>
+      <div><span>API Proxy URL</span><code>{{API_BASE_URL}}</code> (with <code>/v1</code>)</div>
+    </div>
+  </div>
+  <div class="step"><strong>Step 4: Add Model & Click Check</strong><p>Click <strong><code>+ Add Model</code></strong> to paste your exact Model ID, select that model in the <strong>Connectivity Check</strong> dropdown above, and click <strong><code>Check</code></strong>.</p></div>
+  <div class="step"><strong>Step 5: Start a New Session</strong><p>Return to chat, open a new session, and pick your custom model from the model badge above the input bar.</p></div>
+</div>
 
-LobeChat renames screens between versions. If you cannot find the labels above, use the form that is OpenAI plus a custom address. The three values stay the same.
+### Optional: Self-Hosted Docker Command
 
-## Common problems
+```bash
+docker run -d -p 3210:3210 \
+  -e OPENAI_API_KEY="sk-your-key" \
+  -e OPENAI_PROXY_URL="{{API_BASE_URL}}" \
+  -e ACCESS_CODE="your-passcode" \
+  lobehub/lobe-chat
+```
 
-| What you see | What to do |
+## Common Issues
+
+| Symptom | Fix |
 | --- | --- |
-| 401 | The key or the address is wrong. curl `/v1/models` first |
-| The model list is empty | Add the model ID by hand |
-| The request goes to `api.openai.com` | The custom address was not saved, or the session is still on an official model |
+| `Check` fails on default model | Select your newly added Model ID in the dropdown next to `Check` first |
+| `404` Not Found | Set API Proxy URL to `{{API_BASE_URL}}` |
+| Browser CORS / Network Error | Disable **Use Client-Side Fetching** in the provider settings |
 
 ## Related
 
+- [Cherry Studio](/guide/clients/cherry-studio/)
 - [Chatbox](/guide/clients/chatbox/)
 - [Troubleshooting](/troubleshooting/)

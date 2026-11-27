@@ -53,6 +53,7 @@ const headerNavSchema = z.object({
   console: z.boolean(),
   pricingEnabled: z.boolean(),
   pricingRequireAuth: z.boolean(),
+  agentJoin: z.boolean(),
   rankingsEnabled: z.boolean(),
   rankingsRequireAuth: z.boolean(),
   docs: z.boolean(),
@@ -81,6 +82,10 @@ const toFormValues = (config: HeaderNavModulesConfig): HeaderNavFormValues => ({
     config.pricing?.requireAuth === undefined
       ? HEADER_NAV_DEFAULT.pricing.requireAuth
       : Boolean(config.pricing.requireAuth),
+  agentJoin:
+    config.agentJoin === undefined
+      ? HEADER_NAV_DEFAULT.agentJoin
+      : Boolean(config.agentJoin),
   rankingsEnabled:
     config.rankings?.enabled === undefined
       ? HEADER_NAV_DEFAULT.rankings.enabled
@@ -119,6 +124,7 @@ export function HeaderNavigationSection({
       ...config,
       home: values.home,
       console: values.console,
+      agentJoin: values.agentJoin,
       docs: values.docs,
       about: values.about,
       pricing: {
@@ -162,6 +168,11 @@ export function HeaderNavigationSection({
       key: 'console',
       title: t('Console'),
       description: t('User dashboard and quota controls.'),
+    },
+    {
+      key: 'agentJoin',
+      title: t('Partner Program'),
+      description: t('Agency and enterprise gateway partnership page.'),
     },
     {
       key: 'docs',

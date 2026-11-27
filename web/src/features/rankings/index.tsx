@@ -32,14 +32,19 @@ import {
 import { useRankings } from './hooks/use-rankings'
 import type { RankingPeriod } from './types'
 
-const VALID_PERIODS: RankingPeriod[] = ['today', 'week', 'month', 'year']
+const VALID_PERIODS: ReadonlySet<RankingPeriod> = new Set([
+  'today',
+  'week',
+  'month',
+  'year',
+])
 
 export function Rankings() {
   const { t } = useTranslation()
   const search = useSearch({ from: '/rankings/' })
   const navigate = useNavigate()
 
-  const period: RankingPeriod = VALID_PERIODS.includes(
+  const period: RankingPeriod = VALID_PERIODS.has(
     search.period as RankingPeriod
   )
     ? (search.period as RankingPeriod)
@@ -55,6 +60,39 @@ export function Rankings() {
     })
   }
 
+  const renderContent = () => {
+    if (rankingsQuery.isLoading) {
+      return <RankingsLoading />
+    }
+    if (!snapshot) {
+      const errorMessage =
+        rankingsQuery.error instanceof Error
+          ? rankingsQuery.error.message
+          : t('Unable to load rankings data')
+      return <RankingsError message={errorMessage} />
+    }
+    return (
+      <>
+        <ModelsSection
+          history={snapshot.models_history}
+          rows={snapshot.models}
+          period={period}
+        />
+
+        <MarketShareSection
+          history={snapshot.vendor_share_history}
+          rows={snapshot.vendors}
+          period={period}
+        />
+
+        <PulseSection
+          movers={snapshot.top_movers}
+          droppers={snapshot.top_droppers}
+        />
+      </>
+    )
+  }
+
   return (
     <PublicLayout showMainContainer={false}>
       <div className='relative'>
@@ -63,9 +101,9 @@ export function Rankings() {
           className='pointer-events-none absolute inset-x-0 top-0 h-[600px] opacity-20 dark:opacity-[0.10]'
           style={{
             background: [
-              'radial-gradient(ellipse 60% 50% at 20% 20%, oklch(0.72 0.18 250 / 80%) 0%, transparent 70%)',
-              'radial-gradient(ellipse 50% 40% at 80% 15%, oklch(0.65 0.15 200 / 60%) 0%, transparent 70%)',
-              'radial-gradient(ellipse 40% 35% at 50% 70%, oklch(0.70 0.12 280 / 40%) 0%, transparent 70%)',
+              'radial-gradient(ellipse 60% 50% at 20% 20%, rgba(255, 107, 0, 0.24) 0%, transparent 70%)',
+              'radial-gradient(ellipse 50% 40% at 80% 15%, rgba(245, 158, 11, 0.20) 0%, transparent 70%)',
+              'radial-gradient(ellipse 40% 35% at 50% 70%, rgba(255, 133, 51, 0.14) 0%, transparent 70%)',
             ].join(', '),
             maskImage:
               'linear-gradient(to bottom, black 40%, transparent 100%)',
@@ -73,39 +111,10 @@ export function Rankings() {
               'linear-gradient(to bottom, black 40%, transparent 100%)',
           }}
         />
-        <PageTransition className='relative mx-auto w-full max-w-[1280px] space-y-8 px-3 pt-16 pb-10 sm:px-6 sm:pt-20 sm:pb-12 xl:px-8'>
+        <PageTransition className='relative mx-auto w-full max-w-[1280px] space-y-8 px-3 pt-24 pb-10 sm:px-6 sm:pt-28 sm:pb-12 xl:px-8'>
           <RankingsHero period={period} onPeriodChange={handlePeriodChange} />
 
-          {rankingsQuery.isLoading ? (
-            <RankingsLoading />
-          ) : !snapshot ? (
-            <RankingsError
-              message={
-                rankingsQuery.error instanceof Error
-                  ? rankingsQuery.error.message
-                  : t('Unable to load rankings data')
-              }
-            />
-          ) : (
-            <>
-              <ModelsSection
-                history={snapshot.models_history}
-                rows={snapshot.models}
-                period={period}
-              />
-
-              <MarketShareSection
-                history={snapshot.vendor_share_history}
-                rows={snapshot.vendors}
-                period={period}
-              />
-
-              <PulseSection
-                movers={snapshot.top_movers}
-                droppers={snapshot.top_droppers}
-              />
-            </>
-          )}
+          {renderContent()}
         </PageTransition>
       </div>
     </PublicLayout>

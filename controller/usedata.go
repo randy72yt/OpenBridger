@@ -6,6 +6,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -128,4 +129,25 @@ func GetUserFlowQuotaDates(c *gin.Context) {
 		"data":    dates,
 	})
 	return
+}
+
+func GetAdminBusinessDashboard(c *gin.Context) {
+	startTimestamp, endTimestamp, ok := parseFlowQuotaTimeRange(c)
+	if !ok {
+		return
+	}
+	if endTimestamp-startTimestamp > service.MaxBusinessDashboardRangeSeconds {
+		common.ApiErrorMsg(c, "time range cannot exceed 366 days")
+		return
+	}
+	data, err := service.GetAdminBusinessDashboard(startTimestamp, endTimestamp)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    data,
+	})
 }

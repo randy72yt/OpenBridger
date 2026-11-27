@@ -1,54 +1,48 @@
-# OpenBridger 是一个 API 网关
+# OpenBridger 使用文档
 
-OpenBridger 把多家模型服务放到同一套账号、API Key 和额度下面。你用自己的密钥调用网关，网关再把请求转发到当前可用的上游线路，并按控制台展示的价格记一笔消耗。
+一个账号、一把 API Key，统一调用 **GPT-6.2 / Codex、Claude 5.5、Gemini 4、DeepSeek** 等主流模型。按实际用量以人民币（¥）结算，无需分别绑卡或维护多家官方账号。
 
-它是给开发者和日常调用准备的 API 工具：注册、充值、发密钥、看日志。模型是否在售、某次请求走哪条线路，以控制台当时的数据为准，不在本文事先列清单。
+<div class="actions"><a class="btn primary" href="/guide/quickstart/">3 分钟快速开始</a><a class="btn secondary" href="{{CONSOLE_URL}}">打开控制台</a></div>
 
-<div class="actions"><a class="btn primary" href="/guide/quickstart/">从第一次调用开始</a><a class="btn secondary" href="{{CONSOLE_URL}}">进入控制台</a></div>
+## 按你的使用场景直达教程
 
-<div class="grid"><div class="card"><h3>一个入口</h3><p>OpenAI 兼容调用使用同一 Base URL 和 <code>Authorization: Bearer</code>。Anthropic 兼容调用走同一站点上的 <code>/v1/messages</code>。</p></div><div class="card"><h3>按次计费</h3><p>调用前会预扣额度，结束后按实际用量结算差额。价格看模型广场，不在文档里写死单价。</p></div><div class="card"><h3>按密钥记账</h3><p>给每个工具单独建 API Key，再到使用日志里按密钥核对模型、状态和消耗。</p></div></div>
+<div class="grid">
+  <div class="card"><h3>💻 AI 编程与命令行</h3><p><a href="/guide/clients/cc-switch/">CC Switch 一键配置</a> · <a href="/guide/clients/codex-cli/">Codex 桌面版/插件/CLI</a> · <a href="/guide/clients/claude-code/">Claude Code</a> · <a href="/guide/clients/cursor/">Cursor</a> · <a href="/guide/clients/cline/">Cline / Roo Code</a></p></div>
+  <div class="card"><h3>📚 论文阅读与双语翻译</h3><p><a href="/guide/clients/immersive-translate/">沉浸式翻译（PDF / 网页双语）</a> · <a href="/guide/clients/zotero/">Zotero 文献精读</a> · <a href="/guide/clients/cherry-studio/">Cherry Studio 本地知识库</a></p></div>
+  <div class="card"><h3>💬 日常跨端聊天与共享</h3><p><a href="{{CONSOLE_URL}}/playground">网页版 GPT 对话（免配置）</a> · <a href="/guide/clients/chatbox/">Chatbox（电脑/手机）</a> · <a href="/guide/clients/lobechat/">LobeChat</a> · <a href="/guide/clients/open-webui/">Open WebUI（课题组面板）</a></p></div>
+  <div class="card"><h3>🔌 代码接入与自动化工作流</h3><p><a href="/api/openai-chat/">OpenAI 对话接口</a> · <a href="/api/openai-responses/">Responses 接口</a> · <a href="/api/anthropic-messages/">Anthropic 原生接口</a> · <a href="/guide/clients/dify-workflows/">Dify / n8n / Coze</a></p></div>
+</div>
 
-## 你要记住的三个值
+## 最常填的三个核心参数
 
-<div class="config-card"><div><span>控制台</span><code>{{CONSOLE_URL}}</code></div><div><span>OpenAI 兼容 Base URL</span><code>{{API_BASE_URL}}</code></div><div><span>API Key</span><code>sk-</code> 开头，在「API 密钥」里创建</div></div>
+绝大多数软件只需要填这三项（不同软件的地址格式差异见 [Base URL 填写速查](/guide/base-urls/)）：
 
-文档里的示例统一用 `{{API_BASE_URL}}`。Anthropic 客户端会自己在主机名后面加 `/v1/messages`，那种情况只填 `{{CONSOLE_URL}}`，不要再加 `/v1`。详见 [Claude Code](/guide/clients/claude-code/)。
+<div class="config-card">
+  <div><span>OpenAI 兼容 Base URL</span><code>{{API_BASE_URL}}</code>（Claude Code 填 <code>{{CONSOLE_URL}}</code>，不带 <code>/v1</code>）</div>
+  <div><span>API Key（密钥）</span><code>sk-...</code>（在控制台 <a href="{{CONSOLE_URL}}/keys">API 密钥</a> 创建）</div>
+  <div><span>Model（模型 ID）</span>在 <a href="{{CONSOLE_URL}}/pricing">模型广场</a> 点击复制完整英文 ID</div>
+</div>
 
-## 网关实际提供的调用面
+## 控制台常用入口
 
-下面这些路径在网关代码里有对应处理。某个模型能不能用其中一条，还要看模型广场和当前分组有没有可用线路。
+| 功能 | 入口地址 | 用途 |
+| --- | --- | --- |
+| **GPT 对话** | [{{CONSOLE_URL}}/playground]({{CONSOLE_URL}}/playground) | 网页端直接选模型对话，无需配置客户端 |
+| **模型广场** | [{{CONSOLE_URL}}/pricing]({{CONSOLE_URL}}/pricing) | 查看在售模型、支持协议与实时单价，一键复制模型 ID |
+| **API 密钥** | [{{CONSOLE_URL}}/keys]({{CONSOLE_URL}}/keys) | 为不同软件创建独立 `sk-...` 密钥、设置额度上限 |
+| **钱包 / 订阅** | [{{CONSOLE_URL}}/wallet]({{CONSOLE_URL}}/wallet) | 支付宝 / 微信充值、兑换码充值、购买订阅套餐 |
+| **使用日志** | [{{CONSOLE_URL}}/usage-logs]({{CONSOLE_URL}}/usage-logs) | 逐笔查看调用时间、模型、Token 数与扣费明细 |
 
-| 用途 | 方法与路径 |
-| --- | --- |
-| 列出当前密钥可见的模型 | `GET /v1/models` |
-| 对话 | `POST /v1/chat/completions` |
-| 文本补全 | `POST /v1/completions` |
-| Responses（Codex 使用） | `POST /v1/responses` |
-| Anthropic Messages | `POST /v1/messages` |
-| Embeddings | `POST /v1/embeddings` |
-| 图像生成 / 编辑 | `POST /v1/images/generations`、`POST /v1/images/edits` |
-| 语音转写、翻译、合成 | `POST /v1/audio/transcriptions`、`/v1/audio/translations`、`/v1/audio/speech` |
-| Rerank、审核 | `POST /v1/rerank`、`POST /v1/moderations` |
-| Gemini 原生路径 | `POST /v1beta/models/...` |
-| 实时语音 | `GET /v1/realtime`（WebSocket） |
+## 开发者接口一览
 
-`POST /v1/images/variations`、`/v1/files` 和 `/v1/fine-tunes` 会返回 `501`，`code` 为 `api_not_implemented`。`/v1/messages/count_tokens` 当前没有开放。视频和异步任务走 `/v1/videos`、`/v1/tasks`，只有对应能力已启用时才会成功。
+| 协议 / 能力 | 请求路径 | 参考文档 |
+| --- | --- | --- |
+| 模型列表 | `GET /v1/models` | [Chat Completions](/api/openai-chat/) |
+| OpenAI 对话与识图 | `POST /v1/chat/completions` | [Chat Completions](/api/openai-chat/) |
+| OpenAI Responses（Codex） | `POST /v1/responses` | [Responses 接口](/api/openai-responses/) |
+| Anthropic Messages（Claude Code） | `POST /v1/messages` | [Anthropic 原生接口](/api/anthropic-messages/) |
+| Google Gemini 原生协议 | `POST /v1beta/models/{model}:generateContent` | [Gemini 原生接口](/api/gemini-native/) |
+| 图像 / 视频 / 语音 / 实时语音 | `/v1/images/*`、`/v1/videos`、`/v1/audio/*`、`/v1/realtime` | [图像、视频与语音](/api/multimodal-media/) |
+| 向量化与重排序（RAG） | `POST /v1/embeddings`、`POST /v1/rerank` | [向量与 Rerank](/api/embeddings-rerank/) |
 
-## 控制台入口
-
-| 要做的事 | 地址 |
-| --- | --- |
-| 模型广场 | [{{CONSOLE_URL}}/pricing]({{CONSOLE_URL}}/pricing) |
-| API 密钥 | [{{CONSOLE_URL}}/keys]({{CONSOLE_URL}}/keys) |
-| 钱包 | [{{CONSOLE_URL}}/wallet]({{CONSOLE_URL}}/wallet) |
-| AI 体验台 | [{{CONSOLE_URL}}/playground]({{CONSOLE_URL}}/playground) |
-| 使用日志 | [{{CONSOLE_URL}}/usage-logs]({{CONSOLE_URL}}/usage-logs) |
-| 用户协议 | [{{CONSOLE_URL}}/user-agreement]({{CONSOLE_URL}}/user-agreement) |
-
-<div class="callout warning"><strong>服务范围以用户协议为准</strong><p>主站公布的用户协议写明：本平台仅面向非中国大陆地区用户。访问和使用须符合你所在地法律、上游服务条款和平台规则。协议全文见 <a href="/legal/terms/">用户协议</a>。</p></div>
-
-## 相关
-
-- [快速开始](/guide/quickstart/)
-- [额度与计费](/guide/billing/)
-- [错误码](/guide/errors/)
+<div class="callout warning"><strong>合规提示</strong><p>本平台仅面向非中国大陆地区用户提供服务，访问与使用须符合你所在地法律法规及 <a href="/legal/terms/">用户协议</a>。</p></div>

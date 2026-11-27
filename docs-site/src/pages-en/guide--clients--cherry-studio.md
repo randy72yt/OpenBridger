@@ -1,26 +1,40 @@
-# Use OpenBridger in Cherry Studio
+# Cherry Studio Setup Guide
 
-Cherry Studio can add an OpenAI custom provider. In current builds the entry is under model services or the provider list. If you cannot find a custom OpenAI provider, follow that version's settings page. Do not change system network settings to force this URL.
+Add OpenBridger as a custom OpenAI provider in Cherry Studio for chat, vision, reasoning, and local PDF knowledge bases (RAG).
 
-## Values
+## Before You Begin
 
-<div class="config-card"><div><span>Provider name</span><code>OpenBridger</code></div><div><span>Type</span><code>OpenAI</code></div><div><span>API address</span><code>{{API_BASE_URL}}</code></div><div><span>API key</span><code>a dedicated sk- key</code></div><div><span>Model ID</span><code>full name from Model Square</code></div></div>
+1. Create a key named `cherry-studio` in [API Keys]({{CONSOLE_URL}}/keys) and copy `sk-...`.
+2. Copy exact Model IDs from [Models & Pricing]({{CONSOLE_URL}}/pricing) (e.g., `gpt-6.2-astra`, `claude-sonnet-5-5`, `gemini-4-neon`).
 
-<div class="steps"><div class="step"><strong>Add a provider</strong><p>Type OpenAI, name OpenBridger.</p></div><div class="step"><strong>Enter the address and key</strong><p>Do not append <code>/v1</code> or <code>/chat/completions</code>. <code>{{API_BASE_URL}}</code> already includes <code>/v1</code>.</p></div><div class="step"><strong>Add models</strong><p>If the automatic list is empty, add the full ID from <a href="{{CONSOLE_URL}}/pricing">Model Square</a> by hand.</p></div><div class="step"><strong>Send a short message and check the log</strong><p>Select this provider, send one short message, and find the key in <a href="{{CONSOLE_URL}}/usage-logs">Usage Logs</a>.</p></div></div>
+## 5 Setup Steps
 
-You do not sign out of other providers in Cherry Studio. Each chat uses the provider you selected.
+<div class="steps">
+  <div class="step"><strong>Step 1: Open Model Provider</strong><p>Click <strong>⚙️ Settings</strong> (bottom-left) -> <strong>Model Provider</strong>.</p></div>
+  <div class="step"><strong>Step 2: Add Provider & Switch It ON</strong><p>Scroll to the bottom and click <strong><code>+ Add</code></strong>, name it <code>OpenBridger</code>, pick type <strong><code>OpenAI</code></strong>, and toggle the top-right provider switch <strong>ON</strong>.</p></div>
+  <div class="step"><strong>Step 3: Enter Key & Host (Check Gray Preview!)</strong>
+    <div class="config-card">
+      <div><span>API Key</span>Your <code>sk-...</code> key</div>
+      <div><span>API Host</span>Enter <code>{{API_BASE_URL}}</code> or <code>{{CONSOLE_URL}}</code> so the gray preview below reads <code>{{API_BASE_URL}}/chat/completions</code></div>
+    </div>
+  </div>
+  <div class="step"><strong>Step 4: Add Models & Click Check</strong><p>Under Models, click <strong><code>+ Add</code></strong>, paste the exact Model ID (enable <strong>Vision</strong> / <strong>Reasoning</strong> / <strong>Tools</strong> badges if supported), then click <strong><code>Check</code></strong> next to API Key.</p></div>
+  <div class="step"><strong>Step 5: Select Model in Chat</strong><p>Click 💬 at the top-left, open the top model dropdown, and pick your model under <code>OpenBridger</code>.</p></div>
+</div>
 
-## Common problems
+> **Local PDF RAG**: Add `text-embedding-3-small` (with the **Embedding** badge checked) under `OpenBridger`, then select it when creating a Knowledge Base (see [Embeddings & Rerank](/api/embeddings-rerank/)).
 
-| What you see | What to do |
+## Common Issues
+
+| Symptom | Fix |
 | --- | --- |
-| The key check fails | Compare with curl against <code>{{API_BASE_URL}}/models</code>. If curl works, the address has an extra path |
-| The model list is empty | Add the model ID by hand |
-| 503 or model not found | Check case and the version suffix |
-| No streaming | Check the client's stream toggle, then try the same model without streaming |
+| `Check` fails with `404` | Remove duplicate `/v1` so the gray preview line shows `{{API_BASE_URL}}/chat/completions` |
+| `OpenBridger` missing from chat dropdown | Turn ON the top-right provider switch and add at least one model |
+| No image upload icon | Click ⚙️ next to the model and check **Vision** |
+| `503` No available channel | Re-copy the exact Model ID from [Models & Pricing]({{CONSOLE_URL}}/pricing) |
 
 ## Related
 
 - [Chatbox](/guide/clients/chatbox/)
-- [LobeChat](/guide/clients/lobechat/)
+- [Embeddings & Rerank](/api/embeddings-rerank/)
 - [Error codes](/guide/errors/)

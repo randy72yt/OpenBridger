@@ -90,11 +90,13 @@ export function createUserMessage(
  * Create a loading assistant message
  */
 export function createLoadingAssistantMessage(
-  startedAt: number = Date.now()
+  startedAt: number = Date.now(),
+  model?: string
 ): Message {
   return {
     key: nanoid(),
     from: MESSAGE_ROLES.ASSISTANT,
+    model,
     versions: [createMessageVersion('')],
     createdAt: startedAt,
     startedAt,
