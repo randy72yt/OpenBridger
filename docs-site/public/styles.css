@@ -465,6 +465,13 @@ blockquote p,
   margin: 4px 0;
 }
 
+.step .config-card {
+  margin-top: 10px;
+  padding: 10px 16px;
+  background: var(--bg);
+  box-shadow: none;
+}
+
 .cards {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }

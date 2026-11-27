@@ -1,75 +1,44 @@
-# OpenAI Codex Setup Guide (Desktop App, VS Code Extension & CLI)
+# Codex Setup Guide (Desktop App, VS Code & CLI)
 
-OpenAI Codex comes in three forms: the **Codex Desktop App (macOS / Windows)**, the **VS Code / Cursor Codex Extension**, and the **terminal `codex` CLI**.
+The **Codex Desktop App**, **VS Code extension**, and **`codex` CLI** all read from the same local `.codex` folder — configure it once and all three work together.
 
-All three share the **exact same local `.codex` configuration folder**. Once you configure it, the Desktop App, VS Code extension, and CLI all connect to OpenBridger automatically. Choose **Method 1 (CC Switch GUI — easiest for beginners)** or **Method 2 (Manual 5-Step Config Files)**.
+## Before You Begin
 
----
-
-## Before you start (2 quick checks)
-
-1. Open [API Keys]({{CONSOLE_URL}}/keys), create a key named `codex` under a group that supports the Responses protocol (such as `default` or `codex`), and copy the `sk-...` key.
-2. Open [Model Square]({{CONSOLE_URL}}/pricing) and copy the exact model ID you want to use (for example `gpt-6.2-astra` or `gpt-6.2-sol`).
+1. Create a key named `codex` in [API Keys]({{CONSOLE_URL}}/keys) (pick a Responses-capable group such as `default` or `codex`) and copy `sk-...`.
+2. Copy an exact Model ID from [Models & Pricing]({{CONSOLE_URL}}/pricing) (e.g., `gpt-6.2-astra` or `gpt-6.2-sol`).
 
 ---
 
-## Method 1: 1-Minute GUI Setup with CC Switch (Recommended)
+## Method 1: 1-Click GUI via CC Switch (Recommended)
 
-1. Install and launch **CC Switch** (full walkthrough on [CC Switch (1-Click GUI)](/guide/clients/cc-switch/)).
-2. Select the **`Codex`** tab -> click **`+` (Add Provider)** -> choose **Custom**.
-3. Fill in:
-   - **Name**: `OpenBridger`
-   - **Base URL**: `{{API_BASE_URL}}` (includes `/v1`)
-   - **API Key**: paste your `sk-...` key
-   - **Wire API**: `responses`
-   - **Model**: `gpt-6.2-astra` (or any Responses-capable model ID from Model Square)
-4. Click **Save**, then click **Enable** on the `OpenBridger` card.
-5. **Quit and relaunch the Codex Desktop App** (or reload VS Code) and start a new thread!
+1. Open **CC Switch** (see [CC Switch Guide](/guide/clients/cc-switch/)).
+2. Click **`Codex`** -> click **`+`** -> choose **Custom**.
+3. Enter `Base URL` = `{{API_BASE_URL}}`, `API Key` = `sk-...`, `Wire API` = `responses`, `Model` = `gpt-6.2-astra`.
+4. Click **Save** -> click **Enable** -> fully quit and relaunch Codex Desktop (or reload VS Code).
 
 ---
 
-## Method 2: Manual 5-Step Setup (`auth.json` + `config.toml`)
+## Method 2: Manual `.codex` Config Files
 
-<div class="callout warning"><strong>Why use <code>auth.json</code> for the Desktop App?</strong><p>Launching the <strong>Codex Desktop App</strong> from macOS Dock/Spotlight or the Windows Start Menu does not load shell variables from <code>~/.zshrc</code>. Placing your key in <code>~/.codex/auth.json</code> works reliably across the Desktop App, VS Code extension, and CLI simultaneously.</p></div>
+<div class="callout warning"><strong>Desktop App note</strong><p>Launching the GUI Desktop App does not load shell exports from <code>~/.zshrc</code>. Saving your key in <code>auth.json</code> alongside <code>config.toml</code> works across Desktop, VS Code, and CLI.</p></div>
 
 <div class="steps">
-  <div class="step">
-    <strong>Step 1: Install Codex (any or all of the three)</strong>
-    <p><strong>• Desktop App</strong>: Install the OpenAI Codex app for macOS or Windows (if it prompts you to sign in with ChatGPT on first launch, simply close the app first).<br>
-    <strong>• VS Code Extension</strong>: Search for <code>OpenAI Codex</code> (<code>openai.chatgpt</code>) in the VS Code Extensions Marketplace and click Install.<br>
-    <strong>• CLI</strong>: With Node.js 22+ installed, run <code>npm install -g @openai/codex</code>.</p>
-  </div>
-  <div class="step">
-    <strong>Step 2: Open your <code>.codex</code> folder</strong>
-    <p><strong>• macOS</strong>: Open <strong>Finder</strong>, press <code>Cmd + Shift + G</code>, type <code>~/.codex</code>, and press Enter. If it does not exist yet, go to <code>~/</code>, press <code>Cmd + Shift + .</code> to show hidden folders, create a folder named <code>.codex</code>, and open it.<br>
-    <strong>• Windows</strong>: Open <strong>File Explorer</strong>, click the address bar, type <code>%USERPROFILE%</code> and press Enter (e.g. <code>C:\Users\YourName</code>). Create a folder named <code>.codex</code> and open it.</p>
-  </div>
-  <div class="step">
-    <strong>Step 3: Create <code>auth.json</code></strong>
-    <p>Inside <code>.codex</code>, create a plain-text file named <strong><code>auth.json</code></strong> (on Windows, check <strong>View -> File name extensions</strong> to make sure it is not saved as <code>auth.json.txt</code>) and paste the JSON snippet below with your key.</p>
-  </div>
-  <div class="step">
-    <strong>Step 4: Create <code>config.toml</code></strong>
-    <p>In the same <code>.codex</code> folder, create a file named <strong><code>config.toml</code></strong> (not <code>config.toml.txt</code>) and paste the TOML configuration below.</p>
-  </div>
-  <div class="step">
-    <strong>Step 5: Restart Codex & verify in Usage Logs</strong>
-    <p><strong>• Desktop App</strong>: Fully quit Codex (<code>Cmd + Q</code> on macOS, or right-click tray icon -> Quit on Windows), reopen it, and start a new thread.<br>
-    <strong>• VS Code Extension</strong>: Press <code>Cmd/Ctrl + Shift + P</code>, run <code>Developer: Reload Window</code>, and open a new Codex chat.<br>
-    <strong>• CLI</strong>: Run <code>codex</code> inside your project directory.<br>
-    Send a test prompt and confirm the call appears under [Usage Logs]({{CONSOLE_URL}}/usage-logs).</p>
-  </div>
+  <div class="step"><strong>Step 1: Install Codex</strong><p>• <strong>Desktop App</strong>: Install the official Codex app (close the initial ChatGPT login prompt without signing in).<br>• <strong>VS Code Extension</strong>: Install <code>OpenAI Codex</code> (<code>openai.chatgpt</code>).<br>• <strong>CLI</strong>: Requires Node.js 22+; run <code>npm install -g @openai/codex</code>.</p></div>
+  <div class="step"><strong>Step 2: Open Your <code>.codex</code> Folder</strong><p>• <strong>macOS</strong>: In Finder, press <code>Cmd + Shift + G</code>, enter <code>~/</code>, press <code>Cmd + Shift + .</code> to show hidden files, and create/open <code>.codex</code>.<br>• <strong>Windows</strong>: In File Explorer, enter <code>%USERPROFILE%</code> in the address bar, check <strong>File name extensions</strong> under View, and create/open <code>.codex</code>.</p></div>
+  <div class="step"><strong>Step 3: Create <code>auth.json</code></strong><p>Inside <code>.codex</code>, create <strong><code>auth.json</code></strong> (not <code>.json.txt</code>) with the JSON below.</p></div>
+  <div class="step"><strong>Step 4: Create <code>config.toml</code></strong><p>Inside <code>.codex</code>, create <strong><code>config.toml</code></strong> with the TOML config below.</p></div>
+  <div class="step"><strong>Step 5: Restart & Verify</strong><p>Quit and relaunch Codex Desktop (<code>Cmd + Q</code> / tray exit), run <code>Developer: Reload Window</code> in VS Code, or run <code>codex</code> in terminal. Start a new thread and check <a href="{{CONSOLE_URL}}/usage-logs">Usage Logs</a>.</p></div>
 </div>
 
-### Step 3 file: `auth.json`
+### `auth.json`
 
 ```json
 {
-  "OPENAI_API_KEY": "sk-paste-your-openbridger-key-here"
+  "OPENAI_API_KEY": "sk-replace-with-your-key"
 }
 ```
 
-### Step 4 file: `config.toml`
+### `config.toml`
 
 ```toml
 model_provider = "openbridger"
@@ -84,21 +53,15 @@ base_url = "{{API_BASE_URL}}"
 wire_api = "responses"
 ```
 
-- `model`: exact model ID from [Model Square]({{CONSOLE_URL}}/pricing).
-- `model_reasoning_effort`: `"low"`, `"medium"`, or `"high"`.
-- `wire_api`: **must remain `"responses"`**.
-- Keep `~/.codex/auth.json` private and never commit it to Git.
+> Set `model_reasoning_effort` to `"medium"` for faster everyday edits or `"high"` for complex debugging. Never commit `auth.json` to Git.
 
----
+## Common Issues
 
-## Troubleshooting
-
-| Symptom | Cause | Fix |
-| --- | --- | --- |
-| Desktop App still shows the ChatGPT sign-in screen | Missing `preferred_auth_method = "apikey"` or file accidentally named `config.toml.txt` | Show file extensions, verify exact filenames in `~/.codex/`, and fully quit & relaunch the app |
-| Custom model does not appear in UI dropdown after an update | UI dropdown only lists built-in presets, while `config.toml` still controls the active model | Edit `model = "..."` in `config.toml` (or CC Switch), restart Codex, and start a **New Thread** |
-| `401` invalid token | Extra whitespace in `auth.json` or exhausted key quota | Re-copy the `sk-...` key without `Bearer ` |
-| `503` `model_not_found` | Key group does not expose Responses for that model, or typo in model ID | Copy the exact model ID from [Model Square]({{CONSOLE_URL}}/pricing) |
+| Symptom | Fix |
+| --- | --- |
+| Desktop App still opens browser login | Verify `preferred_auth_method = "apikey"` in `config.toml`, confirm no `.txt` extension, and quit/relaunch |
+| Custom model isn't in the UI picker after an app update | Edit `model` in `config.toml` (or CC Switch), restart, and open a **New Thread** instead of picking bundled UI presets |
+| `401` / `503` | `401`: re-copy `sk-...`; `503`: verify exact Model ID and key group in [Models & Pricing]({{CONSOLE_URL}}/pricing) |
 
 ## Related
 

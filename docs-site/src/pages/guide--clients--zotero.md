@@ -1,39 +1,35 @@
-# Zotero（论文阅读与文献问答）
+# Zotero 配置教程（论文划词与 PDF 文献问答）
 
-Zotero 搭配 AI 插件（如 **Awesome GPT / Zotero GPT**）可以在阅读 PDF 论文时直接划词解释公式、提炼研究方法、对比多篇文献创新点。该类插件走标准 OpenAI 兼容接口，填入网关地址即可使用。
+在 Zotero 中配合 **Awesome GPT（`zotero-gpt`）** 插件，可在读 PDF 论文时直接划词翻译、解释数学公式、提炼全文创新点。
 
-## 开始之前
+## 开始前准备
 
-- 已安装 Zotero 7（或 Zotero 6）及 Awesome GPT（`zotero-gpt`）插件。
-- 在 [API 密钥]({{CONSOLE_URL}}/keys) 新建一把名为 `zotero` 的密钥。
-- 在 [模型广场]({{CONSOLE_URL}}/pricing) 复制一个长上下文对话模型 ID（如 `gpt-6.2-sol`、`claude-sonnet-5-5`、`gemini-4-neon`）；若开启本地 PDF 向量检索，再准备一个向量模型 ID（如 `text-embedding-3-small`）。
+1. 在 [API 密钥]({{CONSOLE_URL}}/keys) 创建名为 `zotero` 的密钥，复制 `sk-...`。
+2. 在 [模型广场]({{CONSOLE_URL}}/pricing) 复制长上下文对话模型 ID（如 `gemini-4-neon`、`claude-sonnet-5-5`、`gpt-6.2-sol`）；若要用「整篇 PDF 检索问答」，再记一个向量模型 `text-embedding-3-small`。
 
-## 配置步骤
+## 配置 4 步
 
-1. 打开 Zotero 顶部菜单「编辑（Edit）-> 设置（Settings）」（macOS 为 `Zotero -> Settings`），切到 **GPT** 标签页。
-2. 按插件界面字段填入以下配置：
-
-<div class="config-card">
-  <div><span>API（接口地址）</span><code>{{CONSOLE_URL}}</code> 或 <code>{{API_BASE_URL}}</code>（见下方说明）</div>
-  <div><span>Secret Key</span><code>sk-你的密钥</code></div>
-  <div><span>Model（对话模型）</span><code>从模型广场复制的模型 ID</code></div>
-  <div><span>Embedding Model（可选）</span><code>text-embedding-3-small</code>（需分组内已开放该向量模型）</div>
+<div class="steps">
+  <div class="step"><strong>第 1 步：安装 Awesome GPT 插件（已装可跳过）</strong><p>从 GitHub <code>MuiseDestiny/zotero-gpt</code> 的 Releases 下载最新 <code>.xpi</code> 文件 -> 打开 Zotero 顶部菜单 <strong>「工具（Tools）-> 插件（Plugins）」</strong> -> 点右上角 ⚙️ 小齿轮选 <strong><code>Install Plugin From File...</code></strong> 选刚下载的 <code>.xpi</code> 安装。</p></div>
+  <div class="step"><strong>第 2 步：打开 Zotero 的 GPT 设置页</strong><p>Windows 点顶部菜单 <strong>「编辑（Edit）-> 设置（Settings）」</strong>（macOS 点左上角 <strong><code>Zotero -> Settings</code></strong>），在左侧切到 <strong><code>GPT</code></strong> 标签页。</p></div>
+  <div class="step"><strong>第 3 步：填写接口地址、密钥与模型</strong>
+    <div class="config-card">
+      <div><span>API（接口地址）</span>先填 <code>{{CONSOLE_URL}}</code>（若测试报 <code>404</code> 则改为 <code>{{API_BASE_URL}}</code>）</div>
+      <div><span>Secret Key</span>粘贴 <code>sk-...</code> 完整密钥</div>
+      <div><span>Model（对话模型）</span>粘贴模型广场完整 ID（如 <code>gpt-6.2-sol</code> 或 <code>gemini-4-neon</code>）</div>
+      <div><span>Embedding Model（全文问答用）</span><code>text-embedding-3-small</code></div>
+    </div>
+  </div>
+  <div class="step"><strong>第 4 步：打开论文实测</strong><p>双击打开任意一篇 PDF 论文，选中一段英文摘要唤出 GPT 悬浮条点翻译（或按快捷键打开 GPT 窗口输入 <code>hi</code>），能正常流式输出即配置完成。</p></div>
 </div>
-
-<div class="callout"><strong>关于 API 地址是否带 /v1</strong><p>主流版本的 <code>zotero-gpt</code> 会在你填的 <code>API</code> 后面自动拼接 <code>/v1/chat/completions</code>，此时应填站点根地址 <code>{{CONSOLE_URL}}</code>；如果所用衍生插件明确提示填写 OpenAI Base URL，则填 <code>{{API_BASE_URL}}</code>。填完点测试或在论文页面发一句 <code>hi</code>，到 <a href="{{CONSOLE_URL}}/usage-logs">使用日志</a> 看到记录即配置成功。</p></div>
-
-## 推荐科研模型搭配
-
-- **全文精读与长文献综述**：优先选支持超长上下文的模型（如 `gemini-4-neon`、`claude-sonnet-5-5`、`gpt-6.2-astra`）。
-- **日常划词翻译与术语解释**：选择轻量快速模型（如 `gpt-6.2-sol`、`deepseek-v4.1-flash`），响应更快、单次消耗更省。
 
 ## 常见问题
 
-| 现象 | 处理 |
+| 现象 | 解决方法 |
 | --- | --- |
-| 报错 `404` | 切换 `{{CONSOLE_URL}}` 与 `{{API_BASE_URL}}` 两种写法，避免出现 `/v1/v1/` |
-| 划词正常但点击「PDF 全文问答」报错 | 全文检索依赖 Embedding 模型，检查插件里的 Embedding 模型名称是否在 [模型广场]({{CONSOLE_URL}}/pricing) 可用 |
-| `403` 用户额度不足 | 长论文一次会发送数万 Token，预扣额度较高，检查 [钱包]({{CONSOLE_URL}}/wallet) 余额 |
+| 报 `404` | 不同版本插件自动补 `/v1` 规则不同，把 `API` 一栏在 `{{CONSOLE_URL}}` 和 `{{API_BASE_URL}}` 之间换一下即可 |
+| 划词正常，但点 `Meet Paper / 全文问答` 报错 | 检查 `Embedding Model` 是否填了当前密钥分组可用的向量模型（如 `text-embedding-3-small`） |
+| 报 `403 用户额度不足` | 整篇论文一次发送数万 Token 预扣较高，去 [钱包]({{CONSOLE_URL}}/wallet) 检查余额 |
 
 ## 相关
 

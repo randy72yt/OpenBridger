@@ -1,48 +1,36 @@
-# Create and manage an API key
+# Create and Manage API Keys
 
-An API key is the credential a program or client uses. The console page is API Keys: [{{CONSOLE_URL}}/keys]({{CONSOLE_URL}}/keys).
+API keys authenticate your apps and SDKs. Manage them in [API Keys]({{CONSOLE_URL}}/keys). Creating **one dedicated key per tool** (e.g., `codex`, `cherry`, `zotero`) makes usage tracking and key rotation effortless.
 
-## Before you start
+## Create a Key in 3 Steps
 
-- You are signed in.
-- You know which tool this key is for. One tool, one key, so you can disable it and read its logs on their own.
+<div class="steps">
+  <div class="step">
+    <strong>Step 1: Click Create Key</strong>
+    <p>Open <a href="{{CONSOLE_URL}}/keys">{{CONSOLE_URL}}/keys</a> and click the button to create a new key.</p>
+  </div>
+  <div class="step">
+    <strong>Step 2: Name It & Pick a Group</strong>
+    <p>• <strong>Name</strong>: name it after the client (e.g., <code>cursor</code>, <code>claude-code</code>).<br>
+    • <strong>Group</strong>: keep your default group, pick a specific route group, or choose <code>auto</code>.<br>
+    • <strong>Quota / Expiry</strong>: keep unlimited / never expire for personal tools; set a spending cap when sharing a key (such as a lab Open WebUI server).</p>
+  </div>
+  <div class="step">
+    <strong>Step 3: Copy Your <code>sk-...</code> Key</strong>
+    <p>Click Copy next to your new key. The copied token already starts with <code>sk-</code> — paste it directly into client API Key fields without adding a second <code>sk-</code> or <code>Bearer </code> prefix.</p>
+  </div>
+</div>
 
-## Create one
-
-<div class="steps"><div class="step"><strong>Open API Keys</strong><p>Go to <a href="{{CONSOLE_URL}}/keys">{{CONSOLE_URL}}/keys</a> and create a key.</p></div><div class="step"><strong>Name it</strong><p>The name is at most 50 characters. Use the tool or project, for example <code>cursor</code>, <code>claude-code</code>, or <code>server-prod</code>.</p></div><div class="step"><strong>Limit it if you need to</strong><p>The form can set the group, model list, key credit, expiry, and IP allowlist. If you are unsure, keep the defaults, send a short request, then tighten them.</p></div><div class="step"><strong>Copy the full key</strong><p>The value shown in the console starts with <code>sk-</code>. Send <code>Authorization: Bearer sk-...</code>. The gateway strips that prefix before it looks the key up, so do not add <code>sk-</code> a second time.</p></div></div>
-
-<div class="callout"><strong>Screenshot to add</strong><p>The create-key drawer: name, group, credit, expiry, model limit, and IP allowlist. Replace this note with the current UI.</p></div>
-
-There is a maximum number of keys. The error text includes the current limit when you hit it.
-
-While you are signed in you can reveal a key again. That does not make it safe to put in a repository, a frontend bundle, a screenshot, or a support ticket.
-
-## What each field does
+## Optional Key Restrictions
 
 | Setting | Behavior |
 | --- | --- |
-| Unlimited credit / remaining credit | With unlimited turned off, the key has its own balance. When that balance is used up, calls return `401` and an invalid-token message, even if the wallet still has credit. |
-| Expiry | An expired key also returns `401`. `-1` means it does not expire. |
-| Model limit | When enabled, the key can call only the listed model IDs. |
-| Group | Empty uses the account group. A filled group must be one you can use and must not be retired, or the call returns `403`. |
-| Group `auto` | Tries groups in the order you saved. Cross-group retry continues with the next group when the current group's routes fail. |
-| IP allowlist | Empty means no IP limit. A source IP outside the list returns `403` with `code` `access_denied`. |
-| Disabled | A disabled key cannot call the API. Read-only usage queries reject it too. |
+| **Key Quota** | When a key's own cap runs out, requests return `401` Invalid token even if your wallet still has funds. |
+| **Group = `auto`** | Tries your available groups in order; enabling cross-group retry automatically falls back on transient upstream errors. |
+| **Model Allowlist** | Restricts the key to only the listed Model IDs. |
+| **IP Allowlist** | Leave blank for personal laptops/campus Wi-Fi (dynamic IPs); non-matching IPs receive `403 access_denied`. |
 
-A normal user cannot append `-channelId` to pin an upstream channel. That returns `403`.
-
-## Habits that avoid leaks
-
-<div class="grid"><div class="card"><h3>Split by use</h3><p>Cursor, Claude Code, and production each get a key. A leak or a departure disables one of them.</p></div><div class="card"><h3>Keep it on a server</h3><p>Do not ship the key in a browser, an app package, or a public repository. A website should call your server, and the server should call OpenBridger.</p></div><div class="card"><h3>Rotate it</h3><p>Disable or delete the old key when it leaks, when people change, or when the project ends. Support will not ask for the full key or your password.</p></div></div>
-
-## Check
-
-```bash
-curl "{{API_BASE_URL}}/models" \
-  -H "Authorization: Bearer sk-your-key"
-```
-
-A model list means this key and the network work. The list is what this key's group can see, not every upstream model.
+<div class="callout warning"><strong>Keep keys private</strong><p>Never embed <code>sk-...</code> keys in browser frontend code, public Git repositories, or screenshots. If a key is exposed, disable or delete it immediately and create a replacement.</p></div>
 
 ## Related
 

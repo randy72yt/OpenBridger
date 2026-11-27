@@ -1,57 +1,38 @@
 # FAQ
 
-## What do I put in Base URL?
+## 1. Which Base URL should I enter — with or without `/v1`?
 
-OpenAI-compatible clients use `{{API_BASE_URL}}`. Add `/chat/completions` only when the form has a single field that asks for the full endpoint.
+- **Most clients (Codex, Cursor, Cherry Studio, Chatbox, LobeChat, OpenAI SDKs)**: `{{API_BASE_URL}}` (with `/v1`).
+- **Claude Code / Gemini CLI / Anthropic SDK**: `{{CONSOLE_URL}}` (**no `/v1`**).
+- **Immersive Translate / Coze HTTP nodes**: `{{API_BASE_URL}}/chat/completions` (full path).
+- Check the [Base URL Reference](/guide/base-urls/) whenever in doubt.
 
-Claude Code and the Anthropic SDK use `{{CONSOLE_URL}}` without `/v1`. See [Claude Code](/guide/clients/claude-code/).
+## 2. Should I type `Bearer ` in front of my API key?
 
-Examples use `{{API_BASE_URL}}`.
+- **In GUI client API Key fields**: paste **only** `sk-...` (no `Bearer `).
+- **In raw HTTP headers or `curl`**: send `Authorization: Bearer sk-...`.
 
-## Do I add Bearer to the key?
+## 3. Do new accounts include free credits? How do I top up?
 
-The header is `Authorization: Bearer sk-...`. The key already includes `sk-`. Do not send `Bearer Bearer` or `Bearer sk-sk-`.
+New accounts start at ¥0. Open [Wallet]({{CONSOLE_URL}}/wallet) to top up via Alipay / WeChat Pay or redeem a voucher code — see [Top up and redeem](/guide/account/redeem/).
 
-## Why is the model list empty when the key is valid?
+## 4. Why is the model list empty in my client?
 
-Many clients never call `/v1/models`, or they drop IDs they do not recognize. If curl lists models, paste the full ID from [Model Square]({{CONSOLE_URL}}/pricing).
+Many apps filter out newer model IDs they don't recognize. Click **"+ Add Custom Model"** in your client and paste the exact Model ID copied from [Models & Pricing]({{CONSOLE_URL}}/pricing).
 
-## How do I know traffic went through OpenBridger?
+## 5. Do I need to log out of Cursor / Trae / CodeBuddy first?
 
-Create a key used only by that client, send one short message, and find it in [Usage Logs]({{CONSOLE_URL}}/usage-logs) by key and time. The model name in the client UI is not enough.
+No. Keep your editor account signed in — custom API keys work alongside your existing login.
 
-## Do I sign out of the official account?
+## 6. How do I confirm requests are actually going through OpenBridger?
 
-Usually no. The editor account is for sign-in and sync. A custom Base URL affects only requests that use this key. To go back, turn off the custom Base URL or select the built-in provider, clear the related environment variables, and restart the client.
+Open a **New Chat** in your client, send one short message, and check [Usage Logs]({{CONSOLE_URL}}/usage-logs) for a new entry under that key.
 
-## How do I tell 401 from 403?
+## 7. What do `401`, `403`, `404`, and `503` mean at a glance?
 
-`401` and an invalid-token message means the key is unusable, including when that key's own credit is used up. `403` with `code` `insufficient_user_quota` means the wallet or subscription cannot cover the reserve. Group, IP allowlist, and a banned account are also `403`, with different text. See [Error codes](/guide/errors/).
+- `401`: Wrong API key, extra spaces, or the key's own spending cap ran out.
+- `403`: Wallet balance is empty (top up in [Wallet]({{CONSOLE_URL}}/wallet)) or group/IP restriction blocked it.
+- `404`: Base URL has an extra `/v1/v1` or is missing `/v1`.
+- `503`: Key and URL work, but the Model ID has a typo or isn't in your key's group.
 
-## Which clients are supported?
-
-Any OpenAI-compatible client that can set a Base URL, an API key, and a model ID can follow [the general guide](/guide/clients/openai-compatible/). Separate steps exist for Cursor, Claude Code, Codex, CC Switch, Cherry Studio, Chatbox, LobeChat, Open WebUI, Trae, CodeBuddy, the OpenAI SDK, and LangChain.
-
-Whether a model supports tools, images, or the protocol that client requires is decided by Model Square and one short test call.
-
-## Which balance is charged first, wallet or plan?
-
-The default is Subscription First. With no subscription credit, the wallet is charged. The four preferences and the purchase entry are on [Subscriptions](/guide/account/subscriptions/).
-
-## How can I add credit?
-
-Use the online methods the wallet shows (Alipay and WeChat by default) or a redemption code. The minimum and the credited amount are on the confirmation page. See [Top up and redeem](/guide/account/redeem/).
-
-## Does registration include free credit?
-
-No. A new wallet balance is 0. Add credit with a top-up or a redemption code before you call the API.
-
-## Should I retry a failed request?
-
-Retries do not fix `401`, a `403` for insufficient credit, or a `400` for a bad body. `429` and a temporary upstream 5xx can be retried a limited number of times with backoff. Do not loop forever.
-
-## Related
-
-- [Quick start](/guide/quickstart/)
-- [Troubleshooting](/troubleshooting/)
-- [Contact and incidents](/guide/support/)
+See [Error codes](/guide/errors/) and [Troubleshooting](/troubleshooting/) for full details.

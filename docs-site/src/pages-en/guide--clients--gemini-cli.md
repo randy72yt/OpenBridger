@@ -1,49 +1,62 @@
-# Gemini CLI
+# Gemini CLI Setup Guide
 
-Google's open-source `@google/gemini-cli` supports custom gateway endpoints via environment variables, routing directly to OpenBridger's native `/v1beta` Gemini interface.
+Google's open-source `gemini-cli` connects over the native `/v1beta` protocol for long-context repository analysis and terminal tasks.
 
-## Before you start
+## Before You Begin
 
-- Node.js 20+ installed on your machine.
-- A dedicated API key named `gemini-cli` created under [API Keys]({{CONSOLE_URL}}/keys).
-- A Gemini model ID available in [Model Square]({{CONSOLE_URL}}/pricing) (e.g. `gemini-4-neon`, `gemini-4-carbon`, or `gemini-4-hydrogen`).
+1. Install Node.js 20+ and run `npm install -g @google/gemini-cli`.
+2. Create a key named `gemini-cli` in [API Keys]({{CONSOLE_URL}}/keys) and copy `sk-...`.
+3. Copy an exact Gemini Model ID from [Models & Pricing]({{CONSOLE_URL}}/pricing) (e.g., `gemini-4-neon`, `gemini-4-carbon`, `gemini-4-hydrogen`).
 
-## 1. Install Gemini CLI
+<div class="callout warning"><strong>Do NOT append /v1 or /v1beta</strong><p>Set <code>GOOGLE_GEMINI_BASE_URL</code> to <strong><code>{{CONSOLE_URL}}</code></strong> — the CLI appends <code>/v1beta/...</code> automatically.</p></div>
 
-```bash
-npm install -g @google/gemini-cli
+---
+
+## Method 1: 1-Click GUI via CC Switch
+
+Open **CC Switch** ([CC Switch Guide](/guide/clients/cc-switch/)) -> switch to the **`Gemini`** tab -> click **`+`** -> enter `Base URL` = `{{CONSOLE_URL}}` and `API Key` = `sk-...` -> Save and click **Enable**, then run `gemini -m gemini-4-neon`.
+
+---
+
+## Method 2: Persistent `~/.gemini/.env` or Terminal Export
+
+### 1. Persistent Config (`~/.gemini/.env`)
+
+Create `.env` inside `~/.gemini/` (`%USERPROFILE%\.gemini\.env` on Windows):
+
+```ini
+GEMINI_API_KEY=sk-replace-with-your-key
+GOOGLE_GEMINI_BASE_URL={{CONSOLE_URL}}
+GEMINI_MODEL=gemini-4-neon
 ```
 
-## 2. Export environment variables & launch
+Then run `gemini` in any project directory (if asked for an auth method on first launch, choose **Use Gemini API Key**).
 
-Set `GOOGLE_GEMINI_BASE_URL` to the root host `{{CONSOLE_URL}}` (**without** `/v1` or `/v1beta` — the CLI appends `/v1beta/models/...` automatically):
+### 2. One-Session Terminal Export
 
-```bash
-export GEMINI_API_KEY="sk-your-api-key"
-export GOOGLE_GEMINI_BASE_URL="{{CONSOLE_URL}}"
+- **macOS / Linux**:
+  ```bash
+  export GEMINI_API_KEY="sk-your-key"
+  export GOOGLE_GEMINI_BASE_URL="{{CONSOLE_URL}}"
+  gemini -m gemini-4-neon
+  ```
+- **Windows PowerShell**:
+  ```powershell
+  $env:GEMINI_API_KEY="sk-your-key"
+  $env:GOOGLE_GEMINI_BASE_URL="{{CONSOLE_URL}}"
+  gemini -m gemini-4-neon
+  ```
 
-cd /path/to/your/project
-gemini -m gemini-4-neon
-```
-
-If prompted for an authentication method on first launch, choose **Use Gemini API Key**. Always pass `-m <MODEL_ID>` when you want to pin a specific model from Model Square.
-
-## 3. One-shot non-interactive mode
-
-```bash
-gemini -m gemini-4-hydrogen -p "Summarize the key changes in git diff"
-```
-
-## Common issues
+## Common Issues
 
 | Symptom | Fix |
 | --- | --- |
-| Prompted for Google OAuth sign-in | `GEMINI_API_KEY` is not exported in the current shell |
-| `404` error | Remove any trailing `/v1` or `/v1beta` from `GOOGLE_GEMINI_BASE_URL`; keep `{{CONSOLE_URL}}` |
-| `503` `model_not_found` | Pass `-m` with an exact Gemini model ID visible in [Model Square]({{CONSOLE_URL}}/pricing) |
+| Opens browser asking for Google login | Select **Use Gemini API Key** and verify `GEMINI_API_KEY` is set |
+| `404` error | Change `GOOGLE_GEMINI_BASE_URL` to `{{CONSOLE_URL}}` (no `/v1` or `/v1beta`) |
+| `503` No available channel | Pass `-m <exact-model-id>` from [Models & Pricing]({{CONSOLE_URL}}/pricing) |
 
 ## Related
 
+- [CC Switch (1-Click GUI)](/guide/clients/cc-switch/)
 - [Google Gemini Native API](/api/gemini-native/)
-- [OpenAI Codex](/guide/clients/codex-cli/)
-- [Claude Code](/guide/clients/claude-code/)
+- [Error codes](/guide/errors/)

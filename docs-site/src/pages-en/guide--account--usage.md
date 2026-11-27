@@ -1,29 +1,19 @@
-# Usage and logs
+# Usage and Logs
 
-Usage Logs answer four questions: did the request reach OpenBridger, which model ran, how much was charged, and what status came back on failure.
+Open [Usage Logs]({{CONSOLE_URL}}/usage-logs) to verify whether requests reached OpenBridger, which model ran, how many tokens were used, and the exact cost.
 
-URL: [{{CONSOLE_URL}}/usage-logs]({{CONSOLE_URL}}/usage-logs).
+## Key Columns
 
-## Fields you can match
+| Column | What to Check |
+| --- | --- |
+| **Time & Key Name** | Give each client its own API key (e.g., `codex`, `cherry`) so you can filter usage per tool. |
+| **Model ID** | The actual model routed by the gateway. |
+| **Prompt / Completion Tokens** | Input tokens (including conversation history) and output tokens (including reasoning tokens). |
+| **Cost (¥)** | Final settled charge in RMB. |
+| **Request ID** | Matches the `X-Oneapi-Request-Id` header — share this ID (never your full API key) when contacting support. |
 
-- Time
-- Key name
-- Model ID
-- Charged credit
-- Request id (response header `X-Oneapi-Request-Id`; the error body also ends with `(request id: …)`)
-
-Drawing and other async tasks are in the task or drawing logs (`/usage-logs/task`, `/usage-logs/drawing`), not only in the chat log.
-
-## Practice
-
-- Give each client its own key, and filter by that key instead of only by model name.
-- A name shown in the client can be the client's alias. The model ID in the log is the one that was billed.
-- When you report a failure, send the request id, time with timezone, model ID, and status. Send at most the first 8 characters of the key, for example `sk-abcd`.
-- A sudden high charge usually means the full history was sent again, or an agent called tools in a loop.
-
-## Reserves and logs
-
-The log row is written after settlement. A request that fails during reserve (for example insufficient credit) may have no success row. The error body still has a request id. Keep that body.
+- **Async image & video jobs**: Check the Task / Drawing log tabs rather than standard chat logs.
+- **Why a failed attempt isn't listed**: Requests that 404 before hitting a valid route or fail pre-hold (`403` insufficient quota) are not billed and won't create a charge entry.
 
 ## Related
 

@@ -1,37 +1,27 @@
 # 模型与价格
 
-可售模型、协议和单价都在 [模型广场]({{CONSOLE_URL}}/pricing)。客户端里填写的模型名必须和广场上的完整模型 ID 一致，包括大小写、短横线和版本后缀。
+所有当前可用模型、支持协议与实时单价均以控制台 [模型广场]({{CONSOLE_URL}}/pricing) 为准。
 
 <div class="actions"><a class="btn primary" href="{{CONSOLE_URL}}/pricing">打开模型广场</a></div>
 
-文档不刊登单价表。单价会随上游报价和运营发布变化，写在这里会过时。广场上每个模型的输入、输出、缓存和其他计量单位，就是那次调用的计价依据。
+## 选模型时看清这 3 件事
 
-## 选择时看这四件事
+1. **必须复制完整模型 ID**
+   - 在客户端填写模型时，直接在模型广场**点击模型名一键复制**（包括大小写、连字符与后缀，例如 `gpt-6.2-astra`、`claude-sonnet-5-5`），不要自己简写成 `gpt-6` 或 `claude`。
+2. **协议要和你的软件匹配**
+   - **通用聊天 / 翻译软件**（Cherry Studio、Chatbox、沉浸式翻译、Cursor）：走 `/v1/chat/completions` 对话协议。
+   - **Codex**：需要模型及分组支持 `/v1/responses` 协议。
+   - **Claude Code**：需要模型及分组支持 `/v1/messages` 协议。
+3. **按任务挑轻重，省钱又快**
+   - **架构设计 / 复杂 Debug / 论文深度推导**：选旗舰或深度思考模型（如 `gpt-6.2-astra`、`claude-opus-5-5`、`gemini-4-carbon`）。
+   - **网页双语翻译 / 日常划词 / 简单脚本**：选轻量高速模型（如 `gpt-6.2-sol`、`deepseek-v4.1-flash`、`gemini-4-hydrogen`），首字响应快且单次消耗低得多。
 
-- **协议。** 聊天客户端通常要 Chat Completions（`/v1/chat/completions`）。Codex 要 Responses（`/v1/responses`）。Claude Code 要 Anthropic Messages（`/v1/messages`）。模型广场里有这个名字，不表示三种协议都能用。
-- **分组。** 同一模型 ID 在不同分组下的线路和价格可以不同。密钥上的分组决定你实际能选到哪条。
-- **计量。** 有的按输入和输出 token，有的还计缓存、工具调用、图像张数或音视频时长。先看该模型在广场上的说明，再用一条短请求到 [使用日志]({{CONSOLE_URL}}/usage-logs) 核对。
-- **可用性。** 没有可用线路时，网关返回 `503`，文案含「无可用渠道」，`code` 为 `model_not_found`。这和上游返回的 `404` 不是同一件事，见 [错误码](/guide/errors/)。
+## 为什么客户端拉不到模型列表？
 
-## 名称怎么写
-
-从广场复制。不要把展示名、厂商口语名或你记得的旧 ID 填进客户端。网关按你提交的 `model` 字段选线路，不会根据「大概是哪个模型」去猜。
-
-```bash
-curl "{{API_BASE_URL}}/models" \
-  -H "Authorization: Bearer ${OPENBRIDGER_API_KEY}"
-```
-
-这个列表适合核对密钥能看见哪些 ID。部分客户端不读取它，或者会滤掉自己不认识的名字。滤掉时，把广场上的 ID 手工加进客户端。
-
-## 和计费的关系
-
-一次成功调用的扣费顺序是：按模型价格估算并预扣，请求结束后按实际用量结算，多退少补。预扣失败不会发出上游请求。公式和额度单位见 [额度与计费](/guide/billing/)。
-
-生产调用应准备模型不可用时的处理：换一个广场里仍可用的模型 ID，或稍后重试。不要在客户端里写死一个文档中的示例 ID。
+不少客户端不会主动拉取 `/v1/models`，或者会自动隐藏它不认识的新模型名字。遇到列表为空时无需排障，直接在客户端点 **「+ 手动添加模型」**，把模型广场复制的完整 ID 贴进去即可正常调用。
 
 ## 相关
 
 - [额度与计费](/guide/billing/)
 - [分组与线路](/guide/account/groups/)
-- [OpenAI 兼容调用](/guide/clients/openai-compatible/)
+- [错误码](/guide/errors/)
