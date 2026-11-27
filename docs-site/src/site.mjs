@@ -16,9 +16,9 @@ export const site = {
     {
       title: 'AI 编程与命令行',
       pages: [
-        ['guide--clients--codex-cli', 'OpenAI Codex'],
-        ['guide--clients--claude-code', 'Claude Code'],
-        ['guide--clients--cc-switch', 'CC Switch（一键配置）'],
+        ['guide--clients--cc-switch', 'CC Switch（新手一键配置）'],
+        ['guide--clients--codex-cli', 'Codex（桌面版 / 插件 / CLI）'],
+        ['guide--clients--claude-code', 'Claude Code（桌面端 / CLI）'],
         ['guide--clients--cursor', 'Cursor'],
         ['guide--clients--cline', 'Cline / Roo Code'],
         ['guide--clients--gemini-cli', 'Gemini CLI'],
@@ -94,9 +94,9 @@ export const siteEn = {
     {
       title: 'Coding & CLI tools',
       pages: [
-        ['guide--clients--codex-cli', 'OpenAI Codex'],
-        ['guide--clients--claude-code', 'Claude Code'],
-        ['guide--clients--cc-switch', 'CC Switch'],
+        ['guide--clients--cc-switch', 'CC Switch (1-Click GUI)'],
+        ['guide--clients--codex-cli', 'Codex (Desktop, IDE & CLI)'],
+        ['guide--clients--claude-code', 'Claude Code (App & CLI)'],
         ['guide--clients--cursor', 'Cursor'],
         ['guide--clients--cline', 'Cline & Roo Code'],
         ['guide--clients--gemini-cli', 'Gemini CLI'],
