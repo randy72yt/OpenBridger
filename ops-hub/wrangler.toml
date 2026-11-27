@@ -1,0 +1,34 @@
+name = "ob-netgo-ops-hub"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
+
+# 1. Create KV namespace once:
+#    npx wrangler kv namespace create OPS_STATE
+#    and paste the returned id below.
+[[kv_namespaces]]
+binding = "OPS_STATE"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# 2. Cron triggers:
+#    - Every 2 minutes: poll OpenBridger & NetGo for outage/recovery/node/model/ticket alerts
+#    - 01:00 UTC daily (= 09:00 Beijing Time): send daily dual-platform briefing card to WeChat
+[triggers]
+crons = ["*/2 * * * *", "0 1 * * *"]
+
+[vars]
+OB_BASE_URL = "https://openbridger.com"
+NETGO_OPS_URL = "https://ops.netgo.cc/api/netgo-ops/snapshot"
+DASHBOARD_PUBLIC_URL = ""
+WECOM_TO_USER = "@all"
+MODEL_ALERT_THRESHOLD = "85"
+MIN_MODEL_SAMPLES = "5"
+ALERT_COOLDOWN_SECONDS = "3600"
+
+# 3. Secrets (NEVER commit secrets here; set via `npx wrangler secret put <NAME>`):
+#    - DASHBOARD_PASSPHRASE     (>= 16 chars, used to sign into the mobile PWA)
+#    - SESSION_SIGNING_SECRET   (>= 32 random hex chars, signs HttpOnly session cookies)
+#    - OB_OPS_TOKEN             (matches OPS_SNAPSHOT_TOKEN on ob-prod)
+#    - NETGO_OPS_TOKEN          (matches NETGO_OPS_TOKEN on ng-panel)
+#    - WECOM_CORP_ID            (Enterprise WeChat CorpID)
+#    - WECOM_AGENT_ID           (Enterprise WeChat self-built app AgentId)
+#    - WECOM_CORP_SECRET        (Enterprise WeChat self-built app Secret)
