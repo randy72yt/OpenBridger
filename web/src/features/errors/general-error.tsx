@@ -37,11 +37,8 @@ function getHttpStatus(error: unknown): number | undefined {
   return typeof status === 'number' ? status : undefined
 }
 
-export function GeneralError({
-  className,
-  minimal = false,
-  error,
-}: GeneralErrorProps) {
+export function GeneralError(props: GeneralErrorProps) {
+  const { className, minimal = false, error } = props
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { history } = useRouter()
@@ -55,15 +52,21 @@ export function GeneralError({
     : t('Please try again later.')
 
   return (
-    <div className={cn('h-svh w-full', className)}>
-      <div className='m-auto flex h-full w-full flex-col items-center justify-center gap-2'>
+    <div
+      className={cn(
+        'w-full',
+        !minimal && 'ob-landing-theme bg-background text-foreground h-svh',
+        className
+      )}
+    >
+      <div className='m-auto flex h-full w-full flex-col items-center justify-center gap-2 px-4'>
         {!minimal && (
-          <h1 className='text-[7rem] leading-tight font-bold'>
+          <h1 className='ob-serif-heading ob-hero-gradient-text text-[7rem] leading-tight font-bold'>
             {status ?? 500}
           </h1>
         )}
-        <span className='font-medium'>{title}</span>
-        <p className='text-muted-foreground text-center'>
+        <span className='text-lg font-semibold'>{title}</span>
+        <p className='text-muted-foreground text-center text-sm sm:text-base'>
           {t('We apologize for the inconvenience.')} <br /> {description}
         </p>
         {!minimal && (
@@ -72,12 +75,17 @@ export function GeneralError({
           </p>
         )}
         {!minimal && (
-          <div className='mt-6 flex flex-wrap justify-center gap-4'>
-            <Button variant='outline' onClick={() => history.go(-1)}>
+          <div className='mt-6 flex flex-wrap justify-center gap-3'>
+            <Button
+              variant='outline'
+              className='ob-btn-secondary rounded-full px-5'
+              onClick={() => history.go(-1)}
+            >
               {t('Go Back')}
             </Button>
             <Button
               variant='outline'
+              className='ob-btn-secondary rounded-full px-5'
               render={
                 <a
                   href={FEEDBACK_URL}
@@ -88,7 +96,10 @@ export function GeneralError({
             >
               {t('Report an issue')}
             </Button>
-            <Button onClick={() => navigate({ to: '/' })}>
+            <Button
+              className='ob-btn-primary rounded-full px-6'
+              onClick={() => navigate({ to: '/' })}
+            >
               {t('Back to Home')}
             </Button>
           </div>

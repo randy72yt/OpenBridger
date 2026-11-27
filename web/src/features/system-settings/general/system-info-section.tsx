@@ -17,10 +17,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
+import { ImagePlus, Trash2 } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
+import { useRef, type ChangeEvent } from 'react'
 import type { Resolver } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import * as z from 'zod'
 
+import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
@@ -32,6 +37,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { DEFAULT_SUPPORT_EMAIL, isQrImageSource } from '@/lib/platform-contact'
 
 import { FormDirtyIndicator } from '../components/form-dirty-indicator'
 import { FormNavigationGuard } from '../components/form-navigation-guard'
@@ -46,6 +52,9 @@ import { useSettingsForm } from '../hooks/use-settings-form'
 import { useUpdateOption } from '../hooks/use-update-option'
 import { isValidTaskPublicAddress } from './task-public-address'
 
+const MAX_QR_FILE_BYTES = 5 * 1024 * 1024
+const MAX_QR_DIMENSION = 420
+
 const _systemInfoSchema = z.object({
   SystemName: z.string().min(1),
   ServerAddress: z.string().optional(),
@@ -57,6 +66,14 @@ const _systemInfoSchema = z.object({
   legal: z.object({
     user_agreement: z.string().optional(),
     privacy_policy: z.string().optional(),
+  }),
+  contact: z.object({
+    email: z.string().optional(),
+    wechat_id: z.string().optional(),
+    wechat_qrcode: z.string().optional(),
+  }),
+  landing: z.object({
+    featured_models: z.string().max(200).optional(),
   }),
 })
 
@@ -71,9 +88,66 @@ function normalizeValue(value: unknown): string {
   return typeof value === 'string' ? value : String(value)
 }
 
-export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
+function compressQrImageToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.addEventListener(
+      'error',
+      () => reject(new Error('Failed to read image')),
+      { once: true }
+    )
+    reader.addEventListener(
+      'load',
+      () => {
+        const dataUrl = String(reader.result ?? '')
+        const img = new Image()
+        img.addEventListener(
+          'error',
+          () => reject(new Error('Invalid image file')),
+          { once: true }
+        )
+        img.addEventListener(
+          'load',
+          () => {
+            const scale = Math.min(
+              1,
+              MAX_QR_DIMENSION / Math.max(img.width || 1, img.height || 1)
+            )
+            const targetWidth = Math.max(1, Math.round(img.width * scale))
+            const targetHeight = Math.max(1, Math.round(img.height * scale))
+            const canvas = document.createElement('canvas')
+            canvas.width = targetWidth
+            canvas.height = targetHeight
+            const ctx = canvas.getContext('2d')
+            if (!ctx) {
+              resolve(dataUrl)
+              return
+            }
+            ctx.fillStyle = '#FFFFFF'
+            ctx.fillRect(0, 0, targetWidth, targetHeight)
+            ctx.drawImage(img, 0, 0, targetWidth, targetHeight)
+            const webp = canvas.toDataURL('image/webp', 0.88)
+            if (webp.startsWith('data:image/webp')) {
+              resolve(webp)
+              return
+            }
+            resolve(canvas.toDataURL('image/png'))
+          },
+          { once: true }
+        )
+        img.src = dataUrl
+      },
+      { once: true }
+    )
+    reader.readAsDataURL(file)
+  })
+}
+
+export function SystemInfoSection(props: SystemInfoSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
+  const qrFileInputRef = useRef<HTMLInputElement>(null)
+  const defaultValues = props.defaultValues
 
   const normalizedDefaults: SystemInfoFormValues = {
     SystemName: normalizeValue(defaultValues.SystemName),
@@ -86,6 +160,14 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
     legal: {
       user_agreement: normalizeValue(defaultValues.legal?.user_agreement),
       privacy_policy: normalizeValue(defaultValues.legal?.privacy_policy),
+    },
+    contact: {
+      email: normalizeValue(defaultValues.contact?.email),
+      wechat_id: normalizeValue(defaultValues.contact?.wechat_id),
+      wechat_qrcode: normalizeValue(defaultValues.contact?.wechat_qrcode),
+    },
+    landing: {
+      featured_models: normalizeValue(defaultValues.landing?.featured_models),
     },
   }
 
@@ -107,6 +189,14 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
     legal: z.object({
       user_agreement: z.string().optional(),
       privacy_policy: z.string().optional(),
+    }),
+    contact: z.object({
+      email: z.string().email().optional().or(z.literal('')),
+      wechat_id: z.string().max(128).optional(),
+      wechat_qrcode: z.string().optional(),
+    }),
+    landing: z.object({
+      featured_models: z.string().max(200).optional(),
     }),
   })
 
@@ -131,6 +221,31 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
         }
       },
     })
+
+  const handleQrFileSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    if (!/^image\/(png|jpe?g|webp|gif)$/i.test(file.type)) {
+      toast.error(t('Please upload a PNG, JPG, WebP, or GIF image'))
+      return
+    }
+    if (file.size > MAX_QR_FILE_BYTES) {
+      toast.error(t('Image file must be smaller than 5 MB'))
+      return
+    }
+
+    try {
+      const compressedDataUrl = await compressQrImageToDataUrl(file)
+      form.setValue('contact.wechat_qrcode', compressedDataUrl, {
+        shouldDirty: true,
+        shouldValidate: true,
+      })
+    } catch {
+      toast.error(t('Failed to process QR code image'))
+    }
+  }
 
   return (
     <>
@@ -227,6 +342,137 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
 
               <FormField
                 control={form.control}
+                name='contact.email'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Support & Business Email')}</FormLabel>
+                    <FormControl>
+                      <Input placeholder={DEFAULT_SUPPORT_EMAIL} {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Displayed on the Partner Program and About pages for business and support inquiries'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='contact.wechat_id'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Business WeChat ID')}</FormLabel>
+                    <FormControl>
+                      <Input placeholder='OpenBridger_AI' {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'WeChat ID displayed on the Partner Program and About pages with one-click copy'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <SettingsFormGridItem span='full'>
+                <FormField
+                  control={form.control}
+                  name='contact.wechat_qrcode'
+                  render={({ field }) => {
+                    const qrValue = (field.value ?? '').trim()
+                    const isDataUrl = qrValue.startsWith('data:image/')
+                    const isImage = isQrImageSource(qrValue)
+
+                    return (
+                      <FormItem>
+                        <FormLabel>{t('Business WeChat QR Code')}</FormLabel>
+                        <div className='grid gap-4 sm:grid-cols-[1fr_auto] sm:items-start'>
+                          <div className='space-y-2.5'>
+                            <FormControl>
+                              <Input
+                                placeholder='https://example.com/wechat-qr.png'
+                                value={
+                                  isDataUrl
+                                    ? t('(Uploaded QR image)')
+                                    : (field.value ?? '')
+                                }
+                                readOnly={isDataUrl}
+                                onChange={field.onChange}
+                              />
+                            </FormControl>
+                            <div className='flex flex-wrap items-center gap-2'>
+                              <input
+                                ref={qrFileInputRef}
+                                type='file'
+                                accept='image/png,image/jpeg,image/webp,image/gif'
+                                className='hidden'
+                                onChange={handleQrFileSelected}
+                              />
+                              <Button
+                                type='button'
+                                variant='outline'
+                                size='sm'
+                                onClick={() => qrFileInputRef.current?.click()}
+                              >
+                                <ImagePlus className='mr-1.5 size-4' />
+                                {t('Upload QR image')}
+                              </Button>
+                              {qrValue && (
+                                <Button
+                                  type='button'
+                                  variant='ghost'
+                                  size='sm'
+                                  className='text-muted-foreground hover:text-destructive'
+                                  onClick={() =>
+                                    form.setValue('contact.wechat_qrcode', '', {
+                                      shouldDirty: true,
+                                      shouldValidate: true,
+                                    })
+                                  }
+                                >
+                                  <Trash2 className='mr-1.5 size-4' />
+                                  {t('Clear')}
+                                </Button>
+                              )}
+                            </div>
+                            <FormDescription>
+                              {t(
+                                'Upload a QR screenshot directly or paste an image URL / WeChat QR link. Changes take effect immediately without redeployment.'
+                              )}
+                            </FormDescription>
+                            <FormMessage />
+                          </div>
+
+                          {qrValue && (
+                            <div className='flex flex-col items-center gap-1.5 rounded-xl border bg-white p-2.5 shadow-2xs'>
+                              {isImage ? (
+                                <img
+                                  src={qrValue}
+                                  alt={t('Business WeChat QR Code')}
+                                  className='size-28 rounded-md object-contain'
+                                />
+                              ) : (
+                                <QRCodeSVG
+                                  value={qrValue}
+                                  size={112}
+                                  level='M'
+                                />
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </FormItem>
+                    )
+                  }}
+                />
+              </SettingsFormGridItem>
+
+              <FormField
+                control={form.control}
                 name='Footer'
                 render={({ field }) => (
                   <FormItem>
@@ -272,6 +518,32 @@ export function SystemInfoSection({ defaultValues }: SystemInfoSectionProps) {
                   </FormItem>
                 )}
               />
+
+              <SettingsFormGridItem span='full'>
+                <FormField
+                  control={form.control}
+                  name='landing.featured_models'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {t('Homepage Featured Models Tagline')}
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder='GPT-6.2 · Codex · Claude 5.5 · Gemini 4 · DeepSeek V4.1'
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Optional tagline shown in the homepage hero metrics. Leave empty to automatically showcase the latest models from your active channels.'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </SettingsFormGridItem>
 
               <SettingsFormGridItem span='full'>
                 <FormField

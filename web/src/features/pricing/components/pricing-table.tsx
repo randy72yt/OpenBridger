@@ -33,6 +33,7 @@ import { usePricingColumns } from './pricing-columns'
 
 export interface PricingTableProps {
   models: PricingModel[]
+  showPagination?: boolean
   isLoading?: boolean
   priceRate?: number
   usdExchangeRate?: number
@@ -61,6 +62,7 @@ export function PricingTable(props: PricingTableProps) {
   })
 
   const columns = usePricingColumns({
+    onModelClick,
     tokenUnit,
     priceRate,
     usdExchangeRate,
@@ -93,7 +95,11 @@ export function PricingTable(props: PricingTableProps) {
         table={table}
         isLoading={isLoading}
         emptyTitle={t('No Models Found')}
-        emptyDescription={t('No models match your current filters.')}
+        emptyDescription={
+          props.showPagination === false
+            ? undefined
+            : t('No models match your current filters.')
+        }
         skeletonKeyPrefix='pricing-skeleton'
         applyHeaderSize
         getColumnClassName={(_columnId, kind) =>
@@ -109,7 +115,9 @@ export function PricingTable(props: PricingTableProps) {
         )}
       />
 
-      {!isLoading && models.length > 0 && <DataTablePagination table={table} />}
+      {props.showPagination !== false && !isLoading && models.length > 0 && (
+        <DataTablePagination table={table} />
+      )}
     </div>
   )
 }

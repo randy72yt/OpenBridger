@@ -59,6 +59,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { ModelProviderIcon } from '@/components/model-provider-icon'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 
@@ -568,6 +569,9 @@ export interface ModelGroupSelectorProps {
   // Common props
   className?: string
   disabled?: boolean
+  popoverSide?: 'top' | 'bottom'
+  popoverAlign?: 'start' | 'end'
+  triggerVariant?: 'outline' | 'ghost'
 }
 
 /**
@@ -583,6 +587,9 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
   onGroupChange,
   className,
   disabled = false,
+  popoverSide = 'top',
+  popoverAlign = 'end',
+  triggerVariant = 'outline',
 }) => {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -658,25 +665,36 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
     }
   }, [open, selectedGroup, selectedModel])
 
+  const displayModelName = currentModel?.label || selectedModel || t('Model')
+
   const renderTrigger = () => (
     <Button
       aria-expanded={open}
       className={cn(
-        'h-8 max-w-[15rem] justify-start gap-2 border px-2.5 font-medium shadow-none',
-        'bg-background/80 hover:bg-accent/70 text-foreground',
+        triggerVariant === 'ghost'
+          ? 'hover:bg-muted/75 text-foreground h-9 max-w-[20rem] justify-start gap-2 rounded-xl border-0 px-3 text-sm font-semibold shadow-none'
+          : 'bg-background/80 hover:bg-accent/70 text-foreground h-8 max-w-[15rem] justify-start gap-2 border px-2.5 font-medium shadow-none',
         'focus:!ring-0 focus:!outline-none',
         className
       )}
       disabled={disabled}
       role='combobox'
       size='sm'
-      variant='outline'
+      variant={triggerVariant}
     >
-      <CpuIcon className='text-muted-foreground size-4 shrink-0' />
-      <span className='min-w-0 truncate text-xs'>
-        {currentModel?.label || t('Model')}
+      <ModelProviderIcon
+        modelName={selectedModel}
+        size={triggerVariant === 'ghost' ? 18 : 16}
+      />
+      <span
+        className={cn(
+          'min-w-0 truncate',
+          triggerVariant === 'ghost' ? 'text-sm font-semibold' : 'text-xs'
+        )}
+      >
+        {displayModelName}
       </span>
-      <span className='bg-muted text-muted-foreground hidden max-w-20 shrink-0 rounded px-1.5 py-0.5 text-[10px] sm:inline-flex'>
+      <span className='bg-muted text-muted-foreground hidden max-w-20 shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium sm:inline-flex'>
         {currentGroup?.label || t('Group')}
       </span>
       <ChevronsUpDown className='text-muted-foreground ml-auto size-3.5 shrink-0 opacity-60' />
@@ -776,15 +794,18 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
                 }
                 value={model.value}
               >
-                <span
-                  className={cn(
-                    'min-w-0 truncate',
-                    selectedModel === model.value
-                      ? modelGroupSelectorLayoutClasses.selectedModelText
-                      : modelGroupSelectorLayoutClasses.unselectedModelText
-                  )}
-                >
-                  {model.label}
+                <span className='flex min-w-0 items-center gap-2'>
+                  <ModelProviderIcon modelName={model.value} size={15} />
+                  <span
+                    className={cn(
+                      'min-w-0 truncate',
+                      selectedModel === model.value
+                        ? modelGroupSelectorLayoutClasses.selectedModelText
+                        : modelGroupSelectorLayoutClasses.unselectedModelText
+                    )}
+                  >
+                    {model.label}
+                  </span>
                 </span>
                 <Check
                   className={cn(
@@ -836,13 +857,13 @@ export const ModelGroupSelector: React.FC<ModelGroupSelectorProps> = ({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger render={renderTrigger()} />
       <PopoverContent
-        align='end'
+        align={popoverAlign}
         className={cn(
           'bg-popover z-50 w-[34rem] max-w-[calc(100vw-2rem)] rounded-xl border p-0 shadow-lg',
           modelGroupSelectorLayoutClasses.desktopPanel
         )}
         collisionPadding={8}
-        side='top'
+        side={popoverSide}
         sideOffset={8}
       >
         {renderContent()}

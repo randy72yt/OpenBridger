@@ -16,42 +16,63 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { QueryClientContext } from '@tanstack/react-query'
+import { useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { PLATFORM_CONTACT } from '@/lib/platform-contact'
+import { CopyButton } from '@/components/copy-button'
+import type { SystemStatus } from '@/features/auth/types'
+import { useStatus } from '@/hooks/use-status'
+import { resolvePlatformContact } from '@/lib/platform-contact'
 
-export function PlatformContact() {
+function PlatformContactContent(props: { status: SystemStatus | null }) {
   const { t } = useTranslation()
+  const contact = resolvePlatformContact(props.status)
+
   return (
     <>
-      <span className='break-words'>
-        {t('Contact email')}:{' '}
-        {PLATFORM_CONTACT.email ? (
-          <a
-            className='hover:text-foreground underline-offset-4 hover:underline'
-            href={`mailto:${PLATFORM_CONTACT.email}`}
-          >
-            {PLATFORM_CONTACT.email}
-          </a>
+      <span className='flex flex-wrap items-center gap-1.5 break-words'>
+        <span>{t('Contact email')}:</span>
+        {contact.email ? (
+          <>
+            <a
+              className='text-foreground hover:text-primary font-medium underline-offset-4 hover:underline'
+              href={`mailto:${contact.email}`}
+            >
+              {contact.email}
+            </a>
+            <CopyButton value={contact.email} />
+          </>
         ) : (
-          t('To be announced')
+          <span>{t('To be announced')}</span>
         )}
       </span>
-      <span className='break-words'>
-        {t('Community')}:{' '}
-        {PLATFORM_CONTACT.communityUrl ? (
-          <a
-            className='hover:text-foreground underline-offset-4 hover:underline'
-            href={PLATFORM_CONTACT.communityUrl}
-            target='_blank'
-            rel='noopener noreferrer'
-          >
-            Telegram
-          </a>
+      <span className='flex flex-wrap items-center gap-1.5 break-words'>
+        <span>{t('WeChat')}:</span>
+        {contact.wechatId ? (
+          <>
+            <span className='text-foreground font-medium'>
+              {contact.wechatId}
+            </span>
+            <CopyButton value={contact.wechatId} />
+          </>
         ) : (
-          t('To be announced')
+          <span>{t('To be announced')}</span>
         )}
       </span>
     </>
   )
+}
+
+function PlatformContactConnected() {
+  const { status } = useStatus()
+  return <PlatformContactContent status={status} />
+}
+
+export function PlatformContact() {
+  const queryClient = useContext(QueryClientContext)
+  if (!queryClient) {
+    return <PlatformContactContent status={null} />
+  }
+  return <PlatformContactConnected />
 }

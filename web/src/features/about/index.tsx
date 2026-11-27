@@ -20,7 +20,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import { PublicLayout } from '@/components/layout'
-import { Footer } from '@/components/layout/components/footer'
 import { PlatformContact } from '@/components/platform-contact'
 import { RichContent } from '@/components/rich-content'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -42,7 +41,7 @@ export function DefaultAboutContent() {
           <div className='text-primary flex items-center gap-3 text-xs font-semibold tracking-wider'>
             {systemName} · {t('Regional access notice')}
           </div>
-          <h1 className='text-3xl font-semibold tracking-tight md:text-4xl'>
+          <h1 className='ob-serif-heading text-3xl font-semibold tracking-tight md:text-4xl'>
             {t('Service usage notice')}
           </h1>
           <p className='text-muted-foreground leading-8'>
@@ -152,17 +151,16 @@ export function About() {
     return (
       <PublicLayout showMainContainer={false}>
         <DefaultAboutContent />
-        <Footer />
       </PublicLayout>
     )
   }
 
   if (isUrl) {
     return (
-      <PublicLayout showMainContainer={false}>
+      <PublicLayout showMainContainer={false} showFooter={false}>
         <iframe
           src={rawContent}
-          className='h-[calc(100vh-3.5rem)] w-full border-0'
+          className='h-screen w-full border-0 pt-20'
           title={t('About')}
           sandbox='allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts'
         />

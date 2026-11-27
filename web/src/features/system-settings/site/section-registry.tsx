@@ -47,6 +47,14 @@ const SITE_SECTIONS = [
             user_agreement: settings['legal.user_agreement'],
             privacy_policy: settings['legal.privacy_policy'],
           },
+          contact: {
+            email: settings['contact.email'],
+            wechat_id: settings['contact.wechat_id'],
+            wechat_qrcode: settings['contact.wechat_qrcode'],
+          },
+          landing: {
+            featured_models: settings['landing.featured_models'],
+          },
         }}
       />
     ),

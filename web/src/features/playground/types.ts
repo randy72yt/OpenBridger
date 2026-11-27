@@ -31,6 +31,7 @@ export interface MessageVersion {
 export interface Message {
   key: string
   from: MessageRole
+  model?: string
   versions: MessageVersion[]
   createdAt?: number
   startedAt?: number

@@ -140,7 +140,10 @@ describe('pricing controls', () => {
     ).toHaveAttribute('aria-pressed', 'true')
     await user.click(within(dialog).getByRole('button', { name: 'Reset' }))
     expect(props.onClearFilters).toHaveBeenCalledOnce()
-    await user.keyboard('{Escape}')
+    await user.click(
+      within(dialog).getByRole('button', { name: 'View results (2)' })
+    )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(await screen.findByRole('button', { name: /Filter/ })).toHaveFocus()
   })
 })

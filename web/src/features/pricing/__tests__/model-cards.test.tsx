@@ -30,6 +30,7 @@ import {
 
 import { ModelCard } from '../components/model-card'
 import { ModelCardGrid } from '../components/model-card-grid'
+import { PricingTable } from '../components/pricing-table'
 import type { PricingModel } from '../types'
 
 function pricingModel(overrides: Partial<PricingModel> = {}): PricingModel {
@@ -80,6 +81,16 @@ afterEach(() => {
 })
 
 describe('model cards', () => {
+  it('opens table model details once with the keyboard', async () => {
+    const onModelClick = vi.fn()
+    render(
+      <PricingTable models={[pricingModel()]} onModelClick={onModelClick} />
+    )
+    screen.getByRole('button', { name: 'example-model' }).focus()
+    await userEvent.keyboard('{Enter}')
+    expect(onModelClick).toHaveBeenCalledExactlyOnceWith('example-model')
+  })
+
   it('copies the complete long model name without opening details', async () => {
     const user = userEvent.setup()
     const onClick = vi.fn()

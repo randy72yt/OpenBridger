@@ -47,7 +47,7 @@ export function Logo({ className, ...props }: SVGProps<SVGSVGElement>) {
         width='12'
         height='12'
         rx='2.5'
-        fill='#2BBFB4'
+        fill='#FF6B00'
         stroke='none'
         transform='rotate(45 32 32)'
       />

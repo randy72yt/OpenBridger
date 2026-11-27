@@ -26,6 +26,7 @@ import {
 } from '@/components/data-table'
 import { GroupBadge } from '@/components/group-badge'
 import { StatusBadge } from '@/components/status-badge'
+import { Button } from '@/components/ui/button'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
 import { DEFAULT_TOKEN_UNIT } from '../constants'
@@ -50,6 +51,7 @@ import { ModelBillingModeBadge } from './model-billing-mode-badge'
 // ----------------------------------------------------------------------------
 
 export interface PricingColumnsOptions {
+  onModelClick?: (modelName: string) => void
   tokenUnit?: TokenUnit
   priceRate?: number
   usdExchangeRate?: number
@@ -87,9 +89,22 @@ export function usePricingColumns(
         return (
           <div className='flex max-w-full min-w-0 items-center gap-2'>
             {modelIcon}
-            <span className='truncate font-mono text-sm font-medium'>
-              {model.model_name}
-            </span>
+            {options.onModelClick ? (
+              <Button
+                variant='link'
+                className='text-foreground h-auto min-w-0 shrink justify-start p-0 font-mono'
+                onClick={(event) => {
+                  event.stopPropagation()
+                  options.onModelClick?.(model.model_name)
+                }}
+              >
+                <span className='truncate'>{model.model_name}</span>
+              </Button>
+            ) : (
+              <span className='truncate font-mono text-sm font-medium'>
+                {model.model_name}
+              </span>
+            )}
           </div>
         )
       },

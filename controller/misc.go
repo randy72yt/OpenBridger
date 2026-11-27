@@ -49,6 +49,7 @@ func GetStatus(c *gin.Context) {
 
 	passkeySetting := system_setting.GetPasskeySettings()
 	legalSetting := system_setting.GetLegalSettings()
+	contactSetting := system_setting.GetContactSettings()
 
 	data := gin.H{
 		"version":                     common.Version,
@@ -125,6 +126,10 @@ func GetStatus(c *gin.Context) {
 		"setup":                       constant.Setup,
 		"user_agreement_enabled":      legalSetting.UserAgreement != "",
 		"privacy_policy_enabled":      legalSetting.PrivacyPolicy != "",
+		"contact_email":               contactSetting.Email,
+		"contact_wechat_id":           contactSetting.WeChatID,
+		"contact_wechat_qrcode":       contactSetting.WeChatQRCode,
+		"landing_featured_models":     system_setting.GetLandingSettings().FeaturedModels,
 		"checkin_enabled":             operation_setting.GetCheckinSetting().Enabled,
 		"pricing_control_enabled":     service.PricingControlEnabled(),
 	}

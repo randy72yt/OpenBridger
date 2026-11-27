@@ -117,6 +117,10 @@ export type SiteSettings = {
   TaskPublicAddress: string
   'legal.user_agreement': string
   'legal.privacy_policy': string
+  'contact.email': string
+  'contact.wechat_id': string
+  'contact.wechat_qrcode': string
+  'landing.featured_models': string
   HeaderNavModules: string
   SidebarModulesAdmin: string
 }

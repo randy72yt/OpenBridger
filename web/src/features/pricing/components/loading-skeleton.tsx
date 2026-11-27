@@ -28,11 +28,12 @@ export interface LoadingSkeletonProps {
 export function LoadingSkeleton(props: LoadingSkeletonProps) {
   return (
     <div aria-busy='true'>
-      <div className='mx-auto mb-5 flex max-w-3xl flex-col items-center pt-5 sm:mb-10 sm:pt-10'>
-        <Skeleton className='h-[clamp(2.3rem,6.325vw,4.025rem)] w-48 max-w-full sm:w-64' />
-        <Skeleton className='mt-3 h-5 w-56 max-w-full sm:mt-4 sm:h-6' />
-        <Skeleton className='mt-2 h-5 w-full max-w-xl' />
-        <Skeleton className='mt-4 h-10 w-full max-w-2xl sm:mt-6' />
+      <div className='mb-5 grid items-end gap-5 border-b pb-6 sm:mb-8 lg:grid-cols-[1fr_minmax(20rem,32rem)]'>
+        <div>
+          <Skeleton className='h-10 w-48 sm:h-12' />
+          <Skeleton className='mt-2 h-5 w-56 max-w-full' />
+        </div>
+        <Skeleton className='h-11 w-full rounded-full' />
       </div>
       <div className='grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]'>
         <div className='hidden self-start rounded-xl border p-3 xl:block'>

@@ -26,7 +26,9 @@ import {
 } from '@/components/ai-elements/conversation'
 import { Loader } from '@/components/ai-elements/loader'
 import { Message } from '@/components/ai-elements/message'
+import { ModelProviderIcon } from '@/components/model-provider-icon'
 
+import { MESSAGE_ROLES } from '../../constants'
 import {
   getChatMessageRenderState,
   getEditingMessageContent,
@@ -47,6 +49,7 @@ import { PlaygroundEmptyState } from './playground-empty-state'
 const MAX_RENDERED_HISTORY_MESSAGES = 24
 
 interface PlaygroundChatProps {
+  currentModel?: string
   messages: MessageType[]
   onCopyMessage?: (message: MessageType) => void
   onRegenerateMessage?: (message: MessageType) => void
@@ -62,32 +65,21 @@ interface PlaygroundChatProps {
   messageLayoutMode?: PlaygroundMessageLayoutMode
 }
 
-export function PlaygroundChat({
-  messages,
-  onCopyMessage,
-  onRegenerateMessage,
-  onEditMessage,
-  onDeleteMessage,
-  onSelectPrompt,
-  isGenerating = false,
-  isLoadingMessages = false,
-  editingKey,
-  onSaveEdit,
-  onCancelEdit,
-  onSaveEditAndSubmit,
-  messageLayoutMode = 'alternating',
-}: PlaygroundChatProps) {
+export function PlaygroundChat(props: PlaygroundChatProps) {
   const { t } = useTranslation()
   const [editText, setEditText] = useState('')
   const [originalText, setOriginalText] = useState('')
   const [sourceMessageKeys, setSourceMessageKeys] = useState<
     ReadonlySet<string>
   >(() => new Set())
+  const messageLayoutMode = props.messageLayoutMode ?? 'alternating'
+  const isGenerating = props.isGenerating ?? false
+  const isLoadingMessages = props.isLoadingMessages ?? false
   const visibleMessageOffset = Math.max(
     0,
-    messages.length - MAX_RENDERED_HISTORY_MESSAGES
+    props.messages.length - MAX_RENDERED_HISTORY_MESSAGES
   )
-  const visibleMessages = messages.slice(visibleMessageOffset)
+  const visibleMessages = props.messages.slice(visibleMessageOffset)
 
   function handleToggleMessageSource(message: MessageType): void {
     setSourceMessageKeys((currentKeys) => {
@@ -104,44 +96,46 @@ export function PlaygroundChat({
   }
 
   useEffect(() => {
-    if (!editingKey) return
-    const content = getEditingMessageContent(messages, editingKey)
+    if (!props.editingKey) return
+    const content = getEditingMessageContent(props.messages, props.editingKey)
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setEditText(content)
 
     setOriginalText(content)
-  }, [editingKey, messages])
+  }, [props.editingKey, props.messages])
 
   let chatContent = visibleMessages.map((message, visibleMessageIndex) => {
     const messageIndex = visibleMessageOffset + visibleMessageIndex
     const { alwaysShowActions, content, isEditing } = getChatMessageRenderState(
-      messages,
+      props.messages,
       message,
       messageIndex,
-      editingKey
+      props.editingKey
     )
     const isError = isErrorMessage(message)
     const previousUserMessage = isError
-      ? getPreviousUserMessage(messages, messageIndex)
+      ? getPreviousUserMessage(props.messages, messageIndex)
       : null
     const alignment = getMessageAlignment(message, messageLayoutMode)
     const isSourceVisible = sourceMessageKeys.has(message.key)
+    const isAssistant = message.from === MESSAGE_ROLES.ASSISTANT
+    const effectiveModelName = message.model || props.currentModel
 
     return (
       <Message
-        className='group flex-row-reverse py-2.5'
+        className='group items-start gap-3 py-3.5'
         from={message.from}
         key={message.key}
       >
-        <div className='w-full min-w-0 flex-1 basis-full'>
+        <div className='min-w-0 flex-1'>
           {isEditing ? (
             <PlaygroundMessageEditor
               editText={editText}
               message={message}
-              onCancelEdit={onCancelEdit}
+              onCancelEdit={props.onCancelEdit}
               onEditTextChange={setEditText}
-              onSaveEdit={onSaveEdit}
-              onSaveEditAndSubmit={onSaveEditAndSubmit}
+              onSaveEdit={props.onSaveEdit}
+              onSaveEditAndSubmit={props.onSaveEditAndSubmit}
               originalText={originalText}
             />
           ) : (
@@ -150,11 +144,11 @@ export function PlaygroundChat({
               actions={
                 <MessageActions
                   message={message}
-                  onCopy={onCopyMessage}
-                  onRegenerate={onRegenerateMessage}
+                  onCopy={props.onCopyMessage}
+                  onRegenerate={props.onRegenerateMessage}
                   onToggleSource={handleToggleMessageSource}
-                  onEdit={onEditMessage}
-                  onDelete={onDeleteMessage}
+                  onEdit={props.onEditMessage}
+                  onDelete={props.onDeleteMessage}
                   isSourceVisible={isSourceVisible}
                   isGenerating={isGenerating}
                   alwaysVisible={alwaysShowActions}
@@ -168,18 +162,18 @@ export function PlaygroundChat({
                   <MessageErrorActions
                     disabled={isGenerating}
                     onRetry={
-                      onRegenerateMessage
-                        ? () => onRegenerateMessage(message)
+                      props.onRegenerateMessage
+                        ? () => props.onRegenerateMessage?.(message)
                         : undefined
                     }
                     onEditPrompt={
-                      onEditMessage && previousUserMessage
-                        ? () => onEditMessage(previousUserMessage)
+                      props.onEditMessage && previousUserMessage
+                        ? () => props.onEditMessage?.(previousUserMessage)
                         : undefined
                     }
                     onDelete={
-                      onDeleteMessage
-                        ? () => onDeleteMessage(message)
+                      props.onDeleteMessage
+                        ? () => props.onDeleteMessage?.(message)
                         : undefined
                     }
                   />
@@ -189,13 +183,30 @@ export function PlaygroundChat({
             />
           )}
         </div>
+
+        {isAssistant && (
+          <div
+            className='border-border/70 bg-card mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border shadow-2xs'
+            data-testid='assistant-model-avatar'
+          >
+            <ModelProviderIcon
+              modelName={effectiveModelName}
+              size={15}
+              fallbackToOpenAI={!effectiveModelName}
+            />
+          </div>
+        )}
       </Message>
     )
   })
 
-  if (visibleMessages.length === 0 && onSelectPrompt) {
+  if (visibleMessages.length === 0 && props.onSelectPrompt) {
     chatContent = [
-      <PlaygroundEmptyState key='empty' onSelectPrompt={onSelectPrompt} />,
+      <PlaygroundEmptyState
+        key='empty'
+        modelName={props.currentModel}
+        onSelectPrompt={props.onSelectPrompt}
+      />,
     ]
   }
 
@@ -213,9 +224,8 @@ export function PlaygroundChat({
 
   return (
     <Conversation>
-      {/* Remove outer padding; apply padding to inner centered container to align with input */}
       <ConversationContent className='p-0'>
-        <div className='mx-auto w-full max-w-4xl px-4 py-4'>{chatContent}</div>
+        <div className='mx-auto w-full max-w-3xl px-4 py-4'>{chatContent}</div>
       </ConversationContent>
       <ConversationScrollButton />
     </Conversation>

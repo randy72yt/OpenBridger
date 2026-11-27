@@ -181,6 +181,77 @@ export interface UptimeGroupResult {
 }
 
 // ============================================================================
+// Admin Business Dashboard Types
+// ============================================================================
+
+export interface BusinessDashboardSummary {
+  cash_revenue_usd: number
+  topup_revenue_usd: number
+  subscription_revenue_usd: number
+  paid_order_count: number
+  paying_users: number
+  arppu_usd: number
+  redemption_usd: number
+  redemption_count: number
+  consumption_usd: number
+  costed_consumption_usd: number
+  uncosted_consumption_usd: number
+  estimated_cost_usd: number
+  estimated_gross_profit_usd: number
+  estimated_gross_margin_pct: number | null
+  cost_coverage_pct: number
+  total_requests: number
+  total_tokens: number
+  total_users: number
+  new_users: number
+  active_users: number
+  wallet_liability_usd: number
+  channel_balance_usd: number
+}
+
+export interface BusinessDailyPoint {
+  date: string
+  timestamp: number
+  cash_revenue_usd: number
+  redemption_usd: number
+  consumption_usd: number
+  estimated_cost_usd: number
+  new_users: number
+  paid_orders: number
+}
+
+export interface PaymentChannelStat {
+  channel: string
+  provider: string
+  order_type: 'topup' | 'subscription' | string
+  order_count: number
+  original_currency: string
+  original_amount: number
+  revenue_usd: number
+}
+
+export interface ModelMarginStat {
+  model_name: string
+  channel_id: number
+  channel_name: string
+  requests: number
+  prompt_tokens: number
+  completion_tokens: number
+  consumption_usd: number
+  estimated_cost_usd: number | null
+  gross_profit_usd: number | null
+  gross_margin_pct: number | null
+  cost_covered: boolean
+}
+
+export interface BusinessDashboardData {
+  summary: BusinessDashboardSummary
+  daily_trend: BusinessDailyPoint[]
+  payment_channels: PaymentChannelStat[]
+  model_margins: ModelMarginStat[]
+}
+
+// ============================================================================
 // Dashboard Filter Types
 // ============================================================================
 

@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { DataTableViewModeToggle } from '@/components/data-table'
 import {
   sideDrawerContentClassName,
+  sideDrawerFooterClassName,
   sideDrawerFormClassName,
   sideDrawerHeaderClassName,
 } from '@/components/drawer-layout'
@@ -37,6 +38,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   Sheet,
+  SheetClose,
+  SheetFooter,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -194,7 +197,7 @@ export function PricingToolbar(props: PricingToolbarProps) {
       <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
         <SheetContent
           side='left'
-          className={sideDrawerContentClassName('sm:max-w-md')}
+          className={sideDrawerContentClassName('ob-landing-theme sm:max-w-md')}
         >
           <SheetHeader className={sideDrawerHeaderClassName()}>
             <SheetTitle>{t('Filter')}</SheetTitle>
@@ -224,6 +227,11 @@ export function PricingToolbar(props: PricingToolbarProps) {
               className='border-0 bg-transparent p-0 shadow-none'
             />
           </div>
+          <SheetFooter className={sideDrawerFooterClassName('flex')}>
+            <SheetClose render={<Button className='w-full rounded-full' />}>
+              {t('View results ({{total}})', { total: props.filteredCount })}
+            </SheetClose>
+          </SheetFooter>
         </SheetContent>
       </Sheet>
     </div>
