@@ -7,7 +7,7 @@ compatibility_date = "2025-03-01"
 #    and paste the returned id below.
 [[kv_namespaces]]
 binding = "OPS_STATE"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "b5193752200e4eb1afb66c29abfd6458"
 
 # 2. Cron triggers:
 #    - Every 2 minutes: poll OpenBridger & NetGo for outage/recovery/node/model/ticket alerts
@@ -18,7 +18,7 @@ crons = ["*/2 * * * *", "0 1 * * *"]
 [vars]
 OB_BASE_URL = "https://openbridger.com"
 NETGO_OPS_URL = "https://ops.netgo.cc/api/netgo-ops/snapshot"
-DASHBOARD_PUBLIC_URL = ""
+DASHBOARD_PUBLIC_URL = "https://hub.openbridger.com"
 WECOM_TO_USER = "@all"
 MODEL_ALERT_THRESHOLD = "85"
 MIN_MODEL_SAMPLES = "5"
