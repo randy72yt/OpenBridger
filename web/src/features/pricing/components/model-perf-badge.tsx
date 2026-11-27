@@ -32,52 +32,92 @@ export type ModelPerfBadgeData = {
   success_rate: number
   avg_tps: number
   recent_success_series?: SuccessRatePoint[]
+  // v2-only fields; their presence switches the badge to the v2 caliber.
+  avg_ttft_ms?: number
+  availability_24h?: number
+  sample_count?: number
+  probe_share?: number
+  insufficient?: boolean
 }
 
-export interface ModelPerfBadgeProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface ModelPerfBadgeProps
+  extends React.HTMLAttributes<HTMLDivElement> {
   perf: ModelPerfBadgeData | undefined
+  statusSlots?: number
 }
 
-const STATUS_SLOTS = Array.from({ length: 24 }, (_, slot) => slot)
+// Denser strips need thinner bars to fit the fixed 96px status block.
+function statusBarWidthClass(slotCount: number): string {
+  if (slotCount >= 72) return 'w-[1px]'
+  if (slotCount >= 48) return 'w-[2px]'
+  return 'w-[3px]'
+}
 
 export const ModelPerfBadge = memo(function ModelPerfBadge(
   props: ModelPerfBadgeProps
 ) {
   const { t } = useTranslation()
-  const latencyText = formatLatency(props.perf?.avg_latency_ms ?? 0)
-  const throughputText = formatThroughput(props.perf?.avg_tps ?? 0).replace(
-    ' t/s',
-    't/s'
+  const slotCount = props.statusSlots ?? 24
+  const statusSlots = useMemo(
+    () => Array.from({ length: slotCount }, (_, slot) => slot),
+    [slotCount]
   )
-  const successRate = props.perf?.success_rate
+  const barWidthClass = statusBarWidthClass(slotCount)
+
+  const v2 = props.perf?.availability_24h != null
+  const successRate = v2 ? props.perf?.availability_24h : props.perf?.success_rate
   const hasSuccessRate =
     successRate != null &&
     Number.isFinite(successRate) &&
     successRate >= 0 &&
     successRate <= 100
+
+  const totalLatencyText = formatLatency(props.perf?.avg_latency_ms ?? 0)
+  const ttftLatencyText = formatLatency(props.perf?.avg_ttft_ms ?? 0)
+  let latencyText = totalLatencyText
+  if (v2 && ttftLatencyText !== '—') {
+    latencyText = `${ttftLatencyText} / ${totalLatencyText}`
+  }
+  const throughputText = formatThroughput(props.perf?.avg_tps ?? 0).replace(
+    ' t/s',
+    't/s'
+  )
+
+  const insufficient = v2 && Boolean(props.perf?.insufficient)
+  const probeDriven = v2 && (props.perf?.probe_share ?? 0) > 0.5
+  const hints: string[] = []
+  if (insufficient) hints.push(t('Not enough samples'))
+  if (probeDriven) hints.push(t('Mostly probe traffic'))
+
   // Hourly points with timestamps, anchored to the client's current hour.
-  // Hours without traffic stay gray. Slot 23 is the current, partial hour.
+  // Hours without traffic stay gray. The last slot is the current, partial hour.
   const statusRates = useMemo(() => {
     const currentHourStart = Math.floor(Date.now() / 1000 / 3600) * 3600
     const ratesByHour = new Map<number, number>()
     for (const point of props.perf?.recent_success_series ?? []) {
       ratesByHour.set(point.ts, point.success_rate)
     }
-    return STATUS_SLOTS.map((slot) => {
-      const hourStart = currentHourStart - (23 - slot) * 3600
+    return statusSlots.map((slot) => {
+      const hourStart = currentHourStart - (slotCount - 1 - slot) * 3600
       return ratesByHour.get(hourStart)
     })
-  }, [props.perf?.recent_success_series])
+  }, [props.perf?.recent_success_series, slotCount, statusSlots])
 
   return (
     <div
       aria-label={t('Performance metrics for the last 24 hours')}
       className={cn(
         'flex w-full min-w-0 items-center justify-between gap-3',
+        insufficient && 'opacity-55',
         props.className
       )}
     >
-      <dl className='flex min-w-0 items-start gap-5 text-xs tabular-nums'>
+      <dl
+        className={cn(
+          'flex min-w-0 items-start gap-5 text-xs tabular-nums',
+          insufficient && 'grayscale-[30%]'
+        )}
+      >
         <div className='w-24 shrink-0'>
           <dt
             title={t('Request success rate sampled over the last 24 hours')}
@@ -85,7 +125,9 @@ export const ModelPerfBadge = memo(function ModelPerfBadge(
           >
             <span>{t('Status')}</span>
             <span className='font-mono'>
-              {hasSuccessRate ? `${successRate.toFixed(1)}%` : '—%'}
+              {hasSuccessRate
+                ? `${successRate.toFixed(v2 ? 2 : 1)}%`
+                : '—%'}
             </span>
           </dt>
           <dd
@@ -98,14 +140,15 @@ export const ModelPerfBadge = memo(function ModelPerfBadge(
             )}
             className='mt-1 flex h-3 w-24 items-center justify-between'
           >
-            {STATUS_SLOTS.map((slot) => {
+            {statusSlots.map((slot) => {
               const rate = statusRates[slot]
               return (
                 <span
                   key={slot}
                   aria-hidden
                   className={cn(
-                    'h-full w-[3px] shrink-0 rounded-xs',
+                    'h-full shrink-0 rounded-xs',
+                    barWidthClass,
                     rate != null &&
                       Number.isFinite(rate) &&
                       rate >= 0 &&
@@ -117,10 +160,15 @@ export const ModelPerfBadge = memo(function ModelPerfBadge(
               )
             })}
           </dd>
+          {hints.length > 0 && (
+            <p className='text-muted-foreground/80 mt-1 text-[10px] leading-4'>
+              {hints.join(' · ')}
+            </p>
+          )}
         </div>
         <div title={t('Average latency')} className='shrink-0'>
           <dt className='text-muted-foreground text-[11px] leading-4'>
-            {t('Latency short')}
+            {v2 ? t('First token / total') : t('Latency short')}
           </dt>
           <dd className='mt-1 font-mono whitespace-nowrap'>
             {latencyText === '—' ? '—s' : latencyText}

@@ -23,7 +23,7 @@ import { useTranslation } from 'react-i18next'
 
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getPerfMetricsSummary } from '@/features/performance-metrics/api'
+import { getAdminPerfSummary } from '@/features/performance-metrics/api'
 import {
   formatLatency,
   formatThroughput,
@@ -32,6 +32,7 @@ import {
   getSuccessRateTextClass,
 } from '@/features/performance-metrics/lib/format'
 import type { PerfModelSummary } from '@/features/performance-metrics/types'
+import { formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const PERFORMANCE_WINDOW_HOURS = 24
@@ -57,38 +58,58 @@ function simpleAverage(
 
 export function PerformanceHealthPanel() {
   const { t } = useTranslation()
-  const metricsQuery = useQuery({
-    queryKey: ['perf-metrics-summary', PERFORMANCE_WINDOW_HOURS],
-    queryFn: () => getPerfMetricsSummary(PERFORMANCE_WINDOW_HOURS),
+  const adminQuery = useQuery({
+    queryKey: ['perf-metrics-admin', PERFORMANCE_WINDOW_HOURS],
+    queryFn: () => getAdminPerfSummary(PERFORMANCE_WINDOW_HOURS),
     staleTime: 60 * 1000,
     retry: false,
   })
 
-  const models = useMemo(
-    () => metricsQuery.data?.data.models ?? [],
-    [metricsQuery.data]
+  const models = useMemo(() => adminQuery.data?.data.models ?? [], [
+    adminQuery.data,
+  ])
+  // KPI averages follow the public v2 caliber (real + probe).
+  const v2Rows = useMemo(
+    () => models.map((model) => model.public_v2),
+    [models]
+  )
+  const availabilityRows = useMemo(
+    () =>
+      models
+        .map((model) => model.availability_24h)
+        .filter((value) => Number.isFinite(value)),
+    [models]
   )
 
   const summary = useMemo(() => {
     return {
       avgLatencyMs: Math.round(
-        simpleAverage(
-          models,
-          'avg_latency_ms',
-          (v) => Number.isFinite(v) && v > 0
-        )
+        simpleAverage(v2Rows, 'avg_latency_ms', (v) => Number.isFinite(v) && v > 0)
       ),
-      avgTps: simpleAverage(
-        models,
-        'avg_tps',
-        (v) => Number.isFinite(v) && v > 0
-      ),
-      successRate: simpleAverage(models, 'success_rate', Number.isFinite),
+      avgTps: simpleAverage(v2Rows, 'avg_tps', (v) => Number.isFinite(v) && v > 0),
+      availability:
+        availabilityRows.length > 0
+          ? availabilityRows.reduce((sum, value) => sum + value, 0) /
+            availabilityRows.length
+          : Number.NaN,
+      probeBudgetUsed: adminQuery.data?.data.probe_budget_used_quota ?? 0,
+      probeBudgetQuota: adminQuery.data?.data.probe_budget_quota ?? 0,
     }
-  }, [models])
+  }, [v2Rows, availabilityRows, adminQuery.data])
 
-  const topModels = useMemo(() => models.slice(0, TOP_MODEL_LIMIT), [models])
-  const loading = metricsQuery.isLoading
+  const topModels = useMemo(
+    () =>
+      [...models]
+        .sort(
+          (a, b) =>
+            b.real.requests +
+            b.probe.requests -
+            (a.real.requests + a.probe.requests)
+        )
+        .slice(0, TOP_MODEL_LIMIT),
+    [models]
+  )
+  const loading = adminQuery.isLoading
   const hasData = models.length > 0
 
   return (
@@ -98,8 +119,9 @@ export function PerformanceHealthPanel() {
           <HeartPulse />
         </IconBadge>
         <h3 className='text-sm font-semibold'>{t('Performance health')}</h3>
-        <span className='text-muted-foreground ml-auto text-xs'>
-          {t('Performance metrics for the last 24 hours')}
+        <span className='text-muted-foreground ml-auto font-mono text-xs tabular-nums'>
+          {t('Probe budget')}: {formatQuota(summary.probeBudgetUsed)} /{' '}
+          {formatQuota(summary.probeBudgetQuota)}
         </span>
       </div>
 
@@ -107,10 +129,10 @@ export function PerformanceHealthPanel() {
         <div className='grid grid-cols-3 gap-2'>
           <MetricCell
             icon={HeartPulse}
-            label={t('Success rate')}
-            value={formatUptimePct(summary.successRate)}
+            label={t('Availability (24h)')}
+            value={formatUptimePct(summary.availability)}
             loading={loading}
-            valueClassName={getSuccessRateTextClass(summary.successRate)}
+            valueClassName={getSuccessRateTextClass(summary.availability)}
             tone='success'
           />
           <MetricCell
@@ -154,17 +176,17 @@ export function PerformanceHealthPanel() {
                       <span
                         className={cn(
                           'size-1.5 rounded-full',
-                          getSuccessRateDotClass(model.success_rate)
+                          getSuccessRateDotClass(model.availability_24h)
                         )}
                         aria-hidden='true'
                       />
                       <span
                         className={cn(
                           'font-mono text-[11px] font-semibold tabular-nums',
-                          getSuccessRateTextClass(model.success_rate)
+                          getSuccessRateTextClass(model.availability_24h)
                         )}
                       >
-                        {formatUptimePct(model.success_rate)}
+                        {formatUptimePct(model.availability_24h)}
                       </span>
                     </span>
                   </div>

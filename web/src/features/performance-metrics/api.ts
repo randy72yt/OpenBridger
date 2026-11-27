@@ -18,14 +18,31 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
 
-import type { PerformanceMetricsData, PerfSummaryAllData } from './types'
+import type {
+  AdminPerfSummaryData,
+  PerformanceMetricsData,
+  PerfSummaryAllData,
+} from './types'
 
+// bars is only honored by the backend when public_v2 is enabled; v1 responses
+// ignore it, so callers can always send the wider status-series window.
 export async function getPerfMetricsSummary(
-  hours = 24
+  hours = 24,
+  bars = 24
 ): Promise<PerfSummaryAllData> {
   const res = await api.get<PerfSummaryAllData>('/api/perf-metrics/summary', {
-    params: { hours },
+    params: { hours, bars },
   })
+  return res.data
+}
+
+export async function getAdminPerfSummary(
+  hours = 24
+): Promise<AdminPerfSummaryData> {
+  const res = await api.get<AdminPerfSummaryData>(
+    '/api/perf-metrics/admin/summary',
+    { params: { hours } }
+  )
   return res.data
 }
 

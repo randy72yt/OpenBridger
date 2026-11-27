@@ -26,7 +26,10 @@ import {
   staticDataTableClassNames as tableStyles,
 } from '@/components/data-table'
 import { GroupBadge } from '@/components/group-badge'
-import { getPerfMetrics } from '@/features/performance-metrics/api'
+import {
+  getPerfMetrics,
+  getPerfMetricsSummary,
+} from '@/features/performance-metrics/api'
 import {
   formatLatency,
   formatThroughput,
@@ -36,7 +39,7 @@ import {
 import type { PerformanceGroup } from '@/features/performance-metrics/types'
 import { cn } from '@/lib/utils'
 
-import { type UptimeDayPoint } from '../lib/mock-stats'
+import type { UptimeDayPoint } from '../lib/mock-stats'
 import type { PricingModel } from '../types'
 import { LatencyTrendChart, UptimeTrendChart } from './model-details-charts'
 import { UptimeSparkline } from './model-details-uptime-sparkline'
@@ -97,7 +100,7 @@ function toLatencySeries(groups: PerformanceGroup[]) {
     }
   }
 
-  return Array.from(byTs.entries())
+  return [...byTs.entries()]
     .sort(([a], [b]) => a - b)
     .map(([ts, values]) => ({
       timestamp: new Date(ts * 1000).toISOString(),
@@ -121,7 +124,7 @@ function toUptimeSeries(groups: PerformanceGroup[]): UptimeDayPoint[] {
       byTs.set(point.ts, current)
     }
   }
-  return Array.from(byTs.entries())
+  return [...byTs.entries()]
     .sort(([a], [b]) => a - b)
     .map(([ts, value]) => {
       const uptime =
@@ -168,6 +171,21 @@ export function ModelDetailsPerformance(props: { model: PricingModel }) {
     queryFn: () => getPerfMetrics(props.model.model_name, 24),
     staleTime: 60 * 1000,
   })
+  // Shares the model grid's cache; the per-model v2 summary carries the 7-day
+  // availability and sample count that the detail endpoint does not expose.
+  const summaryQuery = useQuery({
+    queryKey: ['perf-metrics-summary', 24, 48],
+    queryFn: () => getPerfMetricsSummary(24, 48),
+    staleTime: 60 * 1000,
+    retry: false,
+  })
+  const v2Summary = useMemo(
+    () =>
+      summaryQuery.data?.data.models.find(
+        (model) => model.model_name === props.model.model_name
+      ),
+    [summaryQuery.data, props.model.model_name]
+  )
   const groups = useMemo(
     () => metricsQuery.data?.data.groups ?? [],
     [metricsQuery.data]
@@ -221,7 +239,14 @@ export function ModelDetailsPerformance(props: { model: PricingModel }) {
 
   return (
     <div className='flex flex-col gap-4'>
-      <div className='grid grid-cols-1 gap-2 sm:grid-cols-3'>
+      <div
+        className={cn(
+          'grid grid-cols-1 gap-2',
+          v2Summary?.availability_7d != null
+            ? 'sm:grid-cols-3 lg:grid-cols-5'
+            : 'sm:grid-cols-3'
+        )}
+      >
         <StatCard
           icon={Timer}
           label='TPS'
@@ -246,6 +271,25 @@ export function ModelDetailsPerformance(props: { model: PricingModel }) {
           }
           valueClassName={getSuccessRateTextClass(successRate)}
         />
+        {v2Summary?.availability_7d != null && (
+          <StatCard
+            icon={HeartPulse}
+            label={t('Availability (7 days)')}
+            value={formatUptimePct(v2Summary.availability_7d)}
+            hint={t('Real traffic plus active probes')}
+            valueClassName={getSuccessRateTextClass(v2Summary.availability_7d)}
+          />
+        )}
+        {v2Summary?.sample_count != null && (
+          <StatCard
+            icon={Timer}
+            label={t('Samples (24h)')}
+            value={String(v2Summary.sample_count)}
+            hint={
+              v2Summary.insufficient ? t('Not enough samples') : undefined
+            }
+          />
+        )}
       </div>
 
       <section>

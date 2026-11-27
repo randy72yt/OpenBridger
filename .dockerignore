@@ -14,4 +14,6 @@ docs
 .eslintcache
 .gocache
 /web/node_modules
+/docs-site
+/ops-hub
 !THIRD-PARTY-LICENSES.md

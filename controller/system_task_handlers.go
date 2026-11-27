@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
+	"github.com/QuantumNous/new-api/setting/perf_metrics_setting"
 )
 
 // RegisterScheduledSystemTasks wires the periodic channel test, upstream model
@@ -22,6 +23,7 @@ func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(modelUpdateHandler{})
 	service.RegisterSystemTaskHandler(midjourneyPollHandler{})
 	service.RegisterSystemTaskHandler(asyncTaskPollHandler{})
+	service.RegisterSystemTaskHandler(modelProbeHandler{})
 }
 
 // channelTestHandler runs the scheduled "test all channels" job. Enablement and
@@ -150,6 +152,28 @@ func (asyncTaskPollHandler) NewPayload() any { return nil }
 func (asyncTaskPollHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
 	summary := service.RunTaskPollingOnce(ctx, service.NewSystemTaskProgressReporter(task, runnerID))
 	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, summary, nil)
+}
+
+// modelProbeHandler runs the scheduled model probe pass: low-frequency probes
+// for on-sale models that lack recent real traffic. Disabled by default via
+// perf_metrics_setting.probe_enabled.
+type modelProbeHandler struct{}
+
+func (modelProbeHandler) Type() string { return model.SystemTaskTypeModelProbe }
+
+func (modelProbeHandler) Enabled() bool {
+	return perf_metrics_setting.GetSetting().ProbeEnabled
+}
+
+func (modelProbeHandler) Interval() time.Duration {
+	return time.Duration(perf_metrics_setting.GetProbeScanIntervalMinutes()) * time.Minute
+}
+
+func (modelProbeHandler) NewPayload() any { return nil }
+
+func (modelProbeHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	result := service.RunModelProbeRound(ctx)
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, result, nil)
 }
 
 func finishSystemTaskHandler(task *model.SystemTask, runnerID string, status model.SystemTaskStatus, result any, runErr error) {

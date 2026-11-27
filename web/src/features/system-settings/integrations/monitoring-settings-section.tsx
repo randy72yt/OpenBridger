@@ -42,6 +42,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 
 import {
   SettingsForm,
@@ -67,6 +68,15 @@ const monitoringSchema = z.object({
     flush_interval: z.coerce.number().min(1),
     bucket_time: z.enum(['minute', '5min', 'hour']),
     retention_days: z.coerce.number().min(0),
+    public_v2: z.boolean(),
+    min_public_samples: z.coerce.number().min(0),
+    internal_token_names: z.string(),
+    probe_enabled: z.boolean(),
+    probe_scan_minutes: z.coerce.number().min(1),
+    probe_max_per_run: z.coerce.number().min(0),
+    probe_daily_budget_quota: z.coerce.number().min(0),
+    probe_real_traffic_threshold: z.coerce.number().min(0),
+    probe_models: z.string(),
   }),
 })
 
@@ -79,6 +89,15 @@ type FlatMonitoringDefaults = {
   'perf_metrics_setting.flush_interval': number
   'perf_metrics_setting.bucket_time': 'minute' | '5min' | 'hour'
   'perf_metrics_setting.retention_days': number
+  'perf_metrics_setting.public_v2': boolean
+  'perf_metrics_setting.min_public_samples': number
+  'perf_metrics_setting.internal_token_names': string
+  'perf_metrics_setting.probe_enabled': boolean
+  'perf_metrics_setting.probe_scan_minutes': number
+  'perf_metrics_setting.probe_max_per_run': number
+  'perf_metrics_setting.probe_daily_budget_quota': number
+  'perf_metrics_setting.probe_real_traffic_threshold': number
+  'perf_metrics_setting.probe_models': string
 }
 
 type MonitoringSettingsSectionProps = {
@@ -94,6 +113,17 @@ const buildFormDefaults = (
     flush_interval: defaults['perf_metrics_setting.flush_interval'],
     bucket_time: defaults['perf_metrics_setting.bucket_time'],
     retention_days: defaults['perf_metrics_setting.retention_days'],
+    public_v2: defaults['perf_metrics_setting.public_v2'],
+    min_public_samples: defaults['perf_metrics_setting.min_public_samples'],
+    internal_token_names: defaults['perf_metrics_setting.internal_token_names'],
+    probe_enabled: defaults['perf_metrics_setting.probe_enabled'],
+    probe_scan_minutes: defaults['perf_metrics_setting.probe_scan_minutes'],
+    probe_max_per_run: defaults['perf_metrics_setting.probe_max_per_run'],
+    probe_daily_budget_quota:
+      defaults['perf_metrics_setting.probe_daily_budget_quota'],
+    probe_real_traffic_threshold:
+      defaults['perf_metrics_setting.probe_real_traffic_threshold'],
+    probe_models: defaults['perf_metrics_setting.probe_models'],
   },
 })
 
@@ -108,6 +138,23 @@ const normalizeDefaults = (
     defaults['perf_metrics_setting.bucket_time'],
   'perf_metrics_setting.retention_days':
     defaults['perf_metrics_setting.retention_days'],
+  'perf_metrics_setting.public_v2': defaults['perf_metrics_setting.public_v2'],
+  'perf_metrics_setting.min_public_samples':
+    defaults['perf_metrics_setting.min_public_samples'],
+  'perf_metrics_setting.internal_token_names':
+    defaults['perf_metrics_setting.internal_token_names'],
+  'perf_metrics_setting.probe_enabled':
+    defaults['perf_metrics_setting.probe_enabled'],
+  'perf_metrics_setting.probe_scan_minutes':
+    defaults['perf_metrics_setting.probe_scan_minutes'],
+  'perf_metrics_setting.probe_max_per_run':
+    defaults['perf_metrics_setting.probe_max_per_run'],
+  'perf_metrics_setting.probe_daily_budget_quota':
+    defaults['perf_metrics_setting.probe_daily_budget_quota'],
+  'perf_metrics_setting.probe_real_traffic_threshold':
+    defaults['perf_metrics_setting.probe_real_traffic_threshold'],
+  'perf_metrics_setting.probe_models':
+    defaults['perf_metrics_setting.probe_models'],
 })
 
 const normalizeFormValues = (
@@ -120,6 +167,22 @@ const normalizeFormValues = (
   'perf_metrics_setting.bucket_time': values.perf_metrics_setting.bucket_time,
   'perf_metrics_setting.retention_days':
     values.perf_metrics_setting.retention_days,
+  'perf_metrics_setting.public_v2': values.perf_metrics_setting.public_v2,
+  'perf_metrics_setting.min_public_samples':
+    values.perf_metrics_setting.min_public_samples,
+  'perf_metrics_setting.internal_token_names':
+    values.perf_metrics_setting.internal_token_names.trim(),
+  'perf_metrics_setting.probe_enabled':
+    values.perf_metrics_setting.probe_enabled,
+  'perf_metrics_setting.probe_scan_minutes':
+    values.perf_metrics_setting.probe_scan_minutes,
+  'perf_metrics_setting.probe_max_per_run':
+    values.perf_metrics_setting.probe_max_per_run,
+  'perf_metrics_setting.probe_daily_budget_quota':
+    values.perf_metrics_setting.probe_daily_budget_quota,
+  'perf_metrics_setting.probe_real_traffic_threshold':
+    values.perf_metrics_setting.probe_real_traffic_threshold,
+  'perf_metrics_setting.probe_models': values.perf_metrics_setting.probe_models,
 })
 
 export function MonitoringSettingsSection({
@@ -155,6 +218,7 @@ export function MonitoringSettingsSection({
   }, [defaultValues])
 
   const perfMetricsEnabled = form.watch('perf_metrics_setting.enabled')
+  const probeEnabled = form.watch('perf_metrics_setting.probe_enabled')
 
   const onSubmit = async (values: MonitoringFormValues) => {
     const normalized = normalizeFormValues(values)
@@ -307,6 +371,216 @@ export function MonitoringSettingsSection({
                   </FormControl>
                   <FormDescription>
                     {t('0 means data is kept permanently')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className='grid grid-cols-1 gap-4 md:grid-cols-4'>
+            <FormField
+              control={form.control}
+              name='perf_metrics_setting.public_v2'
+              render={({ field }) => (
+                <SettingsSwitchItem>
+                  <SettingsSwitchContent>
+                    <FormLabel>{t('Public v2 metrics')}</FormLabel>
+                    <FormDescription>
+                      {t(
+                        'Show availability, TTFT and sample counts on the public model square. Recommended after one week of ops review.'
+                      )}
+                    </FormDescription>
+                  </SettingsSwitchContent>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      disabled={!perfMetricsEnabled}
+                    />
+                  </FormControl>
+                </SettingsSwitchItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='perf_metrics_setting.min_public_samples'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Minimum public samples')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={0}
+                      step={1}
+                      {...safeNumberFieldProps(field)}
+                      disabled={!perfMetricsEnabled}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Models with fewer samples are grayed out as insufficient on the public square.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='perf_metrics_setting.internal_token_names'
+              render={({ field }) => (
+                <FormItem className='md:col-span-2'>
+                  <FormLabel>{t('Internal token names')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      value={field.value}
+                      onChange={(event) => field.onChange(event.target.value)}
+                      disabled={!perfMetricsEnabled}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Comma-separated token names excluded from public metrics (plus the playground).'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div>
+            <h4 className='font-medium'>{t('Model probing')}</h4>
+            <p className='text-muted-foreground mt-1 text-xs'>
+              {t(
+                'Probe on-sale models without recent real traffic through the normal relay chain, budget-capped per day.'
+              )}
+            </p>
+          </div>
+
+          <div className='grid grid-cols-1 gap-4 md:grid-cols-4'>
+            <FormField
+              control={form.control}
+              name='perf_metrics_setting.probe_enabled'
+              render={({ field }) => (
+                <SettingsSwitchItem>
+                  <SettingsSwitchContent>
+                    <FormLabel>{t('Enable model probing')}</FormLabel>
+                  </SettingsSwitchContent>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      disabled={!perfMetricsEnabled}
+                    />
+                  </FormControl>
+                </SettingsSwitchItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='perf_metrics_setting.probe_scan_minutes'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Probe scan interval (minutes)')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={1}
+                      step={1}
+                      {...safeNumberFieldProps(field)}
+                      disabled={!probeEnabled}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='perf_metrics_setting.probe_max_per_run'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Max probes per run')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={0}
+                      step={1}
+                      {...safeNumberFieldProps(field)}
+                      disabled={!probeEnabled}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='perf_metrics_setting.probe_daily_budget_quota'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Daily probe budget (quota)')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={0}
+                      step={1000}
+                      {...safeNumberFieldProps(field)}
+                      disabled={!probeEnabled}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t('500000 quota equals $1 by default')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='perf_metrics_setting.probe_real_traffic_threshold'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Real traffic threshold (per hour)')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={0}
+                      step={1}
+                      {...safeNumberFieldProps(field)}
+                      disabled={!probeEnabled}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Models with at least this many real requests in the last hour are not probed.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='perf_metrics_setting.probe_models'
+              render={({ field }) => (
+                <FormItem className='md:col-span-3'>
+                  <FormLabel>{t('Probe model overrides')}</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      rows={6}
+                      className='font-mono text-xs'
+                      value={field.value}
+                      onChange={(event) => field.onChange(event.target.value)}
+                      disabled={!probeEnabled}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'One model per line: <model> <tier:cheap|medium|expensive|off> [token_param] [limit] [endpoint:chat|responses]. Lines starting with # are comments.'
+                    )}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
