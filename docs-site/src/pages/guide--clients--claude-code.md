@@ -1,72 +1,63 @@
-# 在 Claude Code 中使用 OpenBridger
+# Claude Code 配置教程（桌面端 / VS Code / CLI）
 
-Claude Code 使用 Anthropic Messages 协议。网关对应的路径是 `POST /v1/messages`。密钥可以放在 `x-api-key`（Claude Code 会这么做），网关在这条路径上接受它。
+Claude Code（命令行 `claude`、VS Code 插件、桌面端 Code 模式）走 Anthropic 原生 `/v1/messages` 协议，共用本地 `.claude` 目录。
 
-模型名必须是 [模型广场]({{CONSOLE_URL}}/pricing) 里的完整 ID，而且当前分组要有能处理 Messages 请求的线路。只在广场里看得到名字还不够，需要实际发一条短请求并用 [使用日志]({{CONSOLE_URL}}/usage-logs) 确认。
+## 开始前准备
 
-## 开始之前
+1. 在 [API 密钥]({{CONSOLE_URL}}/keys) 创建名为 `claude-code` 的密钥，复制 `sk-...`。
+2. 在 [模型广场]({{CONSOLE_URL}}/pricing) 复制完整模型 ID（如 `claude-sonnet-5-5`、`claude-opus-5-5`）。
 
-- 已安装 `claude` 命令。
-- 一把名为 `claude-code` 的 API Key。
-- 知道你要使用的模型 ID。
+<div class="callout warning"><strong>Base URL 绝不要带 /v1</strong><p>Claude Code 会自动拼接 <code>/v1/messages</code>，地址必须填 <strong><code>{{CONSOLE_URL}}</code></strong>（写成带 <code>/v1</code> 会报 <code>404</code>）。</p></div>
 
-## 当前终端临时生效
+---
 
-```bash
-export ANTHROPIC_BASE_URL="{{CONSOLE_URL}}"
-export ANTHROPIC_AUTH_TOKEN="sk-你的密钥"
+## 方式一：用 CC Switch 图形界面一键配（推荐）
 
-cd /path/to/your/project
-claude
-```
+1. 打开 **CC Switch**（见 [CC Switch 教程](/guide/clients/cc-switch/)），顶部切到 **`Claude Code`** -> 点右上角 **`+`** -> 选 **「自定义配置」**。
+2. 填 `Base URL` = `{{CONSOLE_URL}}`（不带 `/v1`）、`API Key` = `sk-...`、`Model` = `claude-sonnet-5-5`。
+3. 点 **「保存」** -> 点卡片 **「启用」** -> 新开终端运行 `claude`（或重载 VS Code）即可。
 
-`ANTHROPIC_BASE_URL` 是站点根，**不要**写成 `{{API_BASE_URL}}`。Claude Code 会自己请求 `{BASE}/v1/messages`。写成带 `/v1` 的地址会变成 `/v1/v1/messages`。
+---
 
-关掉这个终端后变量就没了。恢复官方服务：
+## 方式二：手动配置 `.claude/settings.json`
 
-```bash
-unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN
-```
+<div class="steps">
+  <div class="step"><strong>第 1 步：安装客户端</strong><p>• <strong>CLI 命令行</strong>：需 Node.js 18+，运行 <code>npm install -g @anthropic-ai/claude-code</code>。<br>• <strong>VS Code / 桌面端</strong>：安装官方 <code>Claude Code</code> 扩展或桌面端。</p></div>
+  <div class="step"><strong>第 2 步：打开 <code>.claude</code> 隐藏文件夹</strong><p>• <strong>macOS</strong>：访达按 <code>Command + Shift + G</code> 输入 <code>~/</code> 回车，按 <code>Command + Shift + .</code> 显示隐藏文件，新建或打开 <code>.claude</code>。<br>• <strong>Windows</strong>：资源管理器地址栏输 <code>%USERPROFILE%</code> 回车，勾选显示「文件扩展名」，新建或打开 <code>.claude</code>。</p></div>
+  <div class="step"><strong>第 3 步：新建 <code>settings.json</code></strong><p>在 <code>.claude</code> 内保存 <strong><code>settings.json</code></strong>（见下方模板，替换密钥和模型 ID）。</p></div>
+  <div class="step"><strong>第 4 步：跳过首次引导（如卡在登录页）</strong><p>若全新安装首次启动仍弹登录引导，在主目录 <code>~/.claude.json</code> 写入 <code>{"hasCompletedOnboarding": true}</code>（或用 CC Switch 点一次启用自动完成）。</p></div>
+  <div class="step"><strong>第 5 步：重开终端 / 重载 VS Code 验证</strong><p>新开终端进入项目目录输入 <code>claude</code>（VS Code 执行 <code>Developer: Reload Window</code>），发一句提问并在 <a href="{{CONSOLE_URL}}/usage-logs">使用日志</a> 核对。</p></div>
+</div>
 
-然后新开终端再运行 `claude`。
-
-## 写进 Claude Code 的配置
-
-`~/.claude/settings.json`：
+### `settings.json` 模板
 
 ```json
 {
   "env": {
     "ANTHROPIC_BASE_URL": "{{CONSOLE_URL}}",
-    "ANTHROPIC_AUTH_TOKEN": "sk-你的密钥"
+    "ANTHROPIC_AUTH_TOKEN": "sk-替换成你在控制台复制的密钥",
+    "ANTHROPIC_MODEL": "claude-sonnet-5-5",
+    "API_TIMEOUT_MS": "300000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
   }
 }
 ```
 
-这个文件里有密钥，不要提交，不要截图。项目目录里的 `.claude/settings.json` 同样不要写入真实密钥。
+### 附：单次终端临时命令（不改配置文件）
 
-如果客户端允许指定模型，把值设成广场上的完整 ID。Claude Code 默认发出的模型名如果和广场不一致，会得到 `503`「无可用渠道」或上游的 model not found。以日志里记录的模型 ID 为准。
-
-检查当前终端实际生效的变量：
-
-```bash
-env | grep ANTHROPIC_
-```
-
-只确认变量在不在，不要把输出贴到聊天或工单。
+- **macOS / Linux**：`export ANTHROPIC_BASE_URL="{{CONSOLE_URL}}" ANTHROPIC_AUTH_TOKEN="sk-密钥" ANTHROPIC_MODEL="claude-sonnet-5-5" && claude`
+- **Windows PowerShell**：`$env:ANTHROPIC_BASE_URL="{{CONSOLE_URL}}"; $env:ANTHROPIC_AUTH_TOKEN="sk-密钥"; $env:ANTHROPIC_MODEL="claude-sonnet-5-5"; claude`
 
 ## 常见问题
 
-| 现象 | 处理 |
+| 现象 | 解决方法 |
 | --- | --- |
-| 仍要求登录官方账号 | 新开终端，确认两个 `ANTHROPIC_` 变量已导出，再启动 `claude` |
-| 401 | 重新复制密钥。不要在 token 前面再加 `Bearer` |
-| 503 无可用渠道 | 广场中的模型 ID 与 Claude Code 发出的名字不一致，或该分组没有 Messages 线路 |
-| 请求没进使用日志 | Base URL 还指着官方主机。用 `env | grep ANTHROPIC_BASE_URL` 核对 |
-
-<div class="callout warning"><strong>协议要对上</strong><p>Chat Completions 可用，不等于 Claude Code 可用。需要模型、分组和 <code>/v1/messages</code> 同时成立。</p></div>
+| 仍提示 `/login` 登录官方账号 | 关掉旧终端新开一个，检查文件名不是 `settings.json.txt`，或用 [CC Switch](/guide/clients/cc-switch/) 一键启用 |
+| 右上角显示红色 `offline` | 客户端探测遥测域名的提示，**只要发消息能正常回复即可直接忽略** |
+| 报 `404` / `503` | `404` 删掉地址末尾的 `/v1`；`503` 去 [模型广场]({{CONSOLE_URL}}/pricing) 核对完整模型 ID |
 
 ## 相关
 
-- [CC Switch](/guide/clients/cc-switch/)
+- [CC Switch（新手一键配置）](/guide/clients/cc-switch/)
+- [Anthropic Messages 原生接口](/api/anthropic-messages/)
 - [错误码](/guide/errors/)

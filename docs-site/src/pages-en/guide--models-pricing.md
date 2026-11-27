@@ -1,37 +1,27 @@
-# Models and pricing
+# Models and Pricing
 
-Models on sale, protocols, and unit prices are on [Model Square]({{CONSOLE_URL}}/pricing). The model string in a client must match that full ID, including case, hyphens, and the version suffix.
+All available models, supported protocols, and live prices are listed in [Models & Pricing]({{CONSOLE_URL}}/pricing).
 
-<div class="actions"><a class="btn primary" href="{{CONSOLE_URL}}/pricing">Open Model Square</a></div>
+<div class="actions"><a class="btn primary" href="{{CONSOLE_URL}}/pricing">Open Models & Pricing</a></div>
 
-This guide does not publish a price table. Prices change when upstream quotes and published offers change. The input, output, cache, and other units shown for a model are the basis of that call's charge.
+## 3 Rules When Choosing a Model
 
-## Four things to check
+1. **Always Copy the Exact Model ID**
+   - Click the model badge in Models & Pricing to copy its full identifier (case, hyphens, and suffixes included — e.g., `gpt-6.2-astra`, `claude-sonnet-5-5`). Never abbreviate it to `gpt-6` or `claude`.
+2. **Match the Protocol to Your Client**
+   - **Chat & translation apps** (Cherry Studio, Chatbox, Immersive Translate, Cursor): use `/v1/chat/completions`.
+   - **Codex**: requires a model and group supporting `/v1/responses`.
+   - **Claude Code**: requires a model and group supporting `/v1/messages`.
+3. **Pick the Right Tier for the Job**
+   - **Complex coding, debugging & math proofs**: use flagship / reasoning models (`gpt-6.2-astra`, `claude-opus-5-5`, `gemini-4-carbon`).
+   - **Bilingual PDF/web translation & quick Q&A**: use fast lightweight models (`gpt-6.2-sol`, `deepseek-v4.1-flash`, `gemini-4-hydrogen`) for lower latency and lower cost.
 
-- **Protocol.** Chat apps usually need Chat Completions (`/v1/chat/completions`). Codex needs Responses (`/v1/responses`). Claude Code needs Anthropic Messages (`/v1/messages`). A name on Model Square does not mean all three work.
-- **Group.** The same model ID can have different routes and prices in different groups. The group on the key decides which one you get.
-- **Units.** Some models bill input and output tokens. Others also bill cache, tool calls, image count, or media duration. Read that model's card, then send one short request and check [Usage Logs]({{CONSOLE_URL}}/usage-logs).
-- **Availability.** With no route, the gateway returns `503`, a message that no channel is available, and `code` `model_not_found`. That is not the same as an upstream `404`. See [Error codes](/guide/errors/).
+## Why Is My Client's Model Dropdown Empty?
 
-## How to write the name
-
-Copy it from Model Square. Do not type a display name, a vendor nickname, or an ID you remember. The gateway selects a route from the `model` field you send. It does not guess.
-
-```bash
-curl "{{API_BASE_URL}}/models" \
-  -H "Authorization: Bearer ${OPENBRIDGER_API_KEY}"
-```
-
-Use this list to see which IDs the key can access. Some clients never call it, or they drop IDs they do not recognize. When that happens, paste the ID into the client by hand.
-
-## How this connects to billing
-
-A successful call is reserved at the model's price, forwarded, then settled from actual usage. A failed reserve never calls upstream. The unit and the formula are on [Credits and billing](/guide/billing/).
-
-For production, plan for a model being unavailable: switch to another ID that Model Square still lists, or retry later. Do not hard-code an example ID from this guide.
+Many desktop clients either skip calling `/v1/models` or filter out newer model names they don't recognize. Simply click **"+ Add Custom Model"** in your client and paste the exact Model ID copied from Models & Pricing.
 
 ## Related
 
 - [Credits and billing](/guide/billing/)
 - [Groups and routes](/guide/account/groups/)
-- [OpenAI-compatible calls](/guide/clients/openai-compatible/)
+- [Error codes](/guide/errors/)

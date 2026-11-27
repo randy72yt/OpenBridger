@@ -1,56 +1,58 @@
-# 完成第一次调用
+# 3 分钟快速开始
 
-这条路径只做四件事：注册并登录、确认钱包里有额度、创建一把 API Key、用 curl 打通 `POST /v1/chat/completions`。
+不管你要配编程工具、翻译插件还是日常聊天客户端，准备工作都只有下面 **4 步**。
 
-## 开始之前
+## 上手 4 步
 
-- 一个可以收信的邮箱，用于注册和以后找回账号。
-- 能打开控制台 [{{CONSOLE_URL}}]({{CONSOLE_URL}})。
-- 本机有 `curl`。Python 或 Node 示例在 [OpenAI 兼容调用](/guide/clients/openai-compatible/)。
+<div class="steps">
+  <div class="step">
+    <strong>第 1 步：注册并登录控制台</strong>
+    <p>打开 <a href="{{CONSOLE_URL}}">{{CONSOLE_URL}}</a> 注册账号并登录。</p>
+  </div>
+  <div class="step">
+    <strong>第 2 步：充值或兑换额度</strong>
+    <p>打开 <a href="{{CONSOLE_URL}}/wallet">钱包</a>（新注册账号初始余额为 ¥0）。选择面额在线支付，或输入兑换码充值（详见 <a href="/guide/account/redeem/">充值与兑换</a>）。哪怕先充最低档，也足够完成大量日常对话测试。</p>
+  </div>
+  <div class="step">
+    <strong>第 3 步：创建一把 API Key</strong>
+    <p>打开 <a href="{{CONSOLE_URL}}/keys">API 密钥</a> -> 点击右上角 <strong>「创建密钥」</strong> -> 填一个好记的名称（例如 <code>codex</code> 或 <code>cherry</code>）-> 点击确认，复制生成的 <code>sk-...</code> 完整密钥。</p>
+  </div>
+  <div class="step">
+    <strong>第 4 步：开始使用（任选一种）</strong>
+    <p><strong>• 不装软件直接在网页聊</strong>：打开控制台左侧 <a href="{{CONSOLE_URL}}/playground">GPT 对话</a>，选模型直接提问。<br>
+    <strong>• 接入常用客户端（推荐）</strong>：去 <a href="{{CONSOLE_URL}}/pricing">模型广场</a> 点复制你想用的模型完整 ID，然后按下方对应教程填入即可：</p>
+  </div>
+</div>
 
-注册页提供的方式以页面为准。程序默认打开的是用户名或邮箱加密码的注册；如果页面要求邮箱验证码或人机验证，按页面做完再继续。GitHub 等第三方登录只有在登录页实际出现时才可用。
+### 热门客户端直达
 
-<div class="callout"><strong>截图待补</strong><p>注册成功后的控制台首页，标出「钱包」「API 密钥」「模型广场」「使用日志」四个入口。由运营用当前界面替换本段。</p></div>
+- **写代码**：[CC Switch（新手一键配置）](/guide/clients/cc-switch/) · [Codex（桌面版 / 插件 / CLI）](/guide/clients/codex-cli/) · [Claude Code](/guide/clients/claude-code/) · [Cursor](/guide/clients/cursor/) · [Cline / Roo Code](/guide/clients/cline/)
+- **看论文 / 聊天**：[沉浸式翻译](/guide/clients/immersive-translate/) · [Zotero](/guide/clients/zotero/) · [Cherry Studio](/guide/clients/cherry-studio/) · [Chatbox](/guide/clients/chatbox/) · [LobeChat](/guide/clients/lobechat/)
 
-## 步骤
+---
 
-<div class="steps"><div class="step"><strong>注册并登录</strong><p>打开 <a href="{{CONSOLE_URL}}">{{CONSOLE_URL}}</a>，完成注册后进入控制台。登录失败次数过多会被临时限制，等一会儿再试，不要连续撞密码。</p></div><div class="step"><strong>看钱包余额</strong><p>打开 <a href="{{CONSOLE_URL}}/wallet">钱包</a>。余额以人民币显示。注册不赠送额度，新用户余额是 0。要先用页面上的在线充值或兑换码，见 <a href="/guide/account/redeem/">充值与兑换</a>，余额够一次短对话再继续。</p></div><div class="step"><strong>复制模型 ID</strong><p>打开 <a href="{{CONSOLE_URL}}/pricing">模型广场</a>，选一个你的分组能用的对话模型，复制完整模型 ID。不要自己缩短版本号。</p></div><div class="step"><strong>创建 API Key</strong><p>打开 <a href="{{CONSOLE_URL}}/keys">API 密钥</a>，新建一把名为 <code>curl-test</code> 的密钥。复制出来的值以 <code>sk-</code> 开头。细节见 <a href="/guide/api-key/">创建 API Key</a>。</p></div><div class="step"><strong>发送一条短请求</strong><p>把下面命令里的密钥和模型 ID 换成你自己的，然后执行。</p></div></div>
+## 附：开发者命令行 10 秒连通测试（可选）
+
+如果你写代码或习惯用终端，可在终端执行一条 `curl` 验证密钥与模型：
 
 ```bash
-export OPENBRIDGER_API_KEY="sk-把控制台复制的密钥贴在这里"
-export OPENBRIDGER_MODEL="模型广场里的完整模型 ID"
-
 curl "{{API_BASE_URL}}/chat/completions" \
-  -H "Authorization: Bearer ${OPENBRIDGER_API_KEY}" \
+  -H "Authorization: Bearer sk-替换成你的密钥" \
   -H "Content-Type: application/json" \
-  -d "{
-    \"model\": \"${OPENBRIDGER_MODEL}\",
-    \"messages\": [{\"role\": \"user\", \"content\": \"用一句话回复：pong\"}]
-  }"
+  -d '{
+    "model": "gpt-6.2-sol",
+    "messages": [{"role": "user", "content": "回复 pong"}]
+  }'
 ```
 
-成功时响应是一段 JSON，里面有 `choices[0].message.content`。同时响应头里有 `X-Oneapi-Request-Id`，报错时把它和正文一起留下来。
+返回 JSON 中出现 `choices[0].message.content`，且在 [使用日志]({{CONSOLE_URL}}/usage-logs) 能看到这条记录，即代表完全跑通。Python / Node.js 代码示例见 [Python / Node SDK 接入](/guide/clients/openai-compatible/)。
 
-## 确认请求真的经过网关
+## 新手最常见的 3 个报错
 
-1. 打开 [使用日志]({{CONSOLE_URL}}/usage-logs)。
-2. 按刚才的时间和密钥名 `curl-test` 筛选。
-3. 核对模型 ID、状态和消耗。日志里有这一条，才说明客户端没有把请求发到别的地址。
+| 报错提示 | 原因 | 解决方法 |
+| --- | --- | --- |
+| `401 无效的令牌` | 密钥复制漏了字符、前后多了空格，或重复写了 `Bearer` | 回 [API 密钥]({{CONSOLE_URL}}/keys) 重新点击复制按钮粘贴 |
+| `403 用户额度不足` | 账号余额为 ¥0，尚未充值或兑换 | 前往 [钱包]({{CONSOLE_URL}}/wallet) 充值或兑换额度 |
+| `503 无可用渠道` | 手打了缩写的模型名，或当前密钥分组不含此模型 | 去 [模型广场]({{CONSOLE_URL}}/pricing) 点击模型名一键复制完整 ID |
 
-也可以先在 [AI 体验台]({{CONSOLE_URL}}/playground) 用同一模型发一句短消息。体验台走的是登录会话，不是 API Key；它能验证模型和额度，不能代替上面的 curl。
-
-## 这一步常见错误
-
-| 现象 | 处理 |
-| --- | --- |
-| `401`，文案「无效的令牌」 | 密钥复制错了、已禁用、已过期，或这把密钥自己的额度用尽。重新复制，不要手写第二遍 `Bearer` 或 `sk-`。 |
-| `403`，文案含「用户额度不足」 | 钱包或当前扣费来源不够这次预扣。先充值或换一个更小的请求。见 [额度与计费](/guide/billing/)。 |
-| `503`，文案含「无可用渠道」 | 模型 ID 写错，或当前分组没有能服务它的线路。从模型广场重新复制。 |
-| 连接失败、超时 | 先确认地址是 `{{API_BASE_URL}}/chat/completions`，没有写成 `/v1/v1/`。再看 [故障排查](/troubleshooting/)。 |
-
-完整状态码表在 [错误码](/guide/errors/)。
-
-## 下一步
-
-- 接到编辑器或聊天客户端：[Cursor](/guide/clients/cursor/)、[Claude Code](/guide/clients/claude-code/)、[Cherry Studio](/guide/clients/cherry-studio/)、[Chatbox](/guide/clients/chatbox/)、[LobeChat](/guide/clients/lobechat/)。
-- 写进自己的程序：[OpenAI 兼容调用](/guide/clients/openai-compatible/) 和 [SDK 与 LangChain](/guide/clients/sdk/)。
+更多状态码见 [错误码](/guide/errors/)。

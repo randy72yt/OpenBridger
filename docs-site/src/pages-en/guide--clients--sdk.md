@@ -1,68 +1,46 @@
-# SDKs and LangChain
+# LangChain Integration (Python & TypeScript)
 
-Server code should use the official OpenAI SDK, or any library that accepts a custom Base URL. Put the key in an environment variable or a secret store. Do not commit it.
+Point `langchain-openai` or `@langchain/openai` at `{{API_BASE_URL}}` to use any supported chat or tool-calling model.
 
-```bash
-export OPENBRIDGER_API_KEY="sk-..."
-export OPENBRIDGER_BASE_URL="{{API_BASE_URL}}"
-export OPENBRIDGER_MODEL="MODEL_ID_FROM_CONSOLE"
-```
-
-Node and Python OpenAI SDK samples are on [OpenAI-compatible calls](/guide/clients/openai-compatible/).
-
-## Before production
-
-- Use a different key for development, test, and production.
-- Set connect and read timeouts. Retry `429` and temporary upstream 5xx a limited number of times with backoff. Do not retry `401` or a `403` for insufficient credit.
-- Log the request id, model, status, and latency. Drop the key and sensitive prompt text.
-- Put your own limit on input length and `max_tokens`. The gateway rejects some illegal values. That is not your quota policy.
-
-## LangChain (Python)
+## 1. Python (`pip install langchain-openai`)
 
 ```python
 import os
 from langchain_openai import ChatOpenAI
 
-model = ChatOpenAI(
-    model=os.environ["OPENBRIDGER_MODEL"],
+llm = ChatOpenAI(
+    model="gpt-6.2-sol",
     api_key=os.environ["OPENBRIDGER_API_KEY"],
-    base_url=os.environ["OPENBRIDGER_BASE_URL"],
+    base_url="{{API_BASE_URL}}",
 )
 
-print(model.invoke("Hello OpenBridger").content)
+print(llm.invoke("Summarize a RAG pipeline in 3 bullet points").content)
 ```
 
-The package is `langchain-openai`. It uses the OpenAI SDK, so `base_url` still includes `/v1`.
+## 2. JavaScript / TypeScript (`npm install @langchain/openai`)
 
-## LangChain (JavaScript)
-
-```js
+```ts
 import { ChatOpenAI } from "@langchain/openai";
 
-const model = new ChatOpenAI({
+const llm = new ChatOpenAI({
+  model: "gpt-6.2-sol",
   apiKey: process.env.OPENBRIDGER_API_KEY,
   configuration: {
-    baseURL: process.env.OPENBRIDGER_BASE_URL,
+    baseURL: "{{API_BASE_URL}}",
   },
-  model: process.env.OPENBRIDGER_MODEL,
 });
 
-const response = await model.invoke("Hello OpenBridger");
-console.log(response.content);
+const res = await llm.invoke("Summarize a RAG pipeline in 3 bullet points");
+console.log(res.content);
 ```
 
-This `baseURL` is also `{{API_BASE_URL}}`. If a package version moved the field to a top-level `baseURL`, follow that version. The finished request host should be `openbridger.com` and the path should end in `/v1/chat/completions` with a single `/v1`.
+## Production Tips
 
-## Common problems
-
-| What you see | What to do |
-| --- | --- |
-| Requests still go to official OpenAI | The environment variable is not in the process, or the parameter name is wrong |
-| Browser CORS | Move the call to your server |
-| Tool calls fail | `invoke` plain text first, then check whether the model supports tools |
-| LangChain wraps a credit error as a generic exception | Print `status` and the body, then use [Error codes](/guide/errors/) |
+- **Separate keys per environment**: Use distinct keys for dev, staging, and prod.
+- **Retry only transient errors**: Retry `429` and transient `5xx` with exponential backoff; fail fast on `401` and `403`.
 
 ## Related
 
-- [OpenAI-compatible calls](/guide/clients/openai-compatible/)
-- [Create an API key](/guide/api-key/)
+- [Python & Node SDKs](/guide/clients/openai-compatible/)
+- [Embeddings & Rerank](/api/embeddings-rerank/)
+- [Error codes](/guide/errors/)

@@ -1,56 +1,58 @@
-# Make the first call
+# 3-Minute Quick Start
 
-Do four things: register and sign in, confirm the wallet has credits, create an API key, and call `POST /v1/chat/completions` with curl.
+Whether you are setting up a coding agent, a paper translator, or a desktop chat app, getting started takes **4 steps**.
 
-## Before you start
+## 4 Steps to Get Started
 
-- An email address for registration and account recovery.
-- A browser that can open [{{CONSOLE_URL}}]({{CONSOLE_URL}}).
-- `curl` on your machine. Python and Node samples are on [OpenAI-compatible calls](/guide/clients/openai-compatible/).
+<div class="steps">
+  <div class="step">
+    <strong>Step 1: Sign Up & Sign In</strong>
+    <p>Open <a href="{{CONSOLE_URL}}">{{CONSOLE_URL}}</a>, register an account, and sign in to the console.</p>
+  </div>
+  <div class="step">
+    <strong>Step 2: Top Up or Redeem Credits</strong>
+    <p>Open <a href="{{CONSOLE_URL}}/wallet">Wallet</a> (new accounts start with a ¥0 balance). Top up online or redeem a voucher code (see <a href="/guide/account/redeem/">Top up and redeem</a>).</p>
+  </div>
+  <div class="step">
+    <strong>Step 3: Create an API Key</strong>
+    <p>Open <a href="{{CONSOLE_URL}}/keys">API Keys</a> -> click <strong>Create Key</strong> -> give it a clear name (such as <code>codex</code> or <code>cherry</code>) -> save and copy the full <code>sk-...</code> key.</p>
+  </div>
+  <div class="step">
+    <strong>Step 4: Start Using Models</strong>
+    <p><strong>• Chat in Browser (No Install)</strong>: Open <a href="{{CONSOLE_URL}}/playground">GPT Chat</a> in the console sidebar and start chatting immediately.<br>
+    <strong>• Connect Your Favorite App</strong>: Copy an exact Model ID from <a href="{{CONSOLE_URL}}/pricing">Models & Pricing</a> and follow the step-by-step guide for your tool below:</p>
+  </div>
+</div>
 
-The registration form is the source of truth. The program default is a username or email plus a password. If the page asks for an email code or a human check, finish that first. Third-party login such as GitHub is available only when the sign-in page shows it.
+### Popular Client Guides
 
-<div class="callout"><strong>Screenshot to add</strong><p>The console after sign-in, with Wallet, API Keys, Model Square, and Usage Logs marked. Replace this note with a capture of the current UI.</p></div>
+- **Coding**: [CC Switch (1-Click GUI)](/guide/clients/cc-switch/) · [Codex (Desktop, IDE & CLI)](/guide/clients/codex-cli/) · [Claude Code](/guide/clients/claude-code/) · [Cursor](/guide/clients/cursor/) · [Cline & Roo Code](/guide/clients/cline/)
+- **Research & Chat**: [Immersive Translate](/guide/clients/immersive-translate/) · [Zotero](/guide/clients/zotero/) · [Cherry Studio](/guide/clients/cherry-studio/) · [Chatbox](/guide/clients/chatbox/) · [LobeChat](/guide/clients/lobechat/)
 
-## Steps
+---
 
-<div class="steps"><div class="step"><strong>Register and sign in</strong><p>Open <a href="{{CONSOLE_URL}}">{{CONSOLE_URL}}</a> and enter the console. Too many failed sign-ins are throttled. Wait, then try again.</p></div><div class="step"><strong>Check the wallet</strong><p>Open the <a href="{{CONSOLE_URL}}/wallet">wallet</a>. The balance is shown in yuan. Registration does not add credit, so a new account starts at 0. Add credit with the top-up or a redemption code on that page before the short chat. See <a href="/guide/account/redeem/">Top up and redeem</a>.</p></div><div class="step"><strong>Copy a model ID</strong><p>Open <a href="{{CONSOLE_URL}}/pricing">Model Square</a>, pick a chat model your group can use, and copy the full model ID. Do not shorten the version.</p></div><div class="step"><strong>Create an API key</strong><p>Open <a href="{{CONSOLE_URL}}/keys">API Keys</a> and create a key named <code>curl-test</code>. The copied value starts with <code>sk-</code>. Details are on <a href="/guide/api-key/">Create an API key</a>.</p></div><div class="step"><strong>Send one short request</strong><p>Replace the key and model ID, then run the command.</p></div></div>
+## Optional: 10-Second Terminal `curl` Check (For Developers)
+
+If you are integrating via code or terminal, run a quick request to verify your key:
 
 ```bash
-export OPENBRIDGER_API_KEY="sk-paste-the-key-from-the-console"
-export OPENBRIDGER_MODEL="full-model-id-from-model-square"
-
 curl "{{API_BASE_URL}}/chat/completions" \
-  -H "Authorization: Bearer ${OPENBRIDGER_API_KEY}" \
+  -H "Authorization: Bearer sk-replace-with-your-key" \
   -H "Content-Type: application/json" \
-  -d "{
-    \"model\": \"${OPENBRIDGER_MODEL}\",
-    \"messages\": [{\"role\": \"user\", \"content\": \"Reply with one word: pong\"}]
-  }"
+  -d '{
+    "model": "gpt-6.2-sol",
+    "messages": [{"role": "user", "content": "Reply with pong"}]
+  }'
 ```
 
-A successful body is JSON with `choices[0].message.content`. The response header `X-Oneapi-Request-Id` is the id to keep if the call fails.
+When you see `choices[0].message.content` in the JSON response and a matching entry in [Usage Logs]({{CONSOLE_URL}}/usage-logs), everything is working. For SDK code, see [Python & Node SDKs](/guide/clients/openai-compatible/).
 
-## Confirm the call hit the gateway
+## Top 3 First-Run Errors
 
-1. Open [Usage Logs]({{CONSOLE_URL}}/usage-logs).
-2. Filter by the time and the key name `curl-test`.
-3. Check the model ID, status, and charge. A matching row means the client did not send the request somewhere else.
+| Error | Cause | Fix |
+| --- | --- | --- |
+| `401` Invalid token | Truncated key, extra spaces, or duplicate `Bearer` prefix | Copy the `sk-...` key fresh from [API Keys]({{CONSOLE_URL}}/keys) |
+| `403` Insufficient quota | Account balance is ¥0 | Top up or redeem a code in [Wallet]({{CONSOLE_URL}}/wallet) |
+| `503` No available channel | Abbreviated model name or key group mismatch | Copy the exact Model ID from [Models & Pricing]({{CONSOLE_URL}}/pricing) |
 
-The [Playground]({{CONSOLE_URL}}/playground) can test the same model with your login session. It does not use the API key, so it does not replace the curl above.
-
-## Errors at this step
-
-| What you see | What to do |
-| --- | --- |
-| `401`, message says the token is invalid | The key was copied wrong, disabled, expired, or its own credit is used up. Copy it again. Do not type a second `Bearer` or `sk-`. |
-| `403`, message says user quota is insufficient | The wallet or the current funding source cannot cover the reserve. Add credits or send a smaller request. See [Credits and billing](/guide/billing/). |
-| `503`, message says no channel is available | The model ID is wrong, or this group has no route. Copy it again from Model Square. |
-| Connection failed or timed out | The URL must be `{{API_BASE_URL}}/chat/completions`, not `/v1/v1/`. Then see [Troubleshooting](/troubleshooting/). |
-
-The full table is on [Error codes](/guide/errors/).
-
-## Next
-
-- Editors and chat apps: [Cursor](/guide/clients/cursor/), [Claude Code](/guide/clients/claude-code/), [Cherry Studio](/guide/clients/cherry-studio/), [Chatbox](/guide/clients/chatbox/), [LobeChat](/guide/clients/lobechat/).
-- Your own program: [OpenAI-compatible calls](/guide/clients/openai-compatible/) and [SDKs and LangChain](/guide/clients/sdk/).
+See [Error codes](/guide/errors/) for the full list.

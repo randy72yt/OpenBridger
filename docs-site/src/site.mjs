@@ -1,32 +1,56 @@
 export const site = {
-  title: 'OpenBridger 实用教程',
-  description: '注册、充值、创建 API Key，并把常用客户端接到网关。',
+  title: 'OpenBridger 开发与实战文档',
+  description: '一站式接入 GPT-6.2、Codex、Claude 5.5、Gemini 4 与 DeepSeek，覆盖常用开发工具、学术科研插件与原生 API 参考。',
   groups: [
     {
       title: '开始使用',
       pages: [
         ['introduction', '产品介绍'],
         ['guide--quickstart', '快速开始'],
+        ['guide--base-urls', 'Base URL 填写速查'],
         ['guide--api-key', '创建 API Key'],
         ['guide--models-pricing', '模型与价格'],
         ['guide--billing', '额度与计费'],
       ],
     },
     {
-      title: '接入客户端',
+      title: 'AI 编程与命令行',
       pages: [
-        ['guide--clients--openai-compatible', 'OpenAI 兼容调用'],
-        ['guide--clients--sdk', 'SDK 与 LangChain'],
+        ['guide--clients--cc-switch', 'CC Switch（新手一键配置）'],
+        ['guide--clients--codex-cli', 'Codex（桌面版 / 插件 / CLI）'],
+        ['guide--clients--claude-code', 'Claude Code（桌面端 / CLI）'],
         ['guide--clients--cursor', 'Cursor'],
-        ['guide--clients--claude-code', 'Claude Code'],
-        ['guide--clients--codex-cli', 'Codex'],
-        ['guide--clients--cc-switch', 'CC Switch'],
+        ['guide--clients--cline', 'Cline / Roo Code'],
+        ['guide--clients--gemini-cli', 'Gemini CLI'],
+        ['guide--clients--aider-opencode', 'OpenCode / Aider'],
+        ['guide--clients--trae', 'Trae'],
+        ['guide--clients--codebuddy', 'CodeBuddy'],
+      ],
+    },
+    {
+      title: '学术科研与日常客户端',
+      pages: [
+        ['guide--clients--immersive-translate', '沉浸式翻译（文献双语）'],
+        ['guide--clients--zotero', 'Zotero（论文阅读）'],
         ['guide--clients--cherry-studio', 'Cherry Studio'],
         ['guide--clients--chatbox', 'Chatbox'],
         ['guide--clients--lobechat', 'LobeChat'],
         ['guide--clients--open-webui', 'Open WebUI'],
-        ['guide--clients--trae', 'Trae'],
-        ['guide--clients--codebuddy', 'CodeBuddy'],
+        ['guide--clients--dify-workflows', 'Dify / n8n / Coze 工作流'],
+      ],
+    },
+    {
+      title: 'API 接口参考',
+      pages: [
+        ['api--openai-chat', 'Chat Completions 对话与识图'],
+        ['api--openai-responses', 'Responses 接口（Codex / 推理）'],
+        ['api--anthropic-messages', 'Anthropic Messages 原生接口'],
+        ['api--gemini-native', 'Google Gemini 原生接口'],
+        ['api--multimodal-media', '图像、视频与语音接口'],
+        ['api--embeddings-rerank', 'Embeddings 向量与 Rerank'],
+        ['api--thinking-fields', '思考推理参数与返回字段'],
+        ['guide--clients--openai-compatible', 'Python / Node SDK 接入'],
+        ['guide--clients--sdk', 'LangChain 接入'],
       ],
     },
     {
@@ -39,7 +63,7 @@ export const site = {
       ],
     },
     {
-      title: '帮助',
+      title: '帮助与协议',
       pages: [
         ['faq', '常见问题'],
         ['troubleshooting', '故障排查'],
@@ -53,34 +77,58 @@ export const site = {
 }
 
 export const siteEn = {
-  title: 'OpenBridger Guides',
-  description: 'Register, add credits, create an API key, and connect common clients.',
+  title: 'OpenBridger Documentation',
+  description: 'Unified API gateway guides for GPT-6.2, Codex, Claude 5.5, Gemini 4, DeepSeek, developer CLIs, academic tools, and native wire protocols.',
   groups: [
     {
       title: 'Getting started',
       pages: [
         ['introduction', 'Introduction'],
         ['guide--quickstart', 'Quick start'],
+        ['guide--base-urls', 'Base URL reference'],
         ['guide--api-key', 'Create an API key'],
         ['guide--models-pricing', 'Models and pricing'],
         ['guide--billing', 'Credits and billing'],
       ],
     },
     {
-      title: 'Clients',
+      title: 'Coding & CLI tools',
       pages: [
-        ['guide--clients--openai-compatible', 'OpenAI-compatible calls'],
-        ['guide--clients--sdk', 'SDKs and LangChain'],
+        ['guide--clients--cc-switch', 'CC Switch (1-Click GUI)'],
+        ['guide--clients--codex-cli', 'Codex (Desktop, IDE & CLI)'],
+        ['guide--clients--claude-code', 'Claude Code (App & CLI)'],
         ['guide--clients--cursor', 'Cursor'],
-        ['guide--clients--claude-code', 'Claude Code'],
-        ['guide--clients--codex-cli', 'Codex'],
-        ['guide--clients--cc-switch', 'CC Switch'],
+        ['guide--clients--cline', 'Cline & Roo Code'],
+        ['guide--clients--gemini-cli', 'Gemini CLI'],
+        ['guide--clients--aider-opencode', 'OpenCode & Aider'],
+        ['guide--clients--trae', 'Trae'],
+        ['guide--clients--codebuddy', 'CodeBuddy'],
+      ],
+    },
+    {
+      title: 'Research & chat apps',
+      pages: [
+        ['guide--clients--immersive-translate', 'Immersive Translate'],
+        ['guide--clients--zotero', 'Zotero'],
         ['guide--clients--cherry-studio', 'Cherry Studio'],
         ['guide--clients--chatbox', 'Chatbox'],
         ['guide--clients--lobechat', 'LobeChat'],
         ['guide--clients--open-webui', 'Open WebUI'],
-        ['guide--clients--trae', 'Trae'],
-        ['guide--clients--codebuddy', 'CodeBuddy'],
+        ['guide--clients--dify-workflows', 'Dify, n8n & Coze'],
+      ],
+    },
+    {
+      title: 'API reference',
+      pages: [
+        ['api--openai-chat', 'Chat Completions & Vision'],
+        ['api--openai-responses', 'Responses API'],
+        ['api--anthropic-messages', 'Anthropic Messages API'],
+        ['api--gemini-native', 'Google Gemini Native API'],
+        ['api--multimodal-media', 'Image, Video & Audio APIs'],
+        ['api--embeddings-rerank', 'Embeddings & Rerank'],
+        ['api--thinking-fields', 'Reasoning & Thinking Fields'],
+        ['guide--clients--openai-compatible', 'Python & Node SDKs'],
+        ['guide--clients--sdk', 'LangChain'],
       ],
     },
     {
@@ -93,7 +141,7 @@ export const siteEn = {
       ],
     },
     {
-      title: 'Help',
+      title: 'Help & legal',
       pages: [
         ['faq', 'FAQ'],
         ['troubleshooting', 'Troubleshooting'],

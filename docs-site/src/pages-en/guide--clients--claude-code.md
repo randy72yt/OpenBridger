@@ -1,72 +1,63 @@
-# Use OpenBridger in Claude Code
+# Claude Code Setup Guide (Desktop, VS Code & CLI)
 
-Claude Code speaks the Anthropic Messages protocol. The gateway path is `POST /v1/messages`. The key may be sent as `x-api-key`, which is what Claude Code does, and the gateway accepts that header on this path.
+Claude Code (`claude` CLI, VS Code extension, and Desktop Code mode) uses the native Anthropic `/v1/messages` protocol and reads from `.claude`.
 
-The model name must be a full ID from [Model Square]({{CONSOLE_URL}}/pricing), and the current group needs a route that can serve Messages. A name on the square is not enough. Send one short request and confirm it in [Usage Logs]({{CONSOLE_URL}}/usage-logs).
+## Before You Begin
 
-## Before you start
+1. Create a key named `claude-code` in [API Keys]({{CONSOLE_URL}}/keys) and copy `sk-...`.
+2. Copy an exact Model ID from [Models & Pricing]({{CONSOLE_URL}}/pricing) (e.g., `claude-sonnet-5-5` or `claude-opus-5-5`).
 
-- The `claude` command is installed.
-- An API key named `claude-code`.
-- The model ID you intend to use.
+<div class="callout warning"><strong>Never append /v1 to Base URL</strong><p>Claude Code appends <code>/v1/messages</code> automatically — enter <strong><code>{{CONSOLE_URL}}</code></strong> (adding <code>/v1</code> causes <code>404</code>).</p></div>
 
-## This terminal only
+---
 
-```bash
-export ANTHROPIC_BASE_URL="{{CONSOLE_URL}}"
-export ANTHROPIC_AUTH_TOKEN="sk-your-key"
+## Method 1: 1-Click GUI via CC Switch (Recommended)
 
-cd /path/to/your/project
-claude
-```
+1. Open **CC Switch** ([CC Switch Guide](/guide/clients/cc-switch/)), select **`Claude Code`** -> click **`+`** -> choose **Custom**.
+2. Enter `Base URL` = `{{CONSOLE_URL}}` (no `/v1`), `API Key` = `sk-...`, `Model` = `claude-sonnet-5-5`.
+3. Click **Save** -> click **Enable** -> open a fresh terminal and run `claude` (or reload VS Code).
 
-`ANTHROPIC_BASE_URL` is the site origin. **Do not** set it to `{{API_BASE_URL}}`. Claude Code requests `{BASE}/v1/messages`. A base that already contains `/v1` becomes `/v1/v1/messages`.
+---
 
-Closing the terminal drops the variables. To use the official service again:
+## Method 2: Manual `.claude/settings.json`
 
-```bash
-unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN
-```
+<div class="steps">
+  <div class="step"><strong>Step 1: Install Claude Code</strong><p>• <strong>CLI</strong>: Requires Node.js 18+; run <code>npm install -g @anthropic-ai/claude-code</code>.<br>• <strong>VS Code / Desktop</strong>: Install the official <code>Claude Code</code> extension or desktop app.</p></div>
+  <div class="step"><strong>Step 2: Open Your <code>.claude</code> Folder</strong><p>• <strong>macOS</strong>: Finder -> <code>Cmd + Shift + G</code> -> <code>~/</code> -> <code>Cmd + Shift + .</code> -> create/open <code>.claude</code>.<br>• <strong>Windows</strong>: File Explorer -> <code>%USERPROFILE%</code> -> enable File name extensions -> create/open <code>.claude</code>.</p></div>
+  <div class="step"><strong>Step 3: Save <code>settings.json</code></strong><p>Create <strong><code>settings.json</code></strong> inside <code>.claude</code> using the template below.</p></div>
+  <div class="step"><strong>Step 4: Skip Initial Onboarding (If Prompted)</strong><p>If a fresh install pauses on first-run login, add <code>{"hasCompletedOnboarding": true}</code> to <code>~/.claude.json</code> (or click Enable once in CC Switch).</p></div>
+  <div class="step"><strong>Step 5: Restart & Verify</strong><p>Open a new terminal in your project folder and run <code>claude</code> (or <code>Developer: Reload Window</code> in VS Code), then confirm the call in <a href="{{CONSOLE_URL}}/usage-logs">Usage Logs</a>.</p></div>
+</div>
 
-Open a new terminal before you run `claude`.
-
-## Persist it in Claude Code settings
-
-`~/.claude/settings.json`:
+### `settings.json` Template
 
 ```json
 {
   "env": {
     "ANTHROPIC_BASE_URL": "{{CONSOLE_URL}}",
-    "ANTHROPIC_AUTH_TOKEN": "sk-your-key"
+    "ANTHROPIC_AUTH_TOKEN": "sk-replace-with-your-key",
+    "ANTHROPIC_MODEL": "claude-sonnet-5-5",
+    "API_TIMEOUT_MS": "300000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
   }
 }
 ```
 
-That file contains the key. Do not commit it or screenshot it. Do not put a real key in a project `.claude/settings.json` either.
+### Optional: One-Session Terminal Command
 
-If the client lets you set the model, use the full ID from Model Square. If Claude Code sends a default name that is not on the square, you get `503` (no channel) or an upstream model-not-found error. The model ID in the log is the one that was sent.
+- **macOS / Linux**: `export ANTHROPIC_BASE_URL="{{CONSOLE_URL}}" ANTHROPIC_AUTH_TOKEN="sk-key" ANTHROPIC_MODEL="claude-sonnet-5-5" && claude`
+- **Windows PowerShell**: `$env:ANTHROPIC_BASE_URL="{{CONSOLE_URL}}"; $env:ANTHROPIC_AUTH_TOKEN="sk-key"; $env:ANTHROPIC_MODEL="claude-sonnet-5-5"; claude`
 
-Check the variables in this terminal:
+## Common Issues
 
-```bash
-env | grep ANTHROPIC_
-```
-
-Confirm only that they exist. Do not paste the output into chat or a ticket.
-
-## Common problems
-
-| What you see | What to do |
+| Symptom | Fix |
 | --- | --- |
-| It still asks you to sign in to the official account | Open a new terminal, confirm both `ANTHROPIC_` variables, then start `claude` |
-| 401 | Copy the key again. Do not put `Bearer` in front of the token |
-| 503 no channel | The model ID Claude Code sends is not the square's ID, or this group has no Messages route |
-| The request never reaches Usage Logs | Base URL still points at the official host. Check `ANTHROPIC_BASE_URL` |
-
-<div class="callout warning"><strong>The protocol has to match</strong><p>A model that works on Chat Completions does not automatically work in Claude Code. The model, the group, and <code>/v1/messages</code> all have to line up.</p></div>
+| Still asks for `/login` | Open a new terminal, check filename isn't `settings.json.txt`, or apply via [CC Switch](/guide/clients/cc-switch/) |
+| Red `offline` badge in top-right | Telemetry probe indicator — safe to ignore if chat replies stream normally |
+| `404` / `503` | `404`: remove `/v1` from Base URL; `503`: copy exact Model ID from [Models & Pricing]({{CONSOLE_URL}}/pricing) |
 
 ## Related
 
-- [CC Switch](/guide/clients/cc-switch/)
+- [CC Switch (1-Click GUI)](/guide/clients/cc-switch/)
+- [Anthropic Messages API](/api/anthropic-messages/)
 - [Error codes](/guide/errors/)

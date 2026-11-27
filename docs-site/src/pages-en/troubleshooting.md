@@ -1,47 +1,38 @@
-# Troubleshooting
+# Troubleshooting (30-Second Fix Guide)
 
-Separate the gateway from the client with curl. If curl works and the client does not, the client's URL or cache is wrong. If curl fails too, check the key, the credit, and the model ID.
+Check the **3-digit HTTP status code** in your error message — 95% of setup issues match one row in the table below.
 
-## Check
+## 1. Match Your Error Code
+
+| Error | Real Cause | Immediate Fix |
+| --- | --- | --- |
+| **`401` Invalid token** | Truncated `sk-...` key, extra `Bearer ` prefix in a GUI field, or the key's own spending cap ran out | Re-copy the raw `sk-...` key from [API Keys]({{CONSOLE_URL}}/keys) and check its cap |
+| **`403` Insufficient quota** | Wallet / plan balance is ¥0 or below the request pre-hold | Top up or redeem a code in [Wallet]({{CONSOLE_URL}}/wallet) |
+| **`404` Not Found** | Duplicate `/v1/v1/...` or missing `/v1` in Base URL | Check [Base URL Reference](/guide/base-urls/) |
+| **`503` No available channel** | **URL and key work!** Either the Model ID has a typo or your key's group doesn't carry that model | Re-copy the exact Model ID from [Models & Pricing]({{CONSOLE_URL}}/pricing) or set key group to `auto` |
+| **`429` Rate limit** | Burst concurrency (e.g., translating a 50-page PDF at once) or temporary upstream congestion | Lower requests-per-second in your plugin or retry shortly |
+| **Still asks for official login / nothing in logs** | Client wasn't restarted or you're typing in an old thread | **Quit and relaunch the app**, click **+ New Chat**, and select your custom model |
+
+---
+
+## 2. Double-Check Your Base URL Format
+
+<div class="config-card">
+  <div><span>Codex / Cursor / Cherry Studio / Chatbox / LobeChat / Open WebUI</span><code>{{API_BASE_URL}}</code> (with <code>/v1</code>)</div>
+  <div><span>Claude Code / Gemini CLI / Anthropic SDK</span><code>{{CONSOLE_URL}}</code> (<strong>NO /v1</strong>)</div>
+  <div><span>Immersive Translate / Coze HTTP Node</span><code>{{API_BASE_URL}}/chat/completions</code> (full path)</div>
+</div>
+
+---
+
+## 3. Optional Terminal Check (For Developers)
+
+To isolate a client UI quirk from your API key, run:
 
 ```bash
 curl -i "{{API_BASE_URL}}/models" \
-  -H "Authorization: Bearer ${OPENBRIDGER_API_KEY}"
+  -H "Authorization: Bearer sk-your-key"
 ```
 
-- HTTP 200 and a model list: the key and the URL work.
-- 401: the key itself is unusable. See [Error codes](/guide/errors/).
-- 403 that mentions quota: open the [wallet]({{CONSOLE_URL}}/wallet).
-- Cannot connect: the host is `openbridger.com`. The path must not be `/v1/v1/models`.
-
-Then send the short chat from [Quick start](/guide/quickstart/) and match the request id in [Usage Logs]({{CONSOLE_URL}}/usage-logs).
-
-## Table
-
-| What you see | Usual cause | What to do |
-| --- | --- | --- |
-| 401 invalid token | Wrong, disabled, or expired key, key credit used up, or `Bearer` typed twice | Copy the key again and check its remaining credit and expiry |
-| 403 insufficient quota | Wallet or subscription cannot cover the reserve | Add credit, or shorten the input |
-| 403 group or IP | The key's group is not usable, or the allowlist excludes this egress IP | Change the group or the allowlist |
-| 503 no channel | The model ID is not in this group | Copy the full ID from Model Square |
-| Upstream 404 / model not found | Upstream does not know that name, or the client rewrote the ID | Try another ID from Model Square and read the name stored in the log |
-| 429 | Local rate limit or an upstream limit | If the message says you reached the request limit, wait for that window. Otherwise it is upstream. Retry later |
-| Timeout | A long context or a slow upstream | Send one short prompt and a smaller output, then compare |
-| Stream cut off | The network, or the client's stream handling | Send the same model with `"stream": false` |
-| Charge looks high | History was resent, or tools ran many times | Read tokens in the log, not only the chat bubbles |
-| An old URL is still used | Another env var or config file is still set | Open a new terminal and inspect `OPENAI_*` and `ANTHROPIC_*` |
-| Model list will not load | The client does not call `/v1/models`, or it filters IDs | Enter the model ID by hand |
-
-## Which URL to type
-
-| Client | Value |
-| --- | --- |
-| OpenAI SDK, Chatbox, Cherry Studio, LobeChat, Cursor's OpenAI Base URL, Open WebUI | `{{API_BASE_URL}}` |
-| A single field that asks for the full endpoint | `{{API_BASE_URL}}/chat/completions` |
-| Claude Code, Anthropic SDK | `{{CONSOLE_URL}}` (no `/v1`) |
-| Codex | Base URL `{{API_BASE_URL}}`, protocol Responses |
-
-## Related
-
-- [Error codes](/guide/errors/)
-- [Contact and incidents](/guide/support/)
+- `HTTP/2 200` with JSON models: your key and network are healthy — check the client's Base URL or active thread.
+- Still stuck? Copy the `request id` from the error response and see [Contact and incidents](/guide/support/).

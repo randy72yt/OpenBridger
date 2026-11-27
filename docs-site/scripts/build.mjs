@@ -52,7 +52,7 @@ function renderDocument({ slug, title, markdown, language, currentSite }) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="${escapeHtml(description)}">
-  <meta name="theme-color" content="#071218">
+  <meta name="theme-color" content="#fffbf7">
   <title>${escapeHtml(title)}｜${escapeHtml(currentSite.title)}</title>
   <link rel="icon" href="/openbridger-mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">

@@ -1,24 +1,38 @@
-# Use OpenBridger in Chatbox
+# Chatbox Setup Guide (Desktop & Mobile)
 
-In Chatbox's model providers, choose OpenAI API or OpenAI Compatible. Do not choose sign-in with a web account.
+Add OpenBridger as a custom OpenAI-compatible provider in Chatbox on macOS, Windows, iOS, or Android (skip Chatbox's official subscription sign-in).
 
-<div class="config-card"><div><span>API Host / Base URL</span><code>{{API_BASE_URL}}</code></div><div><span>API key</span><code>sk-...</code></div><div><span>Model</span><code>full ID from Model Square</code></div></div>
+## Before You Begin
 
-## Steps
+1. Create a key named `chatbox` in [API Keys]({{CONSOLE_URL}}/keys) and copy `sk-...`.
+2. Copy exact Model IDs from [Models & Pricing]({{CONSOLE_URL}}/pricing) (e.g., `gpt-6.2-astra`, `claude-sonnet-5-5`).
 
-<div class="steps"><div class="step"><strong>Open the model provider settings</strong><p>The label may be Model Provider, AI Provider, or API.</p></div><div class="step"><strong>Choose OpenAI-compatible</strong><p>Enter the three values above. Do not include <code>/chat/completions</code> in the host unless that field says it wants the full endpoint.</p></div><div class="step"><strong>Type the model if the list is empty</strong><p>Copy it from <a href="{{CONSOLE_URL}}/pricing">Model Square</a>.</p></div><div class="step"><strong>Start a new chat</strong><p>An old chat can stay bound to the previous provider. Create a new one, select OpenBridger, and confirm it in Usage Logs.</p></div></div>
+## 5 Setup Steps
 
-You do not sign out of the Chatbox account.
+<div class="steps">
+  <div class="step"><strong>Step 1: Open Settings</strong><p>Click <strong>⚙️ Settings</strong> (bottom-left) -> <strong>Model Provider</strong>.</p></div>
+  <div class="step"><strong>Step 2: Add Custom Provider</strong><p>Scroll down and click <strong><code>+ Add Custom Provider</code></strong>, name it <code>OpenBridger</code>, and set API Mode to <strong><code>OpenAI API Compatible</code></strong> (or pick <code>OpenAI API</code> on older versions).</p></div>
+  <div class="step"><strong>Step 3: Enter Host & Key</strong>
+    <div class="config-card">
+      <div><span>API Host</span><code>{{API_BASE_URL}}</code> (with <code>/v1</code>)</div>
+      <div><span>API Path (if shown)</span><code>/chat/completions</code></div>
+      <div><span>API Key</span>Your <code>sk-...</code> key</div>
+    </div>
+  </div>
+  <div class="step"><strong>Step 4: Add Model & Save</strong><p>Click <strong><code>+ New</code></strong> under Models, paste the exact Model ID (check <strong>Vision</strong> if supported), and click <strong>Save</strong>.</p></div>
+  <div class="step"><strong>Step 5: Start a New Chat</strong><p>Click <strong><code>+ New Chat</code></strong> in the sidebar, select your <code>OpenBridger</code> model below the input box, and send a test message.</p></div>
+</div>
 
-## Common problems
+## Common Issues
 
-| What you see | What to do |
+| Symptom | Fix |
 | --- | --- |
-| 404, and the path contains chat/completions or /v1 twice | The host includes an extra path. Set it back to `{{API_BASE_URL}}` |
-| 401 | Paste the key again |
-| Nothing in the logs | This chat is still on a built-in model. Start a new chat and select the provider again |
+| `404` (`/v1/v1/chat/completions`) | Keep API Host as `{{API_BASE_URL}}` and API Path as `/chat/completions` |
+| `401` Unauthorized | Re-copy `sk-...` without extra spaces |
+| Nothing in Usage Logs | Click **`+ New Chat`** and explicitly select your custom model |
 
 ## Related
 
 - [Cherry Studio](/guide/clients/cherry-studio/)
-- [OpenAI-compatible calls](/guide/clients/openai-compatible/)
+- [LobeChat](/guide/clients/lobechat/)
+- [Base URL reference](/guide/base-urls/)
