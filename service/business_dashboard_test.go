@@ -31,15 +31,14 @@ func runBusinessDashboardVerification(t *testing.T, db *gorm.DB) {
 		&model.Log{},
 		&model.QuotaData{},
 	}
-	for _, tbl := range tablesToClean {
-		_ = db.Migrator().DropTable(tbl)
+	cleanTables := func() {
+		for _, tbl := range tablesToClean {
+			_ = db.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(tbl).Error
+		}
 	}
 	require.NoError(t, db.AutoMigrate(tablesToClean...))
-	t.Cleanup(func() {
-		for _, tbl := range tablesToClean {
-			_ = db.Migrator().DropTable(tbl)
-		}
-	})
+	cleanTables()
+	t.Cleanup(cleanTables)
 
 	day1 := time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC).Unix()
 	day2 := time.Date(2026, 11, 21, 14, 0, 0, 0, time.UTC).Unix()

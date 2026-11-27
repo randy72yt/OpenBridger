@@ -16,16 +16,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { QueryClientContext } from '@tanstack/react-query'
+import { useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CopyButton } from '@/components/copy-button'
+import type { SystemStatus } from '@/features/auth/types'
 import { useStatus } from '@/hooks/use-status'
 import { resolvePlatformContact } from '@/lib/platform-contact'
 
-export function PlatformContact() {
+function PlatformContactContent(props: { status: SystemStatus | null }) {
   const { t } = useTranslation()
-  const { status } = useStatus()
-  const contact = resolvePlatformContact(status)
+  const contact = resolvePlatformContact(props.status)
 
   return (
     <>
@@ -60,4 +62,17 @@ export function PlatformContact() {
       </span>
     </>
   )
+}
+
+function PlatformContactConnected() {
+  const { status } = useStatus()
+  return <PlatformContactContent status={status} />
+}
+
+export function PlatformContact() {
+  const queryClient = useContext(QueryClientContext)
+  if (!queryClient) {
+    return <PlatformContactContent status={null} />
+  }
+  return <PlatformContactConnected />
 }

@@ -24,17 +24,19 @@ afterEach(() => {
 })
 
 describe('public footer', () => {
-  it('shows pending contacts with local policy links and the upstream attribution', async () => {
+  it('shows default support email, pending WeChat contact, local policy links, and upstream attribution', async () => {
     const root = createRootRoute({ component: Footer })
     const router = createRouter({
       routeTree: root,
       history: createMemoryHistory({ initialEntries: ['/'] }),
     })
     render(<RouterProvider router={router} />)
-    expect(await screen.findByText(/Contact email/)).toHaveTextContent(
+    expect(
+      await screen.findByRole('link', { name: 'support@openbridger.com' })
+    ).toHaveAttribute('href', 'mailto:support@openbridger.com')
+    expect(screen.getByText(/WeChat/).parentElement).toHaveTextContent(
       'To be announced'
     )
-    expect(screen.getByText(/Community/)).toHaveTextContent('To be announced')
     expect(
       screen.getByRole('link', { name: 'User Agreement' })
     ).toHaveAttribute('href', '/user-agreement')
@@ -48,7 +50,7 @@ describe('public footer', () => {
     expect(
       screen.queryByRole('link', { name: /cun_ai|wintokenai/ })
     ).not.toBeInTheDocument()
-    expect(screen.getAllByRole('link')).toHaveLength(3)
+    expect(screen.getAllByRole('link')).toHaveLength(4)
     const footer = screen.getByRole('contentinfo')
     const layout = footer.querySelector('[data-slot=card-content]')
     expect(layout).toHaveClass('flex-col', 'xl:flex-row')
