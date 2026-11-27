@@ -53,6 +53,12 @@ type UpstreamModelOffer struct {
 	Enabled        bool   `json:"enabled" gorm:"not null"`
 	CreatedAt      int64  `json:"created_at" gorm:"bigint"`
 	UpdatedAt      int64  `json:"updated_at" gorm:"bigint"`
+	// Sell prices and margins are computed for the admin view. They are not
+	// stored and never write the published price.
+	SellInputUSD    *float64 `json:"sell_input_usd,omitempty" gorm:"-"`
+	SellOutputUSD   *float64 `json:"sell_output_usd,omitempty" gorm:"-"`
+	InputMarginBPS  *int     `json:"input_margin_bps,omitempty" gorm:"-"`
+	OutputMarginBPS *int     `json:"output_margin_bps,omitempty" gorm:"-"`
 }
 
 type UpstreamCostSnapshot struct {

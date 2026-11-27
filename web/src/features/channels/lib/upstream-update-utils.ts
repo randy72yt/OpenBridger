@@ -17,17 +17,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 export function normalizeModelList(models: unknown[] = []): string[] {
-  return Array.from(
-    new Set(
+  return [
+    ...new Set(
       (models || []).map((model) => String(model || '').trim()).filter(Boolean)
-    )
-  )
+    ),
+  ]
 }
 
 export function parseUpstreamUpdateMeta(settings: unknown): {
   enabled: boolean
   pendingAddModels: string[]
   pendingRemoveModels: string[]
+  prunedModels: string[]
+  droppedMappings: string[]
 } {
   let parsed: Record<string, unknown> | null = null
   if (settings && typeof settings === 'object' && !Array.isArray(settings)) {
@@ -41,7 +43,13 @@ export function parseUpstreamUpdateMeta(settings: unknown): {
   }
 
   if (!parsed || typeof parsed !== 'object') {
-    return { enabled: false, pendingAddModels: [], pendingRemoveModels: [] }
+    return {
+      enabled: false,
+      pendingAddModels: [],
+      pendingRemoveModels: [],
+      prunedModels: [],
+      droppedMappings: [],
+    }
   }
 
   return {
@@ -51,6 +59,12 @@ export function parseUpstreamUpdateMeta(settings: unknown): {
     ),
     pendingRemoveModels: normalizeModelList(
       (parsed.upstream_model_update_last_removed_models as unknown[]) || []
+    ),
+    prunedModels: normalizeModelList(
+      (parsed.upstream_model_update_last_pruned_models as unknown[]) || []
+    ),
+    droppedMappings: normalizeModelList(
+      (parsed.upstream_model_update_last_dropped_mappings as unknown[]) || []
     ),
   }
 }

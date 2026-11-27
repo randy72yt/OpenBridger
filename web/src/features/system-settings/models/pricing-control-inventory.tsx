@@ -67,6 +67,11 @@ function formatCost(value: number | null | undefined) {
   return `$${value.toLocaleString(undefined, { maximumFractionDigits: 6 })}`
 }
 
+function formatMargin(bps: number | null | undefined) {
+  if (bps == null) return '—'
+  return `${(bps / 100).toFixed(2)}%`
+}
+
 // actualCost is the number that must be compared with the upstream bill:
 // base unit price × the settlement multiplier of the group it was collected for.
 function actualCost(cost: number, ratio: number | null | undefined) {
@@ -239,6 +244,8 @@ export function PricingControlInventory(props: PricingControlInventoryProps) {
                 <TableHead>{t('Group ratio')}</TableHead>
                 <TableHead>{t('Actual input cost')}</TableHead>
                 <TableHead>{t('Actual output cost')}</TableHead>
+                <TableHead>{t('Sell input / margin')}</TableHead>
+                <TableHead>{t('Sell output / margin')}</TableHead>
                 <TableHead>{t('Source')}</TableHead>
                 <TableHead>{t('Expires')}</TableHead>
               </TableRow>
@@ -247,7 +254,7 @@ export function PricingControlInventory(props: PricingControlInventoryProps) {
               {props.offers.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={9}
+                    colSpan={11}
                     className='text-muted-foreground py-10 text-center'
                   >
                     {props.loading
@@ -304,6 +311,18 @@ export function PricingControlInventory(props: PricingControlInventoryProps) {
                           offer.upstream_group_ratio
                         )
                       )}
+                    </TableCell>
+                    <TableCell className='tabular-nums'>
+                      {formatCost(offer.sell_input_usd)}
+                      <span className='text-muted-foreground mt-1 block text-xs'>
+                        {formatMargin(offer.input_margin_bps)}
+                      </span>
+                    </TableCell>
+                    <TableCell className='tabular-nums'>
+                      {formatCost(offer.sell_output_usd)}
+                      <span className='text-muted-foreground mt-1 block text-xs'>
+                        {formatMargin(offer.output_margin_bps)}
+                      </span>
                     </TableCell>
                     <TableCell>
                       <Badge variant='outline' title={offer.source_url}>

@@ -409,6 +409,7 @@ func GetChannel(c *gin.Context) {
 	}
 	if channel != nil {
 		clearChannelInfo(channel)
+		channel.RedactUpstreamAccessToken()
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -1126,12 +1127,19 @@ func UpdateChannel(c *gin.Context) {
 	if channel.Key != "" && channel.Key != originChannel.Key {
 		changedFields = append(changedFields, "key")
 	}
+	if channel.UpstreamAccessToken != "" && channel.UpstreamAccessToken != originChannel.UpstreamAccessToken {
+		changedFields = append(changedFields, "upstream_access_token")
+	}
+	if channel.UpstreamUserID != originChannel.UpstreamUserID {
+		changedFields = append(changedFields, "upstream_user_id")
+	}
 	recordManageAudit(c, "channel.update", map[string]interface{}{
 		"id":             channel.Id,
 		"name":           channel.Name,
 		"changed_fields": changedFields,
 	})
 	channel.Key = ""
+	channel.RedactUpstreamAccessToken()
 	clearChannelInfo(&channel.Channel)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

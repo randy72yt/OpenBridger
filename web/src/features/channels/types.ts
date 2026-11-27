@@ -71,6 +71,9 @@ export const channelSchema = z.object({
     multi_key_mode: 'random',
   }),
   settings: z.string().default('{}'), // other_settings JSON
+  upstream_user_id: z.number().optional(),
+  upstream_access_token_configured: z.boolean().optional(),
+  upstream_access_token: z.string().optional(),
 })
 
 export type Channel = z.infer<typeof channelSchema>
@@ -108,6 +111,10 @@ export interface ChannelOtherSettings {
   upstream_model_update_ignored_models?: string[]
   upstream_model_update_last_check_time?: number
   upstream_model_update_last_detected_models?: string[]
+  upstream_model_update_last_removed_models?: string[]
+  upstream_model_update_last_pruned_models?: string[]
+  upstream_model_update_last_pruned_time?: number
+  upstream_model_update_last_dropped_mappings?: string[]
   advanced_custom?: AdvancedCustomConfig
 }
 

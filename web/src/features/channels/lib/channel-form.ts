@@ -204,6 +204,8 @@ export const channelFormSchema = z
     base_url: z.string().optional(),
     task_plugin_key: z.string().optional(),
     key: z.string(),
+    upstream_access_token: z.string().optional(),
+    upstream_user_id: z.string().optional(),
     openai_organization: z.string().optional(),
     models: z.string().min(1, ERROR_MESSAGES.REQUIRED_MODELS),
     group: z.array(z.string()).min(1, ERROR_MESSAGES.REQUIRED_GROUP),
@@ -417,6 +419,8 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   base_url: '',
   task_plugin_key: '',
   key: '',
+  upstream_access_token: '',
+  upstream_user_id: '',
   openai_organization: '',
   models: '',
   group: ['default'],
@@ -570,6 +574,10 @@ export function transformChannelToFormDefaults(
     type: channel.type,
     base_url: channel.base_url || '',
     key: '', // Never populate key from backend for security
+    upstream_access_token: '',
+    upstream_user_id: channel.upstream_user_id
+      ? String(channel.upstream_user_id)
+      : '',
     openai_organization: channel.openai_organization || '',
     models: channel.models || '',
     group: parseGroups(channel.group || 'default'),
@@ -806,7 +814,7 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     base_url: normalizeBaseUrl(formData.base_url) || null,
     key: formData.key,
     openai_organization: formData.openai_organization || null,
-    models: formData.models,
+    models: dedupeModelList(formData.models),
     group: formatGroups(formData.group),
     model_mapping: formData.model_mapping || null,
     priority: formData.priority || null,
@@ -831,6 +839,20 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     }
   })
 
+  if (formData.type === CHANNEL_TYPE_NEW_API) {
+    const token = formData.upstream_access_token?.trim()
+    if (token) {
+      channel.upstream_access_token = token
+    }
+    const userID = Number.parseInt(
+      String(formData.upstream_user_id || '').trim(),
+      10
+    )
+    if (Number.isInteger(userID) && userID > 0) {
+      channel.upstream_user_id = userID
+    }
+  }
+
   return {
     mode,
     multi_key_mode:
@@ -854,7 +876,7 @@ export function transformFormDataToUpdatePayload(
     type: formData.type,
     base_url: normalizeBaseUrl(formData.base_url) || null,
     openai_organization: formData.openai_organization || null,
-    models: formData.models,
+    models: dedupeModelList(formData.models),
     group: formatGroups(formData.group),
     model_mapping: formData.model_mapping || null,
     priority: formData.priority ?? 0,
@@ -893,6 +915,20 @@ export function transformFormDataToUpdatePayload(
   payload.status_code_mapping = formData.status_code_mapping || ''
   payload.param_override = formData.param_override || ''
   payload.header_override = formData.header_override || ''
+
+  if (formData.type === CHANNEL_TYPE_NEW_API) {
+    const token = formData.upstream_access_token?.trim()
+    if (token) {
+      payload.upstream_access_token = token
+    }
+    const userID = Number.parseInt(
+      String(formData.upstream_user_id || '').trim(),
+      10
+    )
+    if (Number.isInteger(userID) && userID > 0) {
+      payload.upstream_user_id = userID
+    }
+  }
 
   return payload
 }
@@ -949,6 +985,10 @@ export function parseGroups(groups: string): string[] {
  */
 export function formatModels(models: string[]): string {
   return models.join(',')
+}
+
+export function dedupeModelList(models: string): string {
+  return formatModels([...new Set(parseModels(models))])
 }
 
 /**

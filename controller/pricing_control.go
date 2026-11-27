@@ -63,6 +63,10 @@ func GetPricingOffers(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if err := service.AttachPublishedSellPrices(page.Items); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	common.ApiSuccess(c, page)
 }
 

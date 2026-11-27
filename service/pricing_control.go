@@ -832,6 +832,102 @@ func latestOfferRow(publicModel string, channelID int) (*model.UpstreamModelOffe
 func validPriceNumber(value float64) bool {
 	return value >= 0 && !math.IsNaN(value) && !math.IsInf(value, 0)
 }
+
+func publishedTokenUnitPrices(entry model.ModelPricingEntry) (float64, float64, bool) {
+	if expression, isString := entry.Effective["billing_setting.billing_expr"].(string); isString && strings.TrimSpace(expression) != "" {
+		input, _, inputErr := billingexpr.RunExpr(expression, billingexpr.TokenParams{P: 1, Len: 1})
+		output, _, outputErr := billingexpr.RunExpr(expression, billingexpr.TokenParams{C: 1})
+		if inputErr == nil && outputErr == nil && validPriceNumber(input) && validPriceNumber(output) && input > 0 && output > 0 {
+			return input, output, true
+		}
+	}
+	ratio, ratioOK := pricingFloat(entry.Effective["ModelRatio"])
+	if !ratioOK || ratio <= 0 {
+		return 0, 0, false
+	}
+	completion, completionOK := pricingFloat(entry.Effective["CompletionRatio"])
+	if !completionOK || completion <= 0 {
+		completion = 1
+	}
+	input := ratio * 2
+	output := input * completion
+	if !validPriceNumber(input) || !validPriceNumber(output) || input <= 0 || output <= 0 {
+		return 0, 0, false
+	}
+	return input, output, true
+}
+
+func pricingFloat(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case float64:
+		return typed, validPriceNumber(typed)
+	case int:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	default:
+		return 0, false
+	}
+}
+
+func marginBPS(price float64, cost float64) *int {
+	if price <= 0 || !validPriceNumber(price) || !validPriceNumber(cost) || cost < 0 {
+		return nil
+	}
+	value := int(math.Round((1 - cost/price) * 10000))
+	return &value
+}
+
+// AttachPublishedSellPrices fills read-only sell price and margin fields.
+// It does not write offers, proposals, or published prices.
+func AttachPublishedSellPrices(offers []model.UpstreamModelOffer) error {
+	if len(offers) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(offers))
+	seen := make(map[string]struct{}, len(offers))
+	for i := range offers {
+		name := offers[i].PublicModel
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		names = append(names, name)
+	}
+	snapshot, err := model.GetModelPricingSnapshot(names)
+	if err != nil {
+		return err
+	}
+	prices := make(map[string]model.ModelPricingEntry, len(snapshot.Entries))
+	for _, entry := range snapshot.Entries {
+		prices[entry.ModelName] = entry
+	}
+	for i := range offers {
+		entry, ok := prices[offers[i].PublicModel]
+		if !ok {
+			continue
+		}
+		sellInput, sellOutput, sellOK := publishedTokenUnitPrices(entry)
+		if !sellOK {
+			continue
+		}
+		sellInput = roundPricingValue(sellInput)
+		sellOutput = roundPricingValue(sellOutput)
+		offers[i].SellInputUSD = floatPtr(sellInput)
+		offers[i].SellOutputUSD = floatPtr(sellOutput)
+		ratio := 0.0
+		if offers[i].UpstreamGroupRatio != nil {
+			ratio = *offers[i].UpstreamGroupRatio
+		}
+		if ratio <= 0 || !validPriceNumber(ratio) {
+			continue
+		}
+		offers[i].InputMarginBPS = marginBPS(sellInput, offers[i].InputCost*ratio)
+		offers[i].OutputMarginBPS = marginBPS(sellOutput, offers[i].OutputCost*ratio)
+	}
+	return nil
+}
+
 func roundPricingValue(value float64) float64 { return math.Round(value*1e8) / 1e8 }
 func formatPricingValue(value float64) string {
 	return strconv.FormatFloat(roundPricingValue(value), 'f', -1, 64)

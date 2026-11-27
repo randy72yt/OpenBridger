@@ -1,12 +1,25 @@
 package controller
 
-import "github.com/QuantumNous/new-api/model"
+import (
+	"strings"
+
+	"github.com/QuantumNous/new-api/model"
+)
 
 func channelHasSensitiveChanges(channel *PatchChannel, origin *model.Channel, requestData map[string]any) bool {
 	if _, ok := requestData["type"]; ok && channel.Type != origin.Type {
 		return true
 	}
 	if _, ok := requestData["key"]; ok && channel.Key != "" && channel.Key != origin.Key {
+		return true
+	}
+	if _, ok := requestData["upstream_access_token"]; ok {
+		token := strings.TrimSpace(channel.UpstreamAccessTokenWrite)
+		if token != "" && token != origin.UpstreamAccessToken {
+			return true
+		}
+	}
+	if _, ok := requestData["upstream_user_id"]; ok && channel.UpstreamUserID > 0 && channel.UpstreamUserID != origin.UpstreamUserID {
 		return true
 	}
 	if _, ok := requestData["base_url"]; ok && !equalStringPtr(channel.BaseURL, origin.BaseURL) {
@@ -61,16 +74,18 @@ func channelHasSensitiveChanges(channel *PatchChannel, origin *model.Channel, re
 // channelHasSensitiveChanges with a precise old-vs-new comparison; this set is
 // used to exclude them from the fail-closed scan for unknown fields.
 var channelSensitiveFields = map[string]struct{}{
-	"type":                {},
-	"key":                 {},
-	"base_url":            {},
-	"openai_organization": {},
-	"header_override":     {},
-	"param_override":      {},
-	"setting":             {},
-	"other":               {},
-	"settings":            {},
-	"key_mode":            {},
+	"type":                  {},
+	"key":                   {},
+	"upstream_access_token": {},
+	"upstream_user_id":      {},
+	"base_url":              {},
+	"openai_organization":   {},
+	"header_override":       {},
+	"param_override":        {},
+	"setting":               {},
+	"other":                 {},
+	"settings":              {},
+	"key_mode":              {},
 }
 
 // channelOperationalFields lists fields managed by operation endpoints instead
@@ -82,12 +97,13 @@ var channelOperationalFields = map[string]struct{}{
 // channelReadOnlyFields lists server-managed/accounting fields that the general
 // channel edit endpoint must ignore even if a client sends them.
 var channelReadOnlyFields = map[string]struct{}{
-	"created_time":         {},
-	"test_time":            {},
-	"response_time":        {},
-	"balance":              {},
-	"balance_updated_time": {},
-	"used_quota":           {},
+	"created_time":                     {},
+	"test_time":                        {},
+	"response_time":                    {},
+	"balance":                          {},
+	"balance_updated_time":             {},
+	"used_quota":                       {},
+	"upstream_access_token_configured": {},
 }
 
 func clearChannelReadOnlyFields(channel *PatchChannel, requestData map[string]any) {

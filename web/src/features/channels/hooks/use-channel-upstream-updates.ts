@@ -31,9 +31,9 @@ const upstreamUpdateRequestConfig = {
 
 function getManualIgnoredModelCount(settings: unknown): number {
   let parsed: Record<string, unknown> | null = null
-  if (settings && typeof settings === 'object')
+  if (settings && typeof settings === 'object') {
     parsed = settings as Record<string, unknown>
-  else if (typeof settings === 'string') {
+  } else if (typeof settings === 'string') {
     try {
       parsed = JSON.parse(settings)
     } catch {
@@ -222,10 +222,14 @@ export function useChannelUpstreamUpdates(refresh: () => Promise<void>) {
         }
 
         toast.success(
-          t('Detection complete: {{add}} to add, {{remove}} to remove', {
-            add: data?.add_models?.length || 0,
-            remove: data?.remove_models?.length || 0,
-          })
+          t(
+            'Detection complete: {{add}} to add, {{pruned}} removed from this channel',
+            {
+              add: data?.add_models?.length || 0,
+              pruned:
+                data?.pruned_models?.length || data?.remove_models?.length || 0,
+            }
+          )
         )
         await refresh()
       } catch (e: unknown) {

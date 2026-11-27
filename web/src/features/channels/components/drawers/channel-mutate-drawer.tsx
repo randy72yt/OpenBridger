@@ -138,6 +138,7 @@ import {
   CLAUDE_FIELD_PASSTHROUGH_TYPES,
   CHANNEL_STATUS_LABELS,
   CHANNEL_TYPE_OPTIONS,
+  CHANNEL_TYPE_NEW_API,
   CHANNEL_TYPE_TASK_PLUGIN,
   channelTypeOptionsForTaskPluginBind,
   CHANNEL_TYPE_WARNINGS,
@@ -149,6 +150,7 @@ import {
   OPENAI_FIELD_PASSTHROUGH_TYPES,
 } from '../../constants'
 import { useChannelKeyDisclosure } from '../../hooks/use-channel-key-disclosure'
+import { parseUpstreamUpdateMeta } from '../../lib/upstream-update-utils'
 import { useChannelMutateForm } from '../../hooks/use-channel-mutate-form'
 import {
   CHANNEL_FORM_DEFAULT_VALUES,
@@ -756,6 +758,8 @@ export function ChannelMutateDrawer({
   const currentUpstreamModelUpdateIgnoredModels = form.watch(
     'upstream_model_update_ignored_models'
   )
+  const currentChannelSettings = form.watch('settings')
+  const upstreamPruneMeta = parseUpstreamUpdateMeta(currentChannelSettings)
   const shouldPreviewUnsavedModels =
     !isEditing ||
     (currentType === CHANNEL_TYPE_ADVANCED_CUSTOM && canEditSensitive)
@@ -3094,6 +3098,73 @@ export function ChannelMutateDrawer({
                                 }}
                               />
 
+                              {currentType === CHANNEL_TYPE_NEW_API && (
+                                <>
+                                  <FormField
+                                    control={form.control}
+                                    name='upstream_user_id'
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel>
+                                          {t('Upstream user id')}
+                                        </FormLabel>
+                                        <FormControl>
+                                          <Input
+                                            inputMode='numeric'
+                                            autoComplete='off'
+                                            placeholder={t(
+                                              'User id from the upstream New API site'
+                                            )}
+                                            {...field}
+                                            value={field.value ?? ''}
+                                          />
+                                        </FormControl>
+                                        <FormDescription>
+                                          {t(
+                                            'Sent as the New-Api-User header when reading upstream quota. The channel API key cannot read quota.'
+                                          )}
+                                        </FormDescription>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                  <FormField
+                                    control={form.control}
+                                    name='upstream_access_token'
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel>
+                                          {t('Upstream access token')}
+                                        </FormLabel>
+                                        <FormControl>
+                                          <Input
+                                            type='password'
+                                            autoComplete='new-password'
+                                            placeholder={
+                                              currentRow?.upstream_access_token_configured
+                                                ? t(
+                                                    'Leave empty to keep the saved access token'
+                                                  )
+                                                : t(
+                                                    'System access token from the upstream New API site'
+                                                  )
+                                            }
+                                            {...field}
+                                            value={field.value ?? ''}
+                                          />
+                                        </FormControl>
+                                        <FormDescription>
+                                          {t(
+                                            'Stored like the channel key and never shown again. Used only for upstream quota, with the user id above.'
+                                          )}
+                                        </FormDescription>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                </>
+                              )}
+
                               {currentType === 57 && (
                                 <div className='border-border/60 flex flex-col gap-3 border-y py-4'>
                                   <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
@@ -4669,6 +4740,10 @@ export function ChannelMutateDrawer({
                                           {t(
                                             'Periodically check for upstream model changes'
                                           )}
+                                          {' '}
+                                          {t(
+                                            'Models the upstream no longer lists are removed from this channel, and duplicate names are removed.'
+                                          )}
                                         </FormDescription>
                                         <FormMessage />
                                       </div>
@@ -4709,6 +4784,27 @@ export function ChannelMutateDrawer({
                                   )}
                                 />
                               </div>
+                              {upstreamPruneMeta.prunedModels.length > 0 && (
+                                <p className='text-muted-foreground text-sm'>
+                                  {t('Removed upstream: {{models}}', {
+                                    models:
+                                      upstreamPruneMeta.prunedModels.join(', '),
+                                  })}
+                                </p>
+                              )}
+                              {upstreamPruneMeta.droppedMappings.length > 0 && (
+                                <p className='text-muted-foreground text-sm'>
+                                  {t(
+                                    'Dropped model mappings whose upstream target is gone: {{mappings}}',
+                                    {
+                                      mappings:
+                                        upstreamPruneMeta.droppedMappings.join(
+                                          ', '
+                                        ),
+                                    }
+                                  )}
+                                </p>
+                              )}
                               <FormField
                                 control={form.control}
                                 name='upstream_model_update_ignored_models'
